@@ -1,0 +1,67 @@
+Host shim: drop `static` from n0 definitions that follow an implicit-extern
+call of the same function.
+
+gcc rejects the K&R idiom (a static definition after an implicit external
+declaration); MWC cc accepts it.  Dropping the storage class changes linkage
+on the host build only.
+
+--- a/n0/dbgt0.c
++++ b/n0/dbgt0.c
+@@ -335,7 +335,7 @@
+ 	}
+ }
+ 
+-static dbinfo(sp) SYM *sp;
++dbinfo(sp) SYM *sp;
+ {
+ 	register INFO *ip;
+ 	register SYM **ssp;
+--- a/n0/double.c
++++ b/n0/double.c
+@@ -230,7 +230,6 @@
+  * Shift a 0 into the rightmost position.
+  * Return the bit that gets shot off the end.
+  */
+-static
+ intshl(num)
+ BIG	num;
+ {
+--- a/n0/expr.c
++++ b/n0/expr.c
+@@ -846,7 +846,7 @@
+  * the local identifier is planted at the start of the string.
+  * The type of the node is set to array of char.
+  */
+-static
++
+ TREE *
+ bstring()
+ {
+--- a/n0/init.c
++++ b/n0/init.c
+@@ -198,7 +198,6 @@
+  * If the new symbol is '}', the program has said ", }"; this is legal.
+  * If you pull the comments here, it becomes not quite so legal.
+  */
+-static
+ itrail()
+ {
+ 	lex();
+@@ -210,7 +209,6 @@
+  * An initialization starting with '{' contains too many initializers.
+  * Skip initializers to the matching '}' or EOF.
+  */
+-static
+ iskip()
+ {
+ 	register int braces;
+--- a/n0/size.c
++++ b/n0/size.c
+@@ -123,7 +123,6 @@
+ 		cerror("size of %s is not known", s);
+ }
+ 
+-static
+ sizewarn(s, i) char *s; register int i;
+ {
+ 	cerror("sizeof(%s) set to %d", s, i);

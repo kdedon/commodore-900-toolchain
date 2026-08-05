@@ -1,0 +1,296 @@
+# release -- build every gate from clean on a v* tag, then publish the three
+# deliverables as versioned assets (AUTOMATION.md 13).
+#
+# vMAJOR.MINOR.PATCH means something here, and one part of it is CHECKED rather
+# than promised:
+#
+#   PATCH  cannot change an emitted byte -- host fixes, diagnostics, packaging
+#   MINOR  codegen changed: selection, allocation, alignment, object layout
+#   MAJOR  the contract changed: calling convention, l.out layout, driver options
+#
+# A consumer pinning a version is pinning CODEGEN, so the PATCH promise is the
+# one that has to be enforceable, and it is: the self-host fixpoint's 86 objects
+# are deterministic, they ship with every release, and the publish job refuses a
+# PATCH bump whose objects moved.  A promise a workflow can check is worth
+# making; one it cannot is decoration.
+#
+# The release is built against a SPECIFIC COHERENT commit -- deliverable 3 needs
+# libc-z8001.a, whose source belongs to the operating system -- and that commit
+# is part of the release's identity.  host/release-pack.sh records it in the
+# stamp inside the archive, beside the binaries it describes, and refuses to
+# pack without it: an archive nobody can trace back to an OS commit cannot be
+# rebuilt, and a release that cannot be rebuilt is a binary drop.  The packer
+# does it rather than this workflow so that a release cut BY HAND -- which is
+# the only way to cut one while the OS repository is unpublished -- carries the
+# same identity as one cut here.
+#
+# WHERE build.yml SKIPS, THIS REFUSES.  A push may legitimately be tested
+# without an OS tree; a release may not be BUILT without one, because half the
+# archive comes from it.  So the OS edge is checked first and by name, and a
+# tag with nothing to build against fails loudly instead of publishing a
+# toolchain with no C library in it.
+name: release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src, fetch-depth: 0 }
+      # Checked by CONTENT, through this repository's own resolver: what matters
+      # is that the directories are there, not that a fetch step reported
+      # success.
+      - name: The OS source this release is built from
+        working-directory: src
+        run: |
+          make deps DEP=coherent || true
+          p=$(sh host/deps.sh coherent)
+          [ -n "$p" ] || {
+            echo "no COHERENT OS source: the pinned snapshot could not be placed."
+            echo "It must hold include/, libc/ and csu/: the release archive carries"
+            echo "usr/include and native/libc-z8001.a, libm-z8001.a and"
+            echo "libmisc-z8001.a, all built from that source, and the archive's"
+            echo ".provenance names the commit it came from."
+            echo "DEPS names the tag; publish that release, or cut this one by hand"
+            echo "from a checkout that has the OS tree."
+            exit 1
+          }
+          echo "COHERENT OS source: $p"
+          cat "$p/.provenance" 2>/dev/null || :
+          echo "COHERENT OS source: $p ($(git -C "$GITHUB_WORKSPACE/coherent" rev-parse HEAD))"
+
+      # The tag and the VERSION file are two statements of the same number, and
+      # a release where they disagree is a release nobody can reason about.
+      - name: The tag is the VERSION file
+        working-directory: src
+        run: |
+          v=$(cat VERSION)
+          t=${GITHUB_REF_NAME#v}
+          [ "$v" = "$t" ] || { echo "tag $GITHUB_REF_NAME does not match VERSION=$v"; exit 1; }
+
+      - name: Place the pinned emulator
+        working-directory: src
+        run: make deps DEP=emu
+
+      - name: Gates S0-S3
+        working-directory: src
+        env:
+          C900_EMU: ${{ github.workspace }}/src/deps/commodore-900-emulator/bin/c900
+        run: |
+          make all
+          make check
+          make libc selfhost native
+          make check-selfhost
+
+      # The version, the emulator pin and the COHERENT commit are the packer's
+      # to record -- see host/release-pack.sh -- so that an archive built here
+      # and one built by hand carry the same stamp.
+      - name: Package
+        working-directory: src
+        run: sh host/release-pack.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-dist
+          path: src/host/build/dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-objects
+          path: src/host/build/selfhost/root/work/h2/*.o
+
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc make perl python zip unzip tar
+            diffutils coreutils gawk curl
+
+      # Refused here as well as in the Linux job: this one packs the zip, and a
+      # zip packed without usr/include is an archive a consumer cannot compile
+      # against.
+      - name: The OS source this release is built from
+        working-directory: src
+        run: |
+          make deps DEP=coherent || true
+          p=$(sh host/deps.sh coherent)
+          [ -n "$p" ] || {
+            echo "no COHERENT OS source beside this checkout: it must hold"
+            echo "include/, libc/ and csu/.  The Windows archive carries"
+            echo "usr/include from it, and its .provenance names the commit."
+            echo "That repository is unpublished (DEPS: coherent local)."
+            exit 1
+          }
+          echo "COHERENT OS source: $p"
+
+      - name: Place the pinned emulator
+        working-directory: src
+        run: make deps DEP=emu
+      - name: Gates S0-S1, and the corpus for the cross-host comparison
+        working-directory: src
+        run: |
+          export C900_EMU=$(pwd)/deps/commodore-900-emulator
+          make all
+          make check
+          sh host/selfhost-root.sh
+          sh host/build-selfhost2.sh -hostonly
+      # Deliverable 3 is host-independent and the Linux job already built it, so
+      # the Windows archive takes it from there rather than cross-building it
+      # twice: it must be the SAME native compiler in both archives, and copying
+      # is the only way to say that rather than hope it.
+      - uses: actions/download-artifact@v4
+        with: { name: linux-dist, path: dist-linux }
+
+      # The Windows archive is packed by release-pack.sh, the same script that
+      # packs the Linux one.  It was hand-rolled here once, and the two layouts
+      # drifted: the zip carried no host/ view at all, so a consumer that
+      # unpacked it and set $C900_TOOLCHAIN found nothing at the one path every
+      # consuming makefile spells (host/build/z8001/cc0-z8001).  One packer is
+      # the fix; the equivalence job now compares the two archives' contents so
+      # that a second drift is a red build rather than a broken release.
+      #
+      # What the script needs beyond `make all' is deliverable 3, which is what
+      # the Linux -z8001 archive holds: it is unpacked into the build directory
+      # under the names the packer reads, so the two archives ship the same
+      # native compiler and the same Z8001 libraries by construction.
+      - name: Seed deliverable 3 from the Linux archive
+        working-directory: src
+        run: |
+          set -e
+          v=$(cat VERSION)
+          tar xzf ../dist-linux/c900-toolchain-v$v-z8001.tar.gz -C ..
+          z=../c900-toolchain-v$v-z8001/native
+          B=host/build
+          mkdir -p $B/native $B/libc-z8001 $B/libm-z8001 $B/libmisc-z8001
+          cp $z/cc $z/as $z/ld $B/native/
+          cp $z/crt0.o $z/libc-z8001.a $B/libc-z8001/
+          cp $z/libm-z8001.a $B/libm-z8001/
+          cp $z/libmisc-z8001.a $B/libmisc-z8001/
+      - name: Package
+        working-directory: src
+        run: |
+          set -e
+          sh host/release-pack.sh
+      # Only the zip.  release-pack.sh emits every asset for the host it runs
+      # on, and the -z8001 and -codegen archives are host-independent: the
+      # released ones are the Linux job's, and two artifacts of the same name
+      # would collide in the publish job's download directory.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: src/host/build/dist/*.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-objects
+          path: src/host/build/selfhost/root/work/h2/*.o
+
+  equivalence:
+    needs: [ linux, windows ]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+      - uses: actions/download-artifact@v4
+        with: { name: linux-objects, path: obj/linux }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-objects, path: obj/windows }
+      - name: The two hosts are one compiler
+        run: sh src/host/cmp-objdirs.sh obj/linux obj/windows linux windows
+
+      # The objects being identical says nothing about whether either archive
+      # can be USED.  What a consumer resolves is a layout, so the layout is
+      # compared too -- see host/cmp-archives.sh.
+      - uses: actions/download-artifact@v4
+        with: { name: linux-dist, path: dist/linux }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-dist, path: dist/windows }
+      - name: The two archives are one archive
+        run: |
+          v=$(cat src/VERSION)
+          sh src/host/cmp-archives.sh \
+             dist/linux/c900-toolchain-v$v-linux-x86_64.tar.gz \
+             dist/windows/c900-toolchain-v$v-windows-x86_64.zip \
+             linux windows
+
+  publish:
+    needs: [ linux, windows, equivalence ]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src, fetch-depth: 0 }
+      - uses: actions/download-artifact@v4
+        with: { name: linux-dist, path: dist }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-dist, path: dist }
+
+      # The PATCH promise, enforced.  The previous tag published its own codegen
+      # archive; if this tag only bumps PATCH, every one of the 86 objects must
+      # still be identical, and the release is refused if any byte moved.  A
+      # first release, or one where the previous tag published no such archive,
+      # is allowed and says so.
+      - name: A PATCH bump may not move an emitted byte
+        working-directory: src
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          new=${GITHUB_REF_NAME#v}
+          prev=$(git tag --list 'v*' --sort=-v:refname | grep -v "^$GITHUB_REF_NAME$" | head -1)
+          if [ -z "$prev" ]; then
+            echo "no previous tag; nothing to compare against."
+            exit 0
+          fi
+          old=${prev#v}
+          # ASK whether the previous release published a codegen archive, then
+          # fetch it.  `download || true' cannot tell "that tag published none"
+          # from "the download failed", and check-patch-bump allows the first --
+          # so a network or token fault would have waved a codegen change
+          # through as a PATCH release.
+          # The ASK is a command of its own, not the head of a pipeline: a
+          # pipeline's status is grep's, so a `gh' that failed would read as
+          # "no codegen archive" and wave the bump through -- the same shape as
+          # the `download || true' below it.  A tag that was never released is
+          # a real answer and is told apart from a fault by what gh says.
+          if assets=$(gh release view "$prev" --json assets \
+                        --jq '.assets[].name' 2>../gh.err); then
+            :
+          elif grep -qi 'release not found' ../gh.err; then
+            assets=
+            echo "$prev has no release at all; nothing to compare against."
+          else
+            cat ../gh.err
+            echo "$prev could not be queried, so the PATCH promise cannot be"
+            echo "checked and the release is refused."
+            exit 1
+          fi
+          if echo "$assets" | grep -q -- '-codegen\.tar\.gz$'; then
+            gh release download "$prev" --pattern "*-codegen.tar.gz" --dir ../prev ||
+              { echo "$prev published a codegen archive and it could not be fetched;"; \
+                echo "the PATCH promise cannot be checked, so the release is refused."; exit 1; }
+          else
+            echo "$prev published no codegen archive; nothing to compare against."
+          fi
+          sh host/check-patch-bump.sh "$old" "$new" \
+             "../prev/c900-toolchain-v$old-codegen.tar.gz" \
+             "../dist/c900-toolchain-v$new-codegen.tar.gz"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

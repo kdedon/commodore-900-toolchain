@@ -1,0 +1,436 @@
+# build -- the bootstrap stages S0..S4, on both hosts, on every push.
+#
+# The three deliverables (AUTOMATION.md 10) are a Linux executable, a Windows
+# executable, and the native Z8001 cc/as/ld that run on the machine.  The stages
+# below produce them and prove they are one compiler:
+#
+#   S0  make all                     the source compiles under gcc, shims bite
+#   S1  make check                   731 assertions, most EXECUTING the compiled
+#                                    code under the emulator -- codegen truth,
+#                                    not compile-without-error
+#   S2  make libc selfhost native    the compiler compiles ITSELF to Z8001
+#   S3  make check-selfhost          the target-built passes reproduce the host
+#                                    compiler's objects BYTE FOR BYTE, 86 of 86
+#   S4  windows S0+S1, then the      the two hosts' objects are identical: the
+#       equivalence job              only place an LLP64 defect can surface
+#   S5  consumers job                every freestanding consumer still LINKS
+#
+# S1 and S3 are not redundant.  S3 proves the two compilers agree; S1 proves
+# what they agree about is right.  Two identical WRONG compilers pass S3.
+#
+# S5 is a different question again.  S0-S4 ask what this compiler emits; S5
+# asks what it now DEMANDS of the objects it is linked with.  cc2 names
+# external symbols (SS, the stack segment a frame reference is relocated
+# against), and a program gets them from crts0.s and the kernel from md.s --
+# but a boot loader, a CP/M system image or a separately linked module has
+# neither and states them itself, so a change to that set is an ABI change to
+# every one of them, and the only check that sees it is a link.  The consumers
+# below are the freestanding ones: everything else in those trees is a program
+# or a driver bound to a kernel symbol table, which the same job covers on the
+# way past.  A repository whose build is only ever run by hand goes broken
+# quietly, and one of these did, for days.
+#
+# Measured, on this repository: S0 7 s, S1 9 s, S2 3 s, S3 75 s, S5 under 15 s
+# (the compiler passes are milliseconds each; these builds are hundreds of
+# translation units and no emulator).  Under three minutes for everything,
+# both hosts, which is why nothing here is nightly.
+#
+# CI SETS THE VARIABLES; it never relies on the search.  A job that depended on
+# directory adjacency breaks the first time a runner image moves its checkouts,
+# and the search has its own regression test (resolver-isolation.yml).
+#
+# THE OS EDGE IS A PINNED SNAPSHOT, AND ITS ABSENCE IS ANNOUNCED.  S2, S3 and S4
+# build OS artifacts with this compiler, so they need the operating system's
+# source; that repository is unpublished, so `make deps DEP=coherent' places the
+# archive DEPS pins and those stages run against it.  The COHERENT consumer link
+# is the exception -- it links the kernel, which needs the whole repository, not
+# the three directories the snapshot carries -- so it stays on a checkout.
+# Where either is absent the stages DO NOT RUN, and the run says so three ways: an ::warning:: annotation on the run page, a table in the
+# job summary naming each stage that did not run, and the `verdict' job's own
+# displayed name, which reads INCOMPLETE.  What must not happen is the fourth
+# way a gate lies -- announcing a skip and exiting 0 into a green badge that
+# reads as "everything passed".
+#
+# The presence test is on CONTENT, through this repository's own resolver
+# (host/deps.sh coherent), not on whether a checkout step succeeded: a
+# repository of that name can exist, clone cleanly, and hold no os/ at all.
+name: build
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.os.outputs.have }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+      # The pinned edges: the emulator, a binary we cannot fix, and the OS
+      # snapshot.  "Which of each ran this build" is a number chosen in advance,
+      # in DEPS, so deps/ is cached on BOTH -- keyed on the emulator alone, a
+      # coherent pin bumped on its own would restore the old snapshot from cache
+      # and `make deps' would leave it alone as already resolved, a stale input
+      # surviving a deliberate version change.  host/build is deliberately NOT
+      # cached: a stale artifact outliving a source change is a bug class this
+      # project has already been bitten by.
+      - name: The pins
+        id: pin
+        run: |
+          echo "tag=$(awk '$1=="emu"{print $4}' src/DEPS)" >> "$GITHUB_OUTPUT"
+          echo "os=$(awk '$1=="coherent"{print $4}' src/DEPS)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: src/deps
+          key: deps-${{ runner.os }}-${{ steps.pin.outputs.tag }}-${{ steps.pin.outputs.os }}
+
+      # The OS edge is the pinned SNAPSHOT (DEPS: `coherent release'), not a
+      # checkout: that repository is unpublished, and the snapshot is what lets
+      # S2/S3 run here at all.  continue-on-error, because an OS edge that is
+      # not there is a state this workflow handles rather than a fault -- the
+      # job goes on to run everything that does not need one.
+      - name: The OS edge
+        id: os
+        continue-on-error: true
+        working-directory: src
+        run: |
+          make deps DEP=coherent || true
+          p=$(sh host/deps.sh coherent)
+          if [ -n "$p" ]; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+            echo "COHERENT OS source: $p"
+            sed -n 's/^commit /snapshot commit /p;s/^date /snapshot date /p' "$p/.provenance" 2>/dev/null || :
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::warning title=S2 and S3 will not run::The pinned COHERENT OS snapshot could not be placed (DEPS names the tag). The target cross-build and the self-host fixpoint need it and are NOT RUN in this build."
+          fi
+
+      - name: Place the pinned emulator
+        working-directory: src
+        run: make deps DEP=emu
+
+      - name: S0 - host build
+        working-directory: src
+        run: make all
+      - name: S1 - host correctness
+        working-directory: src
+        env:
+          C900_EMU: ${{ github.workspace }}/src/deps/commodore-900-emulator/bin/c900
+        run: make check
+      - name: S2 - target cross-build
+        if: steps.os.outputs.have == 'yes'
+        working-directory: src
+        run: make libc selfhost native
+      - name: S3 - the self-host fixpoint
+        if: steps.os.outputs.have == 'yes'
+        working-directory: src
+        env:
+          C900_EMU: ${{ github.workspace }}/src/deps/commodore-900-emulator/bin/c900
+        run: make check-selfhost
+
+      # The verdict line already names the guilty pass (cc0/cc1/cc2); this is
+      # the material behind it, and it is kilobytes.
+      - name: Fixpoint evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s3-evidence
+          path: |
+            src/host/build/selfhost/root/work/h2/
+            src/host/build/selfhost/root/work/t2/
+            src/host/build/z8001/.provenance
+          retention-days: 90
+
+      # The deliverables, off every green push -- a stranger should not have to
+      # wait for a tag to get a compiler.  Split in two, and the second is
+      # conditional: the host compiler comes out of S0, the native Z8001 one and
+      # the Z8001 libraries out of S2, and an artifact named `toolchain' that
+      # quietly held half of what it usually does would be the skip lying in
+      # another place.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-toolchain
+          path: |
+            src/host/build/z8001/
+            src/host/build/as-z8001
+            src/host/build/ld-z8001
+      - uses: actions/upload-artifact@v4
+        if: steps.os.outputs.have == 'yes'
+        with:
+          name: linux-native-z8001
+          path: |
+            src/host/build/native/
+            src/host/build/libc-z8001/
+      - uses: actions/upload-artifact@v4
+        if: steps.os.outputs.have == 'yes'
+        with:
+          name: linux-objects
+          path: src/host/build/selfhost/root/work/h2/*.o
+
+  # S5 -- the consumers, linked with the compiler from this commit.
+  #
+  # Independent of `linux': it needs the compiler passes and the linker, which
+  # `make all' builds in seconds, and nothing the other stages produce.  So a
+  # break here is reported even when the fixpoint is red, and the two verdicts
+  # do not queue behind each other.
+  #
+  # Each step is the SMALLEST goal that reaches the freestanding link, not the
+  # repository's default goal: kboot is one loader, coherent builds the kernel
+  # and the five loadable drivers.  No emulator, no images, no boot -- those are
+  # the consumers' own gates, and none of them is needed to see a symbol the
+  # link cannot resolve.
+  #
+  # TWO CONSUMERS ARE NOT HERE, and neither is silently absent:
+  #
+  #   CP/M-8000  commodore-900-cpm is not published, so there is no repository
+  #              to check out.  A step naming one would be permanently red,
+  #              which trains a reader to ignore the colour -- so it is stated
+  #              here and restored, unchanged, the day that repository exists:
+  #                - name: CP/M-8000 - the resident system and the split-I/D module
+  #                  run: make -C cpm build/cpm.sys build/split.mod
+  #   COHERENT   the kernel link runs only where the OS source is present, the
+  #              same edge S2 and S3 need, and the verdict job names it when it
+  #              does not.
+  #
+  # kboot is the one that always runs, and it is the load-bearing one: it is a
+  # freestanding consumer that states SS itself, so it is where an ABI change to
+  # the objects this compiler emits shows up as a link that cannot resolve.
+  consumers:
+    runs-on: ubuntu-latest
+    outputs:
+      os: ${{ steps.os.outputs.have }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+      - uses: actions/checkout@v4
+        with:
+          repository: kdedon/commodore-900-kboot
+          path: kboot
+          token: ${{ secrets.C900_CI_TOKEN || github.token }}
+      - uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          repository: kdedon/commodore-900-coherent
+          path: coherent
+          token: ${{ secrets.C900_CI_TOKEN || github.token }}
+      - name: The OS edge
+        id: os
+        working-directory: src
+        run: |
+          p=$(COHERENT_OS="$GITHUB_WORKSPACE/coherent/os" sh host/deps.sh coherent)
+          if [ -n "$p" ]; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+            echo "COHERENT OS source: $p"
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::warning title=The COHERENT consumer link will not run::No COHERENT OS source at $GITHUB_WORKSPACE/coherent/os. The kernel and driver link is NOT RUN in this build; kboot still is."
+          fi
+
+      - name: The compiler under test
+        working-directory: src
+        run: make all
+
+      # C900_TOOLCHAIN is set, never searched: see the note at the head of this
+      # file.  It names the CHECKOUT; each consumer's resolver finds host/build
+      # inside it.
+      # COMPILER=cross names the flavour built from THIS checkout's sources.
+      # kboot's own default is the published compiler dist, which is a pinned
+      # binary and would say nothing about the compiler under test.
+      - name: kboot - the multiboot loader
+        env:
+          C900_TOOLCHAIN: ${{ github.workspace }}/src
+        run: make -C kboot COMPILER=cross
+      - name: COHERENT - the kernel and the loadable drivers
+        if: steps.os.outputs.have == 'yes'
+        env:
+          C900_TOOLCHAIN: ${{ github.workspace }}/src
+        run: make -C coherent BUILD=build-consumers COMPILER=mwc kernel
+
+  windows:
+    runs-on: windows-latest
+    outputs:
+      os: ${{ steps.os.outputs.have }}
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: >-
+            mingw-w64-x86_64-gcc make perl python zip unzip tar
+            diffutils coreutils gawk curl
+
+      # deps/ now holds BOTH pinned edges, so the key names both.  Keyed on the
+      # emulator alone, a coherent pin bumped on its own would restore the old
+      # snapshot from cache and `make deps' would leave it alone as already
+      # resolved -- a stale input surviving a deliberate version change.
+      - name: The pins
+        id: pin
+        run: |
+          echo "tag=$(awk '$1=="emu"{print $4}' src/DEPS)" >> "$GITHUB_OUTPUT"
+          echo "os=$(awk '$1=="coherent"{print $4}' src/DEPS)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: src/deps
+          key: deps-${{ runner.os }}-${{ steps.pin.outputs.tag }}-${{ steps.pin.outputs.os }}
+
+      # Inside the msys2 shell, like every other path here: ${{ github.workspace }}
+      # is a Windows path with backslashes and a POSIX test on one finds nothing.
+      - name: The OS edge
+        id: os
+        working-directory: src
+        run: |
+          make deps DEP=coherent || true
+          p=$(sh host/deps.sh coherent)
+          if [ -n "$p" ]; then
+            echo "have=yes" >> "$GITHUB_OUTPUT"
+            echo "COHERENT OS source: $p"
+          else
+            echo "have=no" >> "$GITHUB_OUTPUT"
+            echo "::warning title=S4 will not run::The pinned COHERENT OS snapshot could not be placed. The Windows half of the cross-host object comparison is NOT RUN, so nothing in this build compares the two hosts' objects."
+          fi
+      - name: Place the pinned emulator
+        working-directory: src
+        run: make deps DEP=emu
+
+      # The variables are still set explicitly, but they are computed INSIDE the
+      # msys2 shell: ${{ github.workspace }} is a Windows path with backslashes,
+      # and a POSIX test on one silently finds nothing.
+      - name: S0 - host build
+        working-directory: src
+        run: make all
+      - name: S1 - host correctness
+        working-directory: src
+        run: |
+          export C900_EMU=$(pwd)/deps/commodore-900-emulator
+          make check
+
+      # S2/S3 proper are host-independent, so running them twice buys only a
+      # second chance to disagree about something that is not host-specific.
+      # What IS host-specific is the objects this compiler emits, so the host
+      # half of the fixpoint runs here -- 86 translation units, under a second --
+      # and the equivalence job compares them with the Linux ones.
+      - name: S4 - compile the corpus for the cross-host comparison
+        if: steps.os.outputs.have == 'yes'
+        working-directory: src
+        run: |
+          sh host/selfhost-root.sh
+          sh host/build-selfhost2.sh -hostonly
+      - uses: actions/upload-artifact@v4
+        if: steps.os.outputs.have == 'yes'
+        with:
+          name: windows-objects
+          path: src/host/build/selfhost/root/work/h2/*.o
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-toolchain
+          path: |
+            src/host/build/z8001/
+            src/host/build/as-z8001*
+            src/host/build/ld-z8001*
+
+  # S4.  Both sides of this comparison are compiled against the OS source (the
+  # corpus is the compiler's own 86 translation units, staged into a root that
+  # holds the OS headers), so with no OS tree there are no objects to compare
+  # and this job does not run.  It is not made to pass on one side: an empty
+  # side would compare equal to nothing, which is the shape of every gate this
+  # repository has had to take apart.
+  equivalence:
+    needs: [ linux, windows ]
+    if: needs.linux.outputs.os == 'yes' && needs.windows.outputs.os == 'yes'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+      - uses: actions/download-artifact@v4
+        with: { name: linux-objects, path: obj/linux }
+      - uses: actions/download-artifact@v4
+        with: { name: windows-objects, path: obj/windows }
+      - name: S4 - deliverables 1 and 2 are one compiler
+        run: sh src/host/cmp-objdirs.sh obj/linux obj/windows linux windows
+      - name: Both sides, when they disagree
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: s4-evidence
+          path: obj/
+          retention-days: 90
+
+  # THE VERDICT.  What a badge cannot say is which stages produced it, and this
+  # workflow can now legitimately finish green having run five of eight -- so
+  # the run states its own coverage, in the two places a person looks: the job
+  # NAME in the checks list, which reads INCOMPLETE when the OS stages did not
+  # run, and a table in the run summary naming every stage, its result, and the
+  # reason for each one that did not run.
+  #
+  # It does not fail the build.  A job that is red on every push for a reason
+  # nobody in this repository can fix teaches a reader to ignore the colour,
+  # which costs more than it buys; what it must never do is report five stages
+  # as eight.
+  verdict:
+    needs: [ linux, windows, consumers, equivalence ]
+    if: always()
+    name: ${{ needs.linux.outputs.os == 'yes' && 'coverage - every stage ran' || 'coverage - INCOMPLETE, the OS stages did not run' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: What ran, and what did not
+        env:
+          OS_LINUX: ${{ needs.linux.outputs.os }}
+          OS_WINDOWS: ${{ needs.windows.outputs.os }}
+          OS_CONSUMERS: ${{ needs.consumers.outputs.os }}
+          R_LINUX: ${{ needs.linux.result }}
+          R_WINDOWS: ${{ needs.windows.result }}
+          R_CONSUMERS: ${{ needs.consumers.result }}
+          R_EQUIVALENCE: ${{ needs.equivalence.result }}
+        run: |
+          # $1 stage  $2 what it is  $3 ran? (yes/no)  $4 result or reason
+          row() { printf '| %s | %s | %s | %s |\n' "$1" "$2" "$3" "$4" >> "$GITHUB_STEP_SUMMARY"; }
+          noos='**NOT RUN** — no COHERENT OS source; that repository is unpublished (`DEPS`: `coherent local`)'
+
+          if [ "$OS_LINUX" = yes ]; then
+            echo "## Coverage: every stage ran" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Coverage: INCOMPLETE" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "A green result on this run means the stages marked RAN below passed." >> "$GITHUB_STEP_SUMMARY"
+            echo "It says nothing about the ones marked NOT RUN — no compiler in this" >> "$GITHUB_STEP_SUMMARY"
+            echo "run was tested against the OS source, and no target-built compiler" >> "$GITHUB_STEP_SUMMARY"
+            echo "was produced or compared at all." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=Incomplete run::S2, S3, S4 and the COHERENT consumer link did not run: no COHERENT OS source. A green badge on this run covers S0, S1 and the kboot link only."
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| stage | what it proves | ran | result |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          row S0 "the source compiles under gcc, both hosts" RAN "linux $R_LINUX, windows $R_WINDOWS"
+          row S1 "731 assertions, most executing compiled code" RAN "linux $R_LINUX, windows $R_WINDOWS"
+          [ "$OS_LINUX" = yes ] \
+            && row S2 "the compiler compiles itself to Z8001" RAN "$R_LINUX" \
+            || row S2 "the compiler compiles itself to Z8001" NO "$noos"
+          [ "$OS_LINUX" = yes ] \
+            && row S3 "the target-built passes reproduce the host objects" RAN "$R_LINUX" \
+            || row S3 "the target-built passes reproduce the host objects" NO "$noos"
+          [ "$R_EQUIVALENCE" = skipped ] \
+            && row S4 "the two hosts emit identical objects" NO "$noos" \
+            || row S4 "the two hosts emit identical objects" RAN "$R_EQUIVALENCE"
+          row "S5 kboot" "a freestanding consumer still links" RAN "$R_CONSUMERS"
+          [ "$OS_CONSUMERS" = yes ] \
+            && row "S5 COHERENT" "the kernel and drivers still link" RAN "$R_CONSUMERS" \
+            || row "S5 COHERENT" "the kernel and drivers still link" NO "$noos"
+          row "S5 CP/M" "the resident system and split-I/D module link" NO \
+              "**NOT RUN** — commodore-900-cpm is unpublished; see the note in this workflow"
+          cat "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,22 @@
+Host shim: the same K&R static drop in n2 (symbucket, precedes).
+
+--- a/n2/cc2sym.c
++++ b/n2/cc2sym.c
+@@ -89,7 +89,6 @@
+  * Given an ASCII global or static external symbol name,
+  * figure out what hash bucket it goes in.
+  */
+-static
+ symbucket(p)
+ register char	*p;
+ {
+--- a/n2/optim.c
++++ b/n2/optim.c
+@@ -362,7 +362,6 @@
+ /*
+  * Return true iff ip1 precedes ip2 in the INS node chain.
+  */
+-static
+ precedes(ip1, ip2)
+ register INS *ip1, *ip2;
+ {

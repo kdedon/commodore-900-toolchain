@@ -1,0 +1,56 @@
+#!/bin/sh
+# arz - Coherent l.out archiver: the `ar' a cross-build can call.
+#
+#	arz r out.a obj...		(the only form a Makefile uses)
+#	arz -b				build mkarz and stop, archiving nothing
+#
+# mkarz takes `mkarz out.a obj...' and always writes a fresh archive, so the
+# traditional key letters have no analogue: `r' is accepted and ignored, and
+# anything else is refused rather than silently treated as `r' -- an `ar d'
+# that quietly rewrote the whole archive would be worse than a failure.
+# `c' (create, suppress the "creating archive" notice) rides along with it for
+# the same reason: the OS tree spells the call `ar cr', which is `r' plus a
+# quieter diagnostic, and mkarz has no diagnostic to quieten.
+#
+# Built on demand from mkarz.c against ld's ar.h/canon.o, which is what keeps
+# the member layout identical to what ld-z8001 expects to scan.  `-b' is that
+# build alone: mkarz is one of the binaries a release archive ships, and nothing
+# in this repository archives anything, so packing a release would otherwise
+# depend on a consumer having run through here first.
+#
+# $C900_BUILD, spelled out rather than sourced from publish.sh: an unpacked
+# release carries this script and the mkarz beside it but none of host/'s
+# machinery, and arz has to keep working there.
+set -e
+HERE=$(cd "$(dirname "$0")" && pwd)
+BUILD="${C900_BUILD:-$HERE/build}"
+LDDIR="$BUILD/ld"
+MKARZ="$BUILD/mkarz"
+
+key="$1"
+case "$key" in
+r|rc|rv|rcv|ru|cr|crv|cru) shift;;
+-b) ;;
+*) echo "arz: only the r (replace/create) key is supported, got '$key'" >&2
+   exit 2;;
+esac
+
+if [ ! -x "$MKARZ" ] || [ "$HERE/mkarz.c" -nt "$MKARZ" ]; then
+	[ -f "$LDDIR/canon.o" ] || {
+		echo "arz: run build-ld.sh first (need build/ld headers + canon.o)" >&2
+		exit 1
+	}
+	# Build to a private name and rename onto $MKARZ: a parallel make runs
+	# several arz at once, and two of them writing the same executable makes
+	# the other's exec fail with "Text file busy".  rename is atomic, so a
+	# concurrent arz sees either the old binary or the new one.
+	cp "$HERE/mkarz.c" "$LDDIR/mkarz.c"
+	( cd "$LDDIR" && gcc -std=gnu89 -w -DBREADBOX=0 -I. -o "$MKARZ.$$" mkarz.c canon.o )
+	mv -f "$MKARZ.$$" "$MKARZ"
+fi
+
+if [ "$key" = -b ]; then
+	echo "arz: $MKARZ"
+	exit 0
+fi
+exec "$MKARZ" "$@"

@@ -1,0 +1,37 @@
+Host shim: n0/sharp.c getline -> mwc_getline.
+
+The name collides with POSIX/glibc getline(3), whose signature differs.
+Coherent libc has no such symbol, so the native source keeps the plain name.
+
+--- a/n0/sharp.c
++++ b/n0/sharp.c
+@@ -313,7 +313,7 @@
+  */
+ static
+ char *
+-getline()
++mwc_getline()
+ {
+ 	register int c;
+ 	register char *p;
+@@ -365,17 +365,17 @@
+ 		break;
+ 
+ 	case XERROR:
+-		cfatal("#error: %s", getline());
++		cfatal("#error: %s", mwc_getline());
+ 		break;
+ 
+ 	case XPRAGMA:
+-		p = getline();
++		p = mwc_getline();
+ 		if (pragma(p) == 0)
+ 			cwarn("unrecognized #pragma ignored: %s", p);
+ 		break;
+ 
+ 	case XIDENT:			/* non-ANSI but hal wants it for RCS */
+-		getline();		/* line is ignored */
++		mwc_getline();		/* line is ignored */
+ 		break;
+ 
+ 	case XIFDEF:

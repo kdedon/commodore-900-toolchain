@@ -1,0 +1,233 @@
+Host shim: n1 select -> iselect, in every file that names it.
+
+The name collides with select(2).  COHERENT 3.2 has no select, so the native
+source keeps the plain name.  build-cc.sh additionally asserts that no
+occurrence survives: a NEW reference added upstream would leave this patch
+applying cleanly while the build silently called the libc function.
+
+--- a/n1/cc1.c
++++ b/n1/cc1.c
+@@ -22,7 +22,7 @@
+ VARIANT	variant;		/* Variant template */
+ #if !TINY
+ int	mflag;			/* Debug modify routines */
+-int	sflag;			/* Debug select routines */
++int	sflag;			/* Debug iselect routines */
+ int	oflag;			/* Debug output routines */
+ #endif
+ #endif
+--- a/n1/code.c
++++ b/n1/code.c
+@@ -32,7 +32,7 @@
+ 	ap = tp;
+ 	walk(ap, amd);
+ #if !TINY
+-	if (sflag) snapf("%W%E", "Before select", ap);
++	if (sflag) snapf("%W%E", "Before iselect", ap);
+ #endif
+ 	if (c != MFLOW) {
+ 		s = ANYR;
+@@ -52,7 +52,7 @@
+ 	if (code1(&tp, c, s) != 0) {
+ 		ap = tp;
+ #if !TINY
+-		if (sflag) snapf("%W%E%W", "After select", ap, NULL);
++		if (sflag) snapf("%W%E%W", "After iselect", ap, NULL);
+ #endif
+ 		output(ap, c, s, n);
+ 	} else
+@@ -76,7 +76,7 @@
+  * COMMA's and store the result node into tpp.
+  * This routine makes side effects happen
+  * in the right places.
+- * A failure to select is fatal.
++ * A failure to iselect is fatal.
+  */
+ code1(tpp, c, r)
+ TREE **tpp;
+@@ -96,7 +96,7 @@
+ #if !TINY
+ 	if (sflag > 1) snapf("%W%E", "Before code1", ap);
+ #endif
+-	if (select(ap, c, r) == 0) {
++	if (iselect(ap, c, r) == 0) {
+ 		/* nomatch(ap); */
+ 		match = 0;
+ 	}
+@@ -116,7 +116,7 @@
+ 			curbusy = savbusy;
+ 			curxreg = 0;
+ 			ap = storelist[i];
+-			if (select(ap, MEFFECT, ANYR) == 0) {
++			if (iselect(ap, MEFFECT, ANYR) == 0) {
+ 				/* nomatch(ap); */
+ 				match = 0;
+ 			}
+--- a/n1/out.c
++++ b/n1/out.c
+@@ -15,7 +15,7 @@
+  * All registers have been set up by selection.
+  * A pointer to the selected macro has been stashed in the tree.
+  * Walk down the tree, putting out the required code.
+- * It would be nice if select and this guy could be one routine.
++ * It would be nice if iselect and this guy could be one routine.
+  */
+ output(tp, c, s, n)
+ register TREE *tp;
+@@ -189,7 +189,7 @@
+ 	}
+ 	/*
+ 	 * Perform output for any subgoals.
+-	 * This code is similar to that in select,
++	 * This code is similar to that in iselect,
+ 	 * but works in exactly the reverse order.
+ 	 */
+ 	if (selmiss(lpflag, lflag)
+@@ -310,7 +310,7 @@
+ 			opv = c;
+ 			continue;
+ 
+-		case M_OP0:	/* Use the opcode table to select */
++		case M_OP0:	/* Use the opcode table to iselect */
+ 		case M_OP1:	/* one of three variations of opcode */
+ 		case M_OP2:
+ 			opcode = optab[op-MIOBASE][c-M_OP0];
+--- a/n1/sel0.c
++++ b/n1/sel0.c
+@@ -21,7 +21,7 @@
+  * This routine is a near duplicate of output().
+  * This routine must succeed or a nomatch fatal error will result.
+  */
+-select(tp, c, r)
++iselect(tp, c, r)
+ register TREE *tp;
+ {
+ 	register TREE *ap;
+@@ -33,7 +33,7 @@
+ 
+ #if !TINY
+ 	if (sflag > 1) {
+-		snapf("select(%P, %C, ", tp, c);
++		snapf("iselect(%P, %C, ", tp, c);
+ 		snapf(c<MFLOW ? "%R" : c<MEQ ? "%d" : "L%d", r);
+ 		snapf(") %A\n", tp->t_op);
+ 	}
+@@ -162,7 +162,7 @@
+ 					store(ap, 0);
+ 				else {
+ 					xp = findoffs(xp);
+-					if (select(xp, MLVALUE, ANYL) == 0)
++					if (iselect(xp, MLVALUE, ANYL) == 0)
+ 						return (0);
+ 					tp->t_used |= xp->t_used;
+ 				}
+@@ -171,7 +171,7 @@
+ 			if (!isofs(ap->t_flag))
+ 				cbotch("call not ofs");
+ 			ap = findoffs(ap);
+-			if (select(ap, MLVALUE, ANYL) == 0)
++			if (iselect(ap, MLVALUE, ANYL) == 0)
+ 				return (0);
+ 			tp->t_used |= ap->t_used;
+ #endif
+@@ -254,7 +254,7 @@
+ 	rnode.t_patp = NULL;
+ 	if (sflag > 2) snapf("%W%E%W", "Selfix", tp, NULL);
+ #endif
+-	if (select(tp, c, r) == 0)
++	if (iselect(tp, c, r) == 0)
+ 		cbotch("node will not fix");
+ 	tp->t_lp = ap;
+ 	tp->t_used = ap->t_used;
+@@ -353,7 +353,7 @@
+ 			consnapv(2, "Offs %R\n", r);
+ 			if (leaf == 1)
+ 				setbusy(r);
+-			if (select(ap, MLVALUE, r)) {
++			if (iselect(ap, MLVALUE, r)) {
+ 				ttp->t_used |= ap->t_used;
+ 				return;
+ 			}
+@@ -364,7 +364,7 @@
+ 	/* Try to load the tree into a register */
+ 	if ((r = rallo(tp, ttp->t_used, 0)) >= 0) {
+ 		setbusy(r);
+-		if (select(tp, MRVALUE, r)) {
++		if (iselect(tp, MRVALUE, r)) {
+ 			tp->t_flag   = 0;
+ 			ttp->t_used |= tp->t_used;
+ 			return;
+@@ -414,7 +414,7 @@
+ 		if ((index = rallo(tp1, ttp->t_used, 1)) >= 0) {
+ 			consnapv(2, "Index %R\n", index);
+ 			setbusy(index);
+-			if (select(tp1, MLVALUE, index)) {
++			if (iselect(tp1, MLVALUE, index)) {
+ 				tp->t_used  |= tp1->t_used;
+ 				ttp->t_used |= tp1->t_used;
+ 				return;
+@@ -440,7 +440,7 @@
+ 		/* If the preferred index is useable
+ 		 * then attempt to use it */
+ 		if ((ttp->t_used&reg[index].r_phys) == 0) {
+-			if (select(tp2, MLVALUE, index)) {
++			if (iselect(tp2, MLVALUE, index)) {
+ 				tp->t_used  |= tp2->t_used;
+ 				ttp->t_used |= tp2->t_used;
+ 				return;
+@@ -450,7 +450,7 @@
+ 		 * try to use another one. */
+ 		if ((newindex = rallo(tp2, ttp->t_used, 1)) >= 0) {
+ 			setbusy(newindex);
+-			if (select(tp2, MLVALUE, newindex)) {
++			if (iselect(tp2, MLVALUE, newindex)) {
+ 				ttp->t_used |= tp2->t_used;
+ 				tp->t_used  |= tp2->t_used;
+ 				return;
+@@ -474,7 +474,7 @@
+ 	}
+ 	/* Select the addressible offset node
+ 	 * into an index register */
+-	if (select(tp2, MLVALUE, index) == 0)
++	if (iselect(tp2, MLVALUE, index) == 0)
+ 		cbotch("sellv");
+ 	/* This flag is for the benefit of output() */
+ 	tp->t_flag |= T_INDIR;
+--- a/n1/sel1.c
++++ b/n1/sel1.c
+@@ -292,7 +292,7 @@
+ 			|| (rtemp==LOTEMP || rtemp==HITEMP)) {
+ 				ntemp = regselect(tp, ntemp, 1);
+ 				if (ntemp < 0) {
+-					consnap(10, "ntemp select\n");
++					consnap(10, "ntemp iselect\n");
+ 					goto again;
+ 				}
+ 			}
+@@ -350,7 +350,7 @@
+ 		 * or the currently specified context */
+ 		sgoal = subgoal(c, stemp);
+ 		/* Now load the specified register or preferred type */
+-		if (select(rp, sgoal, stemp) == 0)
++		if (iselect(rp, sgoal, stemp) == 0)
+ 			goto again;
+ 		tp->t_used |= rp->t_used;
+ 		if ((pflag&P_SRT) != 0) {
+@@ -377,7 +377,7 @@
+ 		else
+ 			stemp = reguse(ltemp, ntemp);
+ 		sgoal = subgoal(c, stemp);
+-		if (select(lp, sgoal, stemp) == 0)
++		if (iselect(lp, sgoal, stemp) == 0)
+ 			goto again;
+ 		tp->t_used |= lp->t_used;
+ 		if ((pflag&P_SLT) != 0) {
+@@ -396,7 +396,7 @@
+ 	if (!isrealreg(ntemp) && ntemp!=NONE) {
+ 		ntemp = regselect(tp, ntemp, 1);
+ 		if (ntemp < 0) {
+-			consnap(10, "ntemp select\n");
++			consnap(10, "ntemp iselect\n");
+ 			goto again;
+ 		}
+ 	}

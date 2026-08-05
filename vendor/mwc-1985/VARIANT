@@ -1,0 +1,61 @@
+# VARIANT -- the variant word the June 1985 passes are run with, by kind of
+# artifact.  Read by the mwc1985 wrappers of every repository that drives these
+# binaries (commodore-900-coherent, commodore-900-bios); this file is the one
+# place the words are written down.
+#
+# The word is a bit vector, passed to cc0/cc1/cc2 as hex byte pairs, byte 0
+# first (h/var.h).  The shipped driver asks for four bits -- /bin/cc is
+# `exec /bin/ccx -VSPVAL -VSINU -VSUREG -VSUVAR $*', giving VSUREG=0, VSUVAR=1,
+# VSPVAL=7 -> byte0 0x83 and VSINU=26 -> byte3 0x04.  Those four are diagnostic
+# and dialect bits and are in every word below.
+#
+# VCOMM (bit 13 -> byte1 0x20) is the one that differs.  It decides how a
+# tentative global -- `int x;' at file scope, no initialiser -- is emitted.
+# Set: the global becomes a COMMON, an L_REF symbol carrying its size, and nld
+# allocates it once, in hash-bucket order, after every object's BSS; a second
+# object naming the same variable shares it.  Clear: cc2 defines the variable in
+# the object's OWN BSS and folds its address at compile time.  The two put the
+# variable at different addresses, and the address is relocated into the text,
+# so an object built the wrong way is not the object the machine shipped.
+#
+# The 1985 builds did not use one word for everything, and the disk image says
+# which used which.  Evidence per kind is below; the survey is
+# c900oses/docs/coherent/TASK-260-MWC1985-VARIANT-PER-TARGET.md.
+#
+#	kind		word
+#
+# system: the kernel, the loadable drivers, the libraries, the ROM, the
+# standalone diagnostics -- everything except a userland command.
+#   * every object and archive member that survives on the disk image carries
+#     commons and defines nothing in its own BSS: 263 commons, 0 BSS-defined
+#     globals over 105 .o files and 8 archives.
+#   * /lib/libc.a holds exactly one common, `_mhdr' (size 0x12, in monitor.o).
+#     Rebuilding libc with this word reproduces that: one common, same symbol,
+#     same size, same member.  With VCOMM clear _mhdr is BSS-defined instead.
+#   * the shipped kernel /coherent keeps its symbol table, and its BSS tail is
+#     a run of symbols packed back-to-back by size in an order unrelated to
+#     source grouping -- nld's common pool -- including `_bvirt' and `wdutab',
+#     which are commons in the con/*.o and drv/wd.o beside it.
+#   * /drv/hrtty and /drv/ivhrtty relink BYTE-IDENTICALLY from the commons-
+#     carrying objects in /usr/src/hrtty/src.
+#   * the V1.0 ROM compares equal to boot-H_V_1.0.bin / boot-L_V_1.0.bin only
+#     with this word (commodore-900-bios; task 221/230).
+#   * three source/object pairs in /usr/sys/z8001/diag recompile byte-identical
+#     with it, and a 65,536-word sweep over one of them matches only when VCOMM
+#     is set (task 230).
+system		83200004
+#
+# userland: the commands in /bin, /usr/bin and /etc.
+#   * the shipped parsers built from /lib/yyparse.c -- expr sh test find awk bc
+#     -- hold `yys = &yystack[-1]' as a compile-time-folded address in the
+#     program's own data segment.  Built with VCOMM that same source cannot come
+#     out that way: yystack is a common, cc2 zero-extends the -2 into the 32-bit
+#     addend of the external LONG relocation (0x0000FFFE), and nld resolves
+#     externals by linear seg<<16|off arithmetic, so it adds +65534 and the
+#     carry lands in the segment byte.  The stock binaries carry no such
+#     address, and neither does any other shipped command: over 157 executables
+#     in /bin, /usr/bin, /etc and /usr/games, every long immediate lies in a
+#     segment the same binary also addresses as memory.
+#   * with VCOMM the same programs built here die at startup: `expr 3 + 4'
+#     prints "Stack overflow".
+userland	83000004

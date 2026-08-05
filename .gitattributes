@@ -1,0 +1,9 @@
+# Line endings are LF in the repository and LF in the working tree, on every
+# host.  The Windows CI job runs the shell scripts under MSYS2, and a checkout
+# that translated them to CRLF would hand `sh' a `\r' at the end of every line.
+* text=auto eol=lf
+
+# The 1985 MWC Z8001 executables in vendor/ are not text and must never be
+# examined for line endings.
+vendor/mwc-1985/* binary
+vendor/mwc-1985/SOURCES.md text eol=lf

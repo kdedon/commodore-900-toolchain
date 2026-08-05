@@ -1,0 +1,152 @@
+# MI-PATCHES -- every deliberate divergence of src/cc from the pristine MWC
+# 4.2.12 donor, with the argument that justifies it.  Read by
+# tests/mi-divergence.py (`make check-mi', which `make check' runs); the BAKED
+# table in docs/PATCHES.md is RENDERED from this file by `make mi-table' and is
+# not the record.
+#
+# One record per fix, blank-line separated:
+#
+#	patch: <id>
+#	file:  <path> [<sha256 of that file as this justification was written>]
+#	fix:   what the edit does
+#	why:   why it is correct ON THE NATIVE C900 -- int is 16 bits, K&R, a
+#	       segmented Z8001 -- not merely why it builds on the host
+#
+# The hash is required for every machine-INDEPENDENT file (a machine-layer file
+# named by a fix that spans both sides carries none, since that side of the tree
+# is ours to change).  It is what stops this from being prose: a file cannot be
+# excused by naming it, only by naming it at a stated content, so a second,
+# unrelated edit to an already-patched file fails the gate until somebody
+# re-reads the argument against the new text.  That is not hypothetical -- it is
+# how n1/sel0.c came to carry an undocumented change under a row about something
+# else.
+#
+# `fix' and `why' are continued by repeating the field; the lines are joined
+# with a space.
+
+patch: expr-func-decay-null
+file: n0/expr.c 8cdc02f3467077e684366faa433c6fa9d0877754317ef617b37ce0463558f98d
+fix: `d_dp != NULL` guard before `d_dp->d_type == D_FUNC`
+why: NULL deref on every `arr[i]` decay; survivable only because Coherent mapped page 0
+
+patch: bitcompat-signedness
+file: n0/stat.c d463bb44e063cbca83dbf952a18ecb2811018e095ff3cb04e1482e07d2069a5e
+fix: signedness guard on `bitcompat()` for DIV/REM/SHR/ASHR (+ op-assign)
+why: mixed-signedness divide/shift skipped the conversion that selects signed vs unsigned instructions
+
+patch: setfname-terminate
+file: n0/cc0.c 79984c2fdec42d4a94652a8e7849a68df76d579b04e6727845e92594ef29af97
+fix: `file[NFNAME-1] = 0` after `strncpy` in `setfname()`
+why: strncpy leaves the name unterminated at exactly NFNAME; `sput()` then scans past the buffer
+
+patch: get-terminal-eof
+file: n0/get.c b22c828530c0362b33cd1b311fb256d49dbf4938b17d632e5b2788eff29fa460
+fix: terminal-EOF guard: NULL `ifp` after `fclose`, return EOF on re-entry
+why: use-after-free + double `fclose` when error recovery pulls tokens past EOF
+
+patch: keyword-inline-id
+file: n0/cc0key.c ea111c92d5b9244ed29e09f9655df11819fe523fed6992585ab6f625293b82bd
+fix: keyword tokens wrapped in `{TOK t; char id[];}` with inline storage
+why: the bare-TOK form relies on link-order adjacency of the id string -- an ABI accident, not a guarantee; the wrapper is layout-identical where the accident held and correct everywhere
+
+patch: relop-long-fold
+file: n1/out.c 2e397f3a029c77d3a812b48a5cf6912d88a95ea525655079a51e8f9479c59e3c
+file: n1/sel0.c 6e2f58d48d031f49f5b75c7c4a9c13c25dd07971fbd57db113dd24b05b2378a5
+fix: `!islong(...)` -- a long compare-vs-0 must not fold to a direct operand test
+why: Z8001: no test-long reaches the relop selector; the fold drops the explicit `CPL n,#0`. (Z8001-target edit: this tree builds the Z8001 compiler only. The donor i386 coder needs the fold; the i386 host harness uses pristine donor source.)
+
+patch: subgoal-reg-leaf
+file: n1/out.c 2e397f3a029c77d3a812b48a5cf6912d88a95ea525655079a51e8f9479c59e3c
+fix: subgoal-output sites skip re-materializing an operand already a `REG` leaf
+why: Z8001 far pointers arrive in a register pair as a REG leaf; re-routing one through `outtree` derefs a garbage `t_lp` (FUZZ-13 SIGSEGV)
+
+patch: opeq0-convert-narrow
+file: n1/mtree0.c 92beccb582bf5374befff34b045dea6024209cbacd22452cf527b0fb346710eb
+fix: `x op= 0' folding CONVERTs a narrower lvalue to the node's promoted type instead of retyping it in place; an effect context keeps the retype
+why: the value of `x op= 0' is x at the PROMOTED type, so retyping the lvalue node widens the object's own load -- on the Z8001 `char c; v = (c += 0)' emitted `ld r0,-1(r13)', a WORD load of a one-byte auto, reading the neighbouring byte as the high half (big-endian, so v became c<<8|junk). Confirmed at HEAD and fixed: the load is now `ldb rl0,-1(r13)' + `extsb', identical to plain `v = c'. Reached by AADD/ASUB/AOR/AXOR/ASHL/ASHR (AAND is rewritten to ASSIGN above); `c += 1' was never affected, only the zero fold. MEFFECT reads nothing, so it keeps the cheaper retype and no code moves
+
+patch: subadd-keep-type
+file: n1/mtree0.c 92beccb582bf5374befff34b045dea6024209cbacd22452cf527b0fb346710eb
+fix: the SUB->ADD constant canonicalization keeps the node's own type (donor stamped `IVAL_T` "Signed")
+why: the stamp writes junk signedness over the C type (`u - 1` labeled signed, `p - c` labeled non-pointer); the Z8001 MD selects signed-vs-unsigned divide/shift by node type, and the MD `fixaddtype` now preserves node signedness through reassociation (FUZZ-5), so the stamp must not lie. Donor i386 relied on the re-derive repairing it each pass
+
+patch: cast-signedness-keep
+file: n0/expr.c 8cdc02f3467077e684366faa433c6fa9d0877754317ef617b37ce0463558f98d
+fix: LPAREN cast: don't collapse a bit-compatible cast that CHANGES signedness onto a DIV/REM/SHR/ASHR/ADIV/AREM node -- keep the CAST node
+why: the collapse retypes the op in place, making `(int)(u/d) >> k` and `(int)((u/d) >> k)` the same tree with opposite correct shifts (FUZZ-20); the surviving node is the only disambiguator. Same guard the `n0/stat.c` return-coerce row already carries; cc1 selects the kept convert at zero cost (leaves.t same-kind identity)
+
+patch: bput-eof
+file: common/bput.c bbe48b328b717889f7a66a6b5b62e5b93962038e511a6f81a118f65b88c104da
+fix: `putc(b, ofp) == EOF && ferror(ofp)` -- EOF alone is not failure
+why: the native putc fast path returns the stored CHAR (`*_cp++ = c`), so byte 0xFF reads back as -1 == EOF; the donor's own `#if 0` comment describes this bug class but its `b &= 0xFF` guard cannot fix the macro's return value. Any IR stream containing an 0xFF byte (every negative ival) aborted "temporary file write error" on the target; the host putc returns an int and never trips it
+
+patch: struct-member-align
+file: n0/z8001/bind.c
+file: h/z8001/mch.h
+file: h/cc0.h d8e0e93278f01e719b1ae3c524caa7c851e34ecfbb7e3a03d7aea66a608ae8b5
+fix: word-align structure members: `fieldalign()` rounds a normal member up to its natural alignment (1 for a byte object, 2 for any wider type/pointer) via new `memalign()`; new `salign()` gives the struct itself the alignment of its widest member; `saligntype()` macro -> `salign()`; `extern int salign()` declared
+why: the donor i8086 template packs members to byte offsets, which the i8086 tolerates (unaligned word/dword access); the Z8000 does NOT -- a word/long/far-pointer read at an odd address returns the wrong bytes. getty's `struct stable` put `char *s_lmsg` at odd offset 5, so `LDL 5(Rn)` loaded a garbage far pointer -> strlen SIGSEGV (the login-prompt blocker). Aligning is a hardware requirement, so the original MWC Z8001 compiler must do the same. Codegen cost: field access is still one load and array indexing still one MULT/scale -- only the displacement/size *immediate* changes, so no instruction-count change; the sole effect is a few padding bytes in mixed sub-word/word structs, which the original ABI also carries. Efficiency parity vs the original is an OPEN follow-up, to be A-B'd against the original HD-extracted binaries via loutdis (NOT a self-comparison). All difftest generators (struct/bitfield/2darr/strptr/torture) still match gcc
+
+patch: itree-opid-buffer
+file: n3/itree.c 2b8ecec7cfeef42f7ebe93bdc0a92c93f375c4ff7ea3acfbfe35e5395870c577
+fix: the `op >= ETCBASE` arm `sprintf`s into `opid` before `opid` points anywhere: give it a local buffer
+why: writes through an uninitialized pointer. The arm fires only on an out-of-range tree opcode -- i.e. on a corrupt or foreign intermediate file, which is precisely when someone runs cc3 -- so the tool crashes exactly where it is supposed to report
+
+patch: igen-segdir-bound
+file: n3/z8001/igen.c
+fix: bound the `ENTER` segment-directive lookup by `NSEGDIR`
+why: `seg_enter[]`/`seg_leave[]` have an entry per LOADABLE segment (6); `ops.h` defines 11 segment codes, and `SANY` and up would index past the end. The i8086 template has the same unbounded index
+
+patch: dspush-null
+file: n0/expand.c 3ee464ba58ba524d3d5ad7b84100c18f11e211c8e50c1dcd671c4967116072df
+fix: `dspush(DS_IEOF, 0)` -> `dspush(DS_IEOF, NULL)`
+why: K&R: the callee takes a pointer, and a bare `0` passes an `int`. On the Z8001 that is 2 bytes into a 4-byte slot, so the argument and everything after it is misaligned. The project's most recurring bug class; harmless on the host, wrong on the target
+
+patch: fold-operand-widen
+file: n0/fold.c faa0d7434315d0d1e07f642e8d26ed091619521ea75591dd3bbe2f2a3be15d17
+fix: constant folding widens each operand by ITS OWN signedness, not the goal type's
+why: an unsigned operand promoted into a wider signed goal (unsigned int + long) is value-preserving and must ZERO extend; a signed operand promoted into an unsigned goal must SIGN extend. Keying both off the goal type mis-widens one or the other. The operation's own signed/unsigned semantics still use the goal `uflag`
+
+patch: node-uival
+file: n1/node.c 726975f8f958dc62ea7bef40c460b0c5de581fd38de2df07c0f2eb47c62c6675
+fix: `(unsigned) tp->t_ival` -> `(uival_t) tp->t_ival`
+why: `unsigned` is the HOST's width; `uival_t` is the IR's. Casting a target constant through host `unsigned` truncates it on any host wider than the target
+
+patch: oldmachine-macro
+file: n0/cc0.c 79984c2fdec42d4a94652a8e7849a68df76d579b04e6727845e92594ef29af97
+file: h/z8001/cppmch.h
+fix: new `OLDMACHINE` ("Z8001"), predefined beside `MACHINE` ("_Z8001")
+why: the June 1985 compiler's standalone cpp predefines the target unprefixed, and the COHERENT 3.2 sources select on that spelling: `<l.out.h>` takes the **n.out object layout** under `#ifdef Z8001`, `sbrk()` its segment-crossing arithmetic, `exec()` its shared-library arms. A compiler that defines only `_Z8001`/`__Z8001__` builds the wrong layout silently, so this is a target-macro requirement, not a convenience. Guarded by `#ifdef`, so a machine layer that does not define it is unchanged
+
+patch: vcpp-copy-text
+file: n0/get.c b22c828530c0362b33cd1b311fb256d49dbf4938b17d632e5b2788eff29fa460
+file: n0/cpp.c e9d3190445d57ff493744babb3e6f343359b09628152e90e5b9d88845abdada7
+fix: in `isvariant(VCPP)` (standalone-preprocessor) runs only: a quote literal ends at the newline instead of erroring, and a non-C byte is copied instead of erroring
+why: VCPP is the mode in which cc0 is a **preprocessor**, and the text it copies is in the CONSUMER's language, not C. The assembly the kernel build preprocesses (`md.s`, `mmas.s`, `scroll.s`) has apostrophes and a stray ESC inside `/`-comments; as C those are "new line in character literal" and "illegal cpp character", and the unterminated-quote scan then ran on past the end of the line. The 1985 standalone cpp copies both without comment, and our output now matches its output on `md.s` token for token. Nothing changes on the compile path: `VCPP` is never set there
+
+patch: stream-binary-win32
+file: h/stream.h 5b2061016aeb410b92fc8f50bce5f301f2cf485db29b566c3acf87a4939f5c69
+fix: new `_WIN32` arm selecting `"rb"`/`"wb"`/`"r+b"` with the pass-to-pass accessors, and the `COHERENT` arm yields to it
+why: the streams cc0/cc1/cc2 pass between them are BINARY, and the host build defines `COHERENT`, whose arm asks for text mode. On Windows that turns every 0x0A written into 0x0D 0x0A and the objects are garbage, silently -- nothing about the compile fails. BAKED, not a shim: it is `#ifdef`-guarded on a platform macro exactly like the donor's own `MSDOS` and `GEMDOS` arms, which are there for the same reason, so the donor plainly anticipated the arm and no other target sees it
+
+patch: vkern-variant
+file: h/var.h 43cc73e30ebffa5615a3c9296f948ca8f08bb7dc3d352a85d193e5bd4a28a7e8
+fix: new variant code `VKERN` (9)
+why: the kernel model: numeric frame/auto addresses carry the system stack segment (SS = 0x3F) rather than the flat model's segment 0. Variant codes are a shared namespace, so the definition has to live with the others; nothing machine-independent reads it
+
+patch: store-converge
+file: n1/sel0.c 6e2f58d48d031f49f5b75c7c4a9c13c25dd07971fbd57db113dd24b05b2378a5
+file: n1/code.c 832bd0b521a714d4f23a1c76d31b7456d68d6546c3944d6aeb96a6fed3d3bd03
+file: h/cc1.h 1e5097c8eb8d0262743ed0877019c8d04fa2b15056079f7e17132ff72a7f9c2e
+fix: `store()` records the subtree each spill was made for (`storesub[]`, beside the existing `storelist[]`), and a second demand for the same subtree is a `cbotch` naming the operator instead of a silent re-enqueue
+why: `store()` spills a subtree to a stack temp and enqueues `temp = <subtree>`; if selecting that assignment cannot address the subtree either, the donor enqueues it again with the same tree and the same registers, so the list grows without converging and NSTORE decides only how long the loop runs (ICE 5149). One subtree now gets one store. This is a termination guarantee, not a codegen change: no accepted program compiles differently, and the diagnostic lands at the demand rather than as an exhausted table. The native cost is the array itself -- NSTORE is 20 off the i386 arm, so 20 near pointers of BSS in cc1, which has room; the loop it bounds is over at most 20 entries and runs once per store, so it is invisible beside selection
+
+patch: address-reg-reserve
+file: n1/reg0.c 3146f8fda7a4ada5c452f42acda5131886f90742853615cdaa5bd195571ad13c
+fix: `rallo()` keeps one register that can address: when an allocation would take the last register whose `r_lvalue` is non-empty, a register that can hold the kind but could never address it takes the value instead. A pointer-typed value is exempt
+why: the reserve is decided entirely by the machine register table's `r_lvalue` -- the set of kinds a register can be dereferenced through -- so it is machine-independent code reading a machine-dependent fact, and on a machine where every register can address (the donor's i386) `hold` is never set and the function returns exactly what the donor returned. On the Z8001 that set is small and exhaustible: a value in the last addressable register cannot be undone, the selector then spills, and the spilled assignment wants the address it could not form -- ICE 5149, which the original 1985 compiler fails on too. Measured over 1017 sources (798 compiling), the reserve fires so rarely that exactly two objects move, awk5.o 1915 -> 1910 instructions and the kernel's bio.o 1523 -> 1521, both FEWER, and the 13 sources shared with the 1985 compiler are unchanged -- so it costs nothing against the efficiency baseline
+
+patch: driver-z8001-model
+file: coh/cc.c d33ecfb9bbbd7cde5cc79bce7338e12e14248c8a6bdb650134d3032306454f39
+fix: `#if _Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` instead of `V80186`, and the model-selection block chooses `VLARGE` unless `-VSMALL` was asked for, in place of the Intel OMF rules
+why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if _Z8001`, so no other target sees them

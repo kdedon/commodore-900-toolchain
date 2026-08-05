@@ -1,0 +1,36 @@
+Host shim: coh/tabgen.c ungetc -> tg_ungetc.
+
+tabgen keeps its own one-character pushback under this name; on the host it
+collides with glibc ungetc(3).
+
+--- a/coh/tabgen.c
++++ b/coh/tabgen.c
+@@ -98,7 +98,7 @@
+ int	nbol	= 0;
+ int	ndef	= 0;
+ int	hiteof	= 0;
+-int	ungetc	= -1;
++int	tg_ungetc	= -1;
+ int	opseq	= 1;
+ char	*tabledir;
+ int	fargc;
+@@ -928,8 +928,8 @@
+ 	register int	isdef;
+ 	register int	i;
+ 
+-	if ((c=ungetc) >= 0) {
+-		ungetc = -1;
++	if ((c=tg_ungetc) >= 0) {
++		tg_ungetc = -1;
+ 		return (c);
+ 	}
+ 	if (hiteof != 0)
+@@ -1017,7 +1017,7 @@
+ 
+ unget(c)
+ {
+-	ungetc = c;
++	tg_ungetc = c;
+ }
+ 
+ getid(c, id)

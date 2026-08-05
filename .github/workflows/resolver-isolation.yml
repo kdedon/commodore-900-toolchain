@@ -1,0 +1,74 @@
+# resolver-isolation -- the regression test for the dependency SEARCH.
+#
+# Every other job sets C900_EMU and COHERENT_OS explicitly, as it must: a job
+# that depended on directory adjacency breaks the first time a runner image
+# moves its checkouts.  That leaves the search lists in host/deps.sh untested,
+# and the bug this project has actually had is a resolver that walked outward,
+# found something belonging to somebody else, and reported a false success --
+# once as 652 "wrong answers" from a compiler that was fine.
+#
+# So: the repository ALONE, in a deliberately deep directory, with an empty
+# $HOME and no emulator anywhere -- and the assertion is that the things that
+# need a sibling REFUSE, by name.  A pass here means the walk is still bounded
+# at three parents and the refusal still says which variable to set.
+name: resolver-isolation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  isolation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: src }
+
+      # Six levels deep, and nothing but this repository anywhere in them:
+      # deeper than the three parents the search is bounded at, so a walk that
+      # went further would leave the sandbox and find the runner's own
+      # checkouts -- which is the failure being tested for.
+      - name: Stage a lone clone, six levels deep
+        run: |
+          mkdir -p iso/home iso/a/b/c/d/e/f
+          rsync -a --exclude .git --exclude host/build src/ iso/a/b/c/d/e/f/commodore-900-toolchain/
+
+      - name: The guest runner refuses, and names C900_EMU
+        working-directory: iso/a/b/c/d/e/f/commodore-900-toolchain
+        run: |
+          set +e
+          out=$(env -i HOME="$GITHUB_WORKSPACE/iso/home" PATH=/usr/bin:/bin \
+                sh host/runner.sh 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          test $rc -ne 0 || { echo "FAIL: resolved an emulator that is not there"; exit 1; }
+          echo "$out" | grep -q C900_EMU || { echo "FAIL: refusal does not name the variable"; exit 1; }
+
+      - name: The OS harnesses refuse, and name COHERENT_OS
+        working-directory: iso/a/b/c/d/e/f/commodore-900-toolchain
+        run: |
+          set +e
+          out=$(env -i HOME="$GITHUB_WORKSPACE/iso/home" PATH=/usr/bin:/bin \
+                make libc 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          test $rc -ne 0 || { echo "FAIL: make libc ran without an OS tree"; exit 1; }
+          echo "$out" | grep -q COHERENT_OS || { echo "FAIL: refusal does not name the variable"; exit 1; }
+
+      # A value the user asked for is refused AS ITSELF, never quietly replaced
+      # by something the search happened to find: a resolver that falls back
+      # from a wrong C900_EMU= reports somebody else's results as yours.
+      - name: A wrong value is refused as itself
+        working-directory: iso/a/b/c/d/e/f/commodore-900-toolchain
+        run: |
+          set +e
+          out=$(env -i HOME="$GITHUB_WORKSPACE/iso/home" PATH=/usr/bin:/bin \
+                C900_EMU=/nonexistent/c900 sh host/runner.sh 2>&1)
+          rc=$?
+          set -e
+          echo "$out"
+          test $rc -ne 0 || { echo "FAIL: a wrong C900_EMU was accepted"; exit 1; }
+          echo "$out" | grep -q /nonexistent/c900 || { echo "FAIL: refusal does not quote the value given"; exit 1; }

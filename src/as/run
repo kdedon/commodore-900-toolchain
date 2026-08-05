@@ -1,0 +1,9 @@
+: the assembler's sources.  host/srcman.sh reads these two lists, so the host
+: cross-build compiles what this build does and refuses a .c under src/as that
+: neither list names.  A scratch or backup copy belongs in a private directory
+: or under $C900_BUILD, never beside the file it copies.
+SRC='asm.c asmexpr.c asmlex.c data.c grindy.c list.c subr.c sym.c'
+MDSRC='z8001/asmout.c z8001/machine.c z8001/pst.c'
+
+cc -n -o /bin/as -s -Iz8001 -I. $SRC $MDSRC
+: rm *.o

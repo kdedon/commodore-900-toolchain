@@ -1,0 +1,101 @@
+# MI-BASELINE -- the pristine donor, by hash.  GENERATED, not written:
+#     make mi-baseline        (with $MWC_DONOR set)
+#
+# Donor: Mark Williams COHERENT 4.2.12 c/ tree, compiler V4.6.3 -- the
+# newest MWC compiler source that exists (docs/toolchain TASK-234).  It is
+# not vendored a second time: this repository already SHIPS that source in
+# src/cc, and the only datum missing is what it looked like before we
+# touched it, which is exactly one hash per file.
+#
+# NOT-VENDORED names a donor file this tree deliberately does not carry;
+# it must stay absent, so that vendoring one later is a decision and not
+# a slip.  A file present here and absent from the donor cannot exist:
+# it would be a new file in a machine-independent directory, which is the
+# thing the rule forbids outright.
+#
+# sha256                                                            path
+b7770fb4baa6d0731fd9938ecc20b8557acdd578f10d52c60ade1a9e7320038a  n0/cc0.c
+2deeaecc7e1e698e3168f1be32b190210c2b645e2124f938bb04eaa99890351b  n0/cc0key.c
+3aee445a06c4728bac741ad518274c43ab10d76e3d781988b64104d8786d2f03  n0/cc0sym.c
+e927de11976ccb348f148dc40518b0256ed5f83943085d27d6a08676ca0c0ba5  n0/cpp.c
+73bf92d09bedb70057ebc32a910e73d89270b5c88a0239d1147281c1f4711594  n0/dbgt0.c
+40f60f6359259ec978bb26cafbfe5090ce8dee8519c0d4a740f10852c866c6a6  n0/ddecl.c
+a36f55752422f236ad62d9fa03dc32cdc74592220cda6b0d156f84dac0721aee  n0/dope.c
+6678b494b3a06543c21b029dba38358da313451aeb6fe19a915d9473646f00d9  n0/double.c
+c22f0bc3ad733d52736e4c371cf658a404827e82f1bb736e163d1f8ab0a8b29a  n0/etc.c
+150f9369f63049ed8c0f985b3a63c36ab9a9c286fed8d19c4e16bab5b381a31e  n0/expand.c
+0ddca271e5fe9f7fc413c5b75b7c8d040b4cc6bdc4c8276adb5104ffd80d47ab  n0/expr.c
+3e8be3cd7cb149f2e3d919cf84697afc594fd2170c9fee843a1ca3fc3cfc06f6  n0/fold.c
+9ff6ca5be3688b02cb432f2e648feb3ebd065548953630884528dd39d843852f  n0/gcandt.c
+47cf3d66a7235c680c64edb7151a04a29d5f017a89cb246367ad803c86c96b39  n0/gdecl.c
+7e3ed2a8f3f62d07d9c97d65269134d5c57de5ebc6657b82cfe0863a47e48bce  n0/get.c
+99001f6dd4ebf4ec2c21dad2ae558e7ce0beb4c191cd771949314bee04fca64f  n0/init.c
+e453e39d5075475a086295a59e902c66114d2edf573d04dfb6f362048081e1b1  n0/lex.c
+dd4f0070490e27fcf3120fbdee86a172d5551e7cc13795a8de95325a50a92728  n0/locals.c
+a54c0fd55be0946e3311225f0945e9f786d7cfa5993ef0b0c6a1de47b31bb89e  n0/sharp.c
+f27093707b449f51b29cc56391ea802a7d0518a63ab69cb26f20f310c5ca1237  n0/size.c
+0124b9bb725947ac05cd1205909d6e6f5ffad539200095dbb6e5cd1b1bdbff36  n0/stat.c
+5aa09a81e667d5eda45d1795fb3d6782fa3ec7df1df42ee1b17d59eb5a234124  n1/cc1.c
+4699747938b40579b6da08fd6fb64e02535fd2c75703eb6e49bcb29f7f037287  n1/cc1sym.c
+a4fe65d83bed2f361c43da7dc6124070ad7dd31a5224383875052243a66f9fd2  n1/code.c
+c6f50433587bff1b6cc07758894a724bea9e3f67983dd7e018fee28a3768f4e9  n1/mtree0.c
+b9a5052971d39f331406e8dad496c7d2d52df74fdee8a7adb82dd7e5712bf94d  n1/mtree1.c
+625e8b0405b886358c73b591a82e23002fe0e0315dee36fd6962cddbdbb24a32  n1/mtree3.c
+90c1ce26a0ff4ff8dd6734e601390c7efe8a1be978aa7f98a7a4571ef691bca2  n1/node.c
+ba57719a8b724e6fe7e1e239e49b170c4850efd31b42ffc73b766b8a17382000  n1/out.c
+99fe3177bb2e91b48099f33f9c723cc608d864f66a40c2ad93f8838d05668f7b  n1/pool.c
+05b80e041cce9cf33d4712efb32eaa30d65619e121dbdb97f8870f53ce454b31  n1/reg0.c
+02f9950ade7d089927a32873749566a4ea21c2b21505495a8e6c7e1738a94d1d  n1/sel0.c
+d007bc49df68b68b22aedaa8a59d9a9da101c5a58419c09bbeaff96b31791dc7  n1/sel1.c
+2421df715261f35dfb7b17aecb0d06df880e528e0be1fdc91336377a2d206612  n1/snap0.c
+c54de7b824f7cbbe6665f391ce2213051a8b8100c7de78df3bf0141db5ad6c46  n1/tree0.c
+13404a0df45a70481594ed75d6c967cf23d9788db025924b0d09b6d2406b5a16  n1/tree1.c
+e5810665fda572284c67534024f6d73455642ce91f7ad98ea437a62f6601c7aa  n2/cc2.c
+5674a3db4fa408c4b4e0c8c9b86ac7e7d8e457a76ebca1d84a1bff53316f98b8  n2/cc2sym.c
+550baccd784ad7ac58ec51bbabb6f228c3db7ef5a393b4ab8f76fa477a51bde7  n2/dbgt2.c
+bb8c68b7b442852cbbcadd78a59adfc0ca722428189caa4ec308e76eb7ff04b1  n2/emit0.c
+8b942e2a33176adaff57c1af9d3a8202860f602e9074783adc59f199770b1ff9  n2/getfun.c
+460ebe302c3f9fc06a503ebc32d01d5e96e1bd10f026d1d24da4689a21166559  n2/optim.c
+816dfa1142ac001d99f19a1f621f75daba45910733b98e5d6daf625a9995daef  n3/cc3.c
+7f084f4d601b864c89b108be983991cf4fb80748f173797b91750c8e56d15b4a  n3/dbgt3.c
+da083000109cbb6d7ec93c15d0c9e5589f785ac261a1c01668139f99e339dc46  n3/itree.c
+1e431c6106b7e53b6506354197f2b72c5da3ded39512a6fe0fefe3ff58edcc04  common/bget.c
+7efd7011e75ad3831a47a810911dcfd2fa39d2c915d752c7955886d24689e5cb  common/bput.c
+82620b9f9a936b46e7a163b0c0ab49e486a16fcf38c5a4d598399acfba603d92  common/dget.c
+031dce2f499387d99cdf8966a368a1bd5454a89c76c89a14d961db7159e6c3f8  common/diag.c
+ac88ce896a250f39252f71d693e975dff0a2763b87bf824100a85e3ece74f051  common/dput.c
+95c64b71deb4f8be3625ca7ed88c6beecd8aa3ff8ce942267d4fae44ead88a86  common/getvar.c
+fbb1db33faea419e2ce4c85d7425a45e371d9ef27559ac0fabb98490eb706f2d  common/iget.c
+47c0a56ea56b8d5484c7615339f20d0f154e94f0b802df1ed57d3b3b1c0bd85a  common/iput.c
+e3af7d0db84b146d27cc13473f0cbaa12a9034b7b015b83776d664233747a1e4  common/lget.c
+27572a3afb06b5e01c1d5b31747818bd682d767e64d09b3a14a0fb6645bf1c0f  common/lput.c
+7c0bf3b96644dfe5497064e90295a83b135b6f0c6faf80cf678e12841e7f064b  common/makvar.c
+dee00c99b0338015c25ad2d140a1a4a3fc6264e820762af48a15379c66956a4a  common/milnam.c
+953253cda95d9f0d76be3c7372fea942dc3059eb413263f1105f555cc2c42455  common/mionam.c
+460cbb010390c280fc3faa6810db113a532367e29f9dae70e6e07bd2db4e1c72  common/newlab.c
+d9c0dd68dbf379f6cc8454112a79b8f2c24db12f8bd840c241344db841e65878  common/newseg.c
+1cf2ff19685ce3de5f9e1737626eeb70ba3d39f15a9df02ee68dc913e1189abe  common/nput.c
+916eadbd555536dd28aa55f97c2d5e643f12ee2d730bf4fd101d67e721209fe0  common/segnam.c
+880c8eea9b2a5ae55b6e6e585db8d1550b600c3f535aa68c898dac3a9aa263a8  common/sget.c
+b260fd588bc7988efa6913707a33d23fb1bfb5270aaa1babc0d8550569528903  common/sput.c
+2c3379f66659dd6b138bc4e6dc7cfacc87958e4b5e9dd7772443097b42009454  common/talloc.c
+545545d2e3159b85a0969163b3f72bd7530150c5c482abc154ff99409d451c03  common/tcpy.c
+49bafa4d1adb475c9a1768ff2ea093660c4d8c0d229c8edf5d71268d9fc6159d  common/unbget.c
+f559593a89d70cc5c60b75e6abd6cfe5c2590a0caac21a377a4089de766c3d23  coh/cc.c
+NOT-VENDORED                                                      coh/number.c
+NOT-VENDORED                                                      coh/profil.c
+NOT-VENDORED                                                      coh/siz286.c
+NOT-VENDORED                                                      coh/sizomf.c
+00dc9b65d62417fae8ce7a33832276ecc5bea84835a18bacb78991acc5eacac0  coh/tabgen.c
+61af340b6e83b3eb8ac8467256e346270d7e76e32c578bc465cb4fe8796e8e7a  h/cc0.h
+33c74c4336900e057c1cd6b7e7184d82440b00a400c5ec22dc233e25749c0216  h/cc1.h
+e96f3d92c48f4bdad9b1d39832934ef707c53abff1157772ca33c0c898b021d0  h/cc2.h
+ff18f35423de55f0a36b4d47514ef7efaf5dd8b348ece484a2466161171123e6  h/cc3.h
+2e943cb18ec002993b6fb594c02ef01e2a123a205098a6d061702ca6c55e6c62  h/debug.h
+bb52b5e5b1a6a0869420a1f910b425e367458ebfc180a532464783d7bea02fcf  h/host.h
+f72b613b1480066e98a90737476d92e52a8d6316f187c93d2a40cbcc3f6b025f  h/ltype.h
+130cdf93411011bcaa8dffa2765be637512bd69e70b05c692d35a938633320ee  h/nout.h
+f1702e924b1be0796fbfa6b7ecb7b4ca2317367fdd532f745ca7814fa9858401  h/ops.h
+e1266ae549048fb18d34d5c9f22e86d31fa6dc6b0f27c89250d4b01e72b497f1  h/reloc.h
+7db16ed0e98d44861c79d7b03a41d6708bd3bd04b025167a52b46d0ea2e696dc  h/stream.h
+d4ba636dbe78237abd9ec008a3b3947b2f57a605695b80186bd8ae0cc11f52f8  h/var.h

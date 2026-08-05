@@ -1,0 +1,130 @@
+#!/bin/sh
+# ccz - Z8001 cross-compile driver: build C900 Coherent (Z8001) binaries on the host.
+# Runs the whole MWC pipeline in one command:
+#     .c  -- cc0-z8001 -> cc1-z8001 -> cc2-z8001 --> Coherent l.out object
+#     .s  -- as-z8001 ----------------------------> Coherent l.out object
+#     link -- ld-z8001 (crt0 + objects + libc-z8001.a) -> runnable C900 l.out
+#
+# Usage:
+#   ccz [-c] [-o OUT] [-I DIR]... [-R BASE] [-s] [-nostdlib] FILE...
+#     -c         compile/assemble each FILE to an object; do not link
+#     -o OUT     output file (default: a.out when linking, FILE.o with -c)
+#     -I DIR     add an include directory (repeatable)
+#     -R BASE    link relocation base (default 0x100)
+#     -s         strip the symbol table (ld -s) -- deliverable binaries
+#     -nostdlib  link without crt0 + libc (freestanding)
+#   FILE may be .c, .s, or .o (objects pass straight to the link).
+#
+# Prereq: build-z8001.sh, build-cc2-z8001.sh, build-as.sh, build-ld.sh, build-libc-z8001.sh.
+set -e
+HERE=$(cd "$(dirname "$0")" && pwd)
+# Two layouts.  In a CHECKOUT the parts are under the build directory and the
+# target headers come from an OS tree, because they belong to the OS and are
+# edited there.  In an UNPACKED RELEASE (bin/, native/, usr/include/ beside each
+# other) there is no OS tree and there is not meant to be one: the archive
+# carries the headers it was built against, and a consumer who has only the
+# release must still be able to compile.
+if [ -x "$HERE/cc0-z8001" ] && [ -d "$HERE/../native" ]; then
+	O="$HERE"; AS="$HERE/as-z8001"; LD="$HERE/ld-z8001"
+	LIBC=$(cd "$HERE/../native" && pwd)
+	OS=$(cd "$HERE/.." && pwd)		# $OS/include, $OS/include/sys below
+	OS="$OS/usr"
+else
+	. "$HERE/publish.sh"			# $BUILD
+	O="$BUILD/z8001"; AS="$BUILD/as-z8001"; LD="$BUILD/ld-z8001"
+	LIBC="$BUILD/libc-z8001"
+	. "$HERE/coherent-os.sh"; OS="$COHERENT_OS"	# see coherent-os.sh
+fi
+# Records the sources compiled when $C900_BUILD_LOG is set, and does nothing at
+# all when it is not.  The fallback keeps ccz working in a layout that does not
+# carry the file (an older unpacked release).
+if [ -r "$HERE/buildlog.sh" ]; then
+	. "$HERE/buildlog.sh"
+else
+	c900_buildlog() { :; }
+fi
+VAR="${CCZ_VAR:-800000020800}"			# includes VREADONLY (ctype.h's `readonly')
+# base unset -> ld uses its Coherent userbase (segment 3), producing a real multi-segment
+# C900 binary (CODE seg 3 / DATA in its segment / STACK seg 0).  -R BASE forces a flat link.
+incs=""; defs=""; out=""; compileonly=0; base=""; nostdlib=0; strip=0; sep=""; large=""; files=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-c) compileonly=1;;
+	-o) out="$2"; shift;;
+	-I) incs="$incs -I$2"; shift;;
+	-I*) incs="$incs $1";;
+	-D) defs="$defs -D$2"; shift;;	# cpp define (cc0 wants -D/-U AFTER the files)
+	-D*) defs="$defs $1";;
+	-U) defs="$defs -U$2"; shift;;
+	-U*) defs="$defs $1";;
+	-R) base="$2"; shift;;
+	-nostdlib) nostdlib=1;;
+	# Separated I/D (LF_SEP): text seg 3, data seg 4.  `-n' with it marks the
+	# text SHARED (LF_SHR): ssalloc() inode-registers a text segment only when
+	# it is SFSHRX, so without it two concurrent copies of a program each hold
+	# a private copy of its text.  Byte-identical output otherwise -- only
+	# l_flag differs -- so it is on by default and -I asks for the old,
+	# unshared form.
+	-i) sep="-n -i";;
+	-I) sep="-i";;		# separated I/D, text NOT shared
+	-L) large="-L";;		# large model: text/data may span multiple 64K segments
+	-s) strip=1;;
+	-*) echo "ccz: unknown option $1" >&2; exit 2;;
+	*) files="$files $1";;
+	esac
+	shift
+done
+[ -n "$files" ] || { echo "ccz: no input files" >&2; exit 2; }
+[ -x "$O/cc0-z8001" ] || { echo "ccz: toolchain not built (run build-z8001.sh + build-cc2-z8001.sh)" >&2; exit 1; }
+
+tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+objs=""
+for f in $files; do
+	b=$(basename "$f"); stem=${b%.*}
+	case "$f" in
+	*.o)  objs="$objs $f";;
+	*.a)  objs="$objs $f";;	# archive: ld scans it after the objects
+	*.s)  o="$tmp/$stem.o"; c900_buildlog "$f"; "$AS" -o "$o" "$f"; objs="$objs $o";;
+	*.c)
+		o="$tmp/$stem.o"
+		c900_buildlog "$f"
+		"$O/cc0-z8001" $VAR "$f" "$tmp/$stem.z0" $incs -I"$OS/include" -I"$OS/include/sys" $defs
+		"$O/cc1-z8001" $VAR "$tmp/$stem.z0" "$tmp/$stem.z1"
+		"$O/cc2-z8001" 0010 "$tmp/$stem.z1" "$o" "$tmp/$stem.scr" 0
+		if [ "$compileonly" = 1 ]; then
+			co=${out:-$stem.o}; cp "$o" "$co"; echo "ccz: $f -> $co"
+		fi
+		objs="$objs $o";;
+	*) echo "ccz: don't know how to handle $f" >&2; exit 2;;
+	esac
+done
+[ "$compileonly" = 1 ] && exit 0
+
+# ---- link a complete C900 executable ----
+# With no -R, ld relocates to its userbase (segment 3); -R BASE overrides for a flat link.
+a="${out:-a.out}"
+Rflag=""; [ -n "$base" ] && Rflag="-R $base"
+sflag=""; [ "$strip" = 1 ] && sflag="-s"		# -s: strip the symbol table (deliverable binaries)
+if [ "$nostdlib" = 1 ]; then
+	"$LD" $sep $large $sflag $Rflag -o "$a" $objs
+else
+	[ -f "$LIBC/crt0.o" ] || { echo "ccz: libc not built (run build-libc-z8001.sh)" >&2; exit 1; }
+	"$LD" $sep $large $sflag $Rflag -o "$a" "$LIBC/crt0.o" $objs "$LIBC/libc-z8001.a"
+fi
+# -s: also drop the trailing REL section.  The kernel exec loader (sys/coh/exec.c) uses
+# only the first NXSEG=6 sections (code/data/bss) and never reads SYM(7) or REL(8); ld's
+# -s zeroed SYM and set LF_NRB (loader ignores relocations), so REL -- the last section --
+# is dead weight.  Removing it matches the shipped stripped binaries (which carry rel=0).
+if [ "$strip" = 1 ] && [ -f "$a" ]; then
+	python3 - "$a" <<'PY'
+import sys
+p=sys.argv[1]; b=bytearray(open(p,'rb').read())
+o=8+4*8					# header ss[8] = REL section size (PDP-canonical long)
+rel=(b[o]|b[o+1]<<8)<<16|(b[o+2]|b[o+3]<<8)
+if rel and len(b)-rel >= 48:
+	del b[len(b)-rel:]		# REL is physically last (SYM already zeroed by ld -s)
+	b[o]=b[o+1]=b[o+2]=b[o+3]=0	# zero the REL size in the header
+	open(p,'wb').write(b)
+PY
+fi
+echo "ccz: $a  ($(wc -c < "$a") bytes, C900 Coherent l.out)"

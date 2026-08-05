@@ -1,0 +1,8 @@
+# Anchored: a bare `build/' matches a directory of that name at EVERY depth, and
+# the only one that exists is host/build.  An unanchored rule is how a committed
+# tree gets silently shadowed in a repository that later grows a src/*/build.
+/host/build/
+__pycache__/
+*.pyc
+# `make deps` unpacks pinned third-party release binaries here (DEPS).
+/deps/

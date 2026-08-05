@@ -1,0 +1,21 @@
+Host shim: the same K&R static drop in common/tcpy.c (icpy, bcpy).
+
+--- a/common/tcpy.c
++++ b/common/tcpy.c
+@@ -85,7 +85,6 @@
+ 	}
+ }
+ 
+-static
+ bcpy()
+ {
+ 	register int n;
+@@ -95,7 +94,7 @@
+ 	return (n);
+ }
+ 
+-static ival_t
++ival_t
+ icpy()
+ {
+ 	register ival_t i;

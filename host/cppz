@@ -1,0 +1,68 @@
+#!/bin/sh
+# cppz - Z8001 preprocessor driver: the C900 cpp interface, over our cc0.
+#
+# Usage:
+#   cppz [-P] [-C] [-E] [-Dname[=val]] [-Uname] [-Idir] INPUT [OUTPUT]
+#
+# OUTPUT omitted means standard output.  This is the interface every consumer
+# of a C900 preprocessor already speaks -- the OS tree's assembly rules call
+# `$(CPP) -P ... $< $@.i', the 1985 flavour answers it through mk/mwc1985/cpp,
+# and PCC's z8001-coherent-cpp answers it natively -- so our pipeline has to
+# answer it too, whatever its own decomposition.
+#
+# That decomposition is the reason this file exists.  The 1985 pipeline is four
+# programs, `cpp | cc0 | cc1 | cc2', and its cpp is a standalone filter; ours
+# folds preprocessing into cc0, which therefore takes the compiler's positional
+# form `cc0 VARIANT IN OUT [-D/-U/-I]...' and no cpp flags at all.  cc0 already
+# has the mode (variant bit VCPP, plus VCPPE to suppress `#line'); it has never
+# had the spelling.  This gives it the spelling.
+#
+#   -P  suppress `#line' markers.  Required for assembly: the assembler rejects
+#       them.  Implemented as cc0's VCPPE, not as a filter over the output.
+#   -C  keep comments (cc0's VCPPC).
+#   -E  synonym for -P (GCC's spelling of "no line markers" is -P, but the
+#       1985 driver's `-E' reaches the same cc0 bit).
+set -e
+HERE=$(cd "$(dirname "$0")" && pwd)
+# Two layouts, as ccz has them: in an UNPACKED RELEASE the pass sits beside
+# this file in bin/; in a CHECKOUT it is under the build directory.
+if [ -x "$HERE/cc0-z8001" ]; then
+	CC0="$HERE/cc0-z8001"
+else
+	. "$HERE/publish.sh"			# $BUILD
+	CC0="$BUILD/z8001/cc0-z8001"
+fi
+
+# Variant bits, 6 bytes as 12 hex digits, high nibble of byte 0 first
+# (h/var.h: VCPPE 29 -> byte 3 bit 5, VCPP 30 -> byte 3 bit 6, VCPPC 31 -> bit 7).
+V_CPP=0x40; V_CPPE=0x20; V_CPPC=0x80
+b3=$V_CPP
+opts=""; files=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	-P|-E)	b3=$((b3 | V_CPPE));;
+	-C)	b3=$((b3 | V_CPPC));;
+	-D|-U|-I) opts="$opts $1$2"; shift;;
+	-D*|-U*|-I*) opts="$opts $1";;
+	-)	files="$files -";;
+	-*)	echo "cppz: unknown option $1" >&2; exit 2;;
+	*)	files="$files $1";;
+	esac
+	shift
+done
+VAR=$(printf '000000%02x0000' "$b3")
+
+set -- $files
+[ $# -ge 1 ] || { echo "cppz: no input file" >&2; exit 2; }
+[ -x "$CC0" ] || { echo "cppz: no $CC0 (run build-z8001.sh)" >&2; exit 1; }
+in=$1; out=${2:--}				# cc0 spells stdout `-' in this mode
+
+# No pipeline and no post-filter: the exit status is cc0's, so a failed
+# preprocess cannot be masked.  A named output is written by cc0 itself, but
+# via a private name so a failure leaves no half-written .i for make to accept
+# on a rerun.
+if [ "$out" = "-" ]; then
+	exec "$CC0" "$VAR" "$in" - $opts
+fi
+"$CC0" "$VAR" "$in" "$out.$$" $opts || { rm -f "$out.$$"; exit 1; }
+mv "$out.$$" "$out"
