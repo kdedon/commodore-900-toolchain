@@ -1,0 +1,17 @@
+Host shim: cc0 calls index(), which mingw's C library does not provide.
+
+index() is the V7 spelling of strchr().  glibc still carries it and COHERENT's
+own libc has it, so the target build wants the declaration as it stands;
+mingw-w64 does not, and cc0 fails to link.  cc0 is the only pass that uses it.
+
+--- a/n0/cc0.c
++++ b/n0/cc0.c
+@@ -75,7 +75,7 @@
+ int	s;			/* Lexical window */
+ 
+ /* Externals. */
+-extern char *index();
++#define index strchr
+ extern char *getenv();
+ 
+ /*

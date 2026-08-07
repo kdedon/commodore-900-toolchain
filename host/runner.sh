@@ -14,7 +14,7 @@
 # Resolution order (host/deps.sh holds it, with every other edge of this
 # repository):
 #   $C900_EMU        explicit, wins
-#   deps/commodore-900-emulator/bin/c900   the release `make deps' unpacks
+#   external/commodore-900-emulator/bin/c900   the release `make deps' unpacks
 #   c900 on $PATH    the container case
 #   a sibling checkout, bounded at three parents, then repos/
 #

@@ -1,7 +1,8 @@
 # VARIANT -- the variant word the June 1985 passes are run with, by kind of
-# artifact.  Read by the mwc1985 wrappers of every repository that drives these
-# binaries (commodore-900-coherent, commodore-900-bios); this file is the one
-# place the words are written down.
+# artifact.  Read by the mwc1985 wrappers of commodore-900-coherent, which
+# drives these binaries out of this directory, and published inside the mwc1985
+# dist.  It is kept with the binaries it describes: the word is a property of
+# these passes, and a copy of them that arrived without it would be unusable.
 #
 # The word is a bit vector, passed to cc0/cc1/cc2 as hex byte pairs, byte 0
 # first (h/var.h).  The shipped driver asks for four bits -- /bin/cc is
@@ -19,8 +20,7 @@
 # so an object built the wrong way is not the object the machine shipped.
 #
 # The 1985 builds did not use one word for everything, and the disk image says
-# which used which.  Evidence per kind is below; the survey is
-# c900oses/docs/coherent/TASK-260-MWC1985-VARIANT-PER-TARGET.md.
+# which used which.  The evidence per kind is below.
 #
 #	kind		word
 #
@@ -39,10 +39,10 @@
 #   * /drv/hrtty and /drv/ivhrtty relink BYTE-IDENTICALLY from the commons-
 #     carrying objects in /usr/src/hrtty/src.
 #   * the V1.0 ROM compares equal to boot-H_V_1.0.bin / boot-L_V_1.0.bin only
-#     with this word (commodore-900-bios; task 221/230).
+#     with this word (commodore-900-bios reproduces it).
 #   * three source/object pairs in /usr/sys/z8001/diag recompile byte-identical
 #     with it, and a 65,536-word sweep over one of them matches only when VCOMM
-#     is set (task 230).
+#     is set.
 system		83200004
 #
 # userland: the commands in /bin, /usr/bin and /etc.

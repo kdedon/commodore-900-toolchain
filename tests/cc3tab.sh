@@ -2,7 +2,7 @@
 # cc3tab.sh -- assert that everything indexed by generated/opcode.h is in step.
 #
 # opcode.h is an INDEX, not a name list: its numbers are the ROW NUMBERS of four
-# separate tables, and it is machine-generated (c900oses/gotools/cmd/genz8001tab,
+# separate tables, and it is machine-generated (gotools/cmd/genz8001tab,
 # from the simulator's decoder) while all four tables are kept by hand.  So a
 # regeneration that renumbers one mnemonic and lands without them does not fail
 # to build and does not mis-print a line -- cc2 encodes a DIFFERENT INSTRUCTION
@@ -27,8 +27,8 @@
 # This gate does NOT need the simulator -- it compares committed artifacts only,
 # so it runs in every checkout as part of `make check'.  What it cannot see is
 # the decoder itself changing under a table that is internally consistent; that
-# is `genz8001tab -check', which does need the simulator and so runs from
-# c900oses/gotools (`make check' there).
+# is `genz8001tab -check', which does need the simulator and so runs where that
+# generator lives, not here.
 #
 # Usage: tests/cc3tab.sh
 set -e

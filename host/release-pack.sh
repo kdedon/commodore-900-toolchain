@@ -1,9 +1,10 @@
 #!/bin/sh
 # release-pack.sh - package the three deliverables into the release assets.
 #
-#	sh host/release-pack.sh [VERSION] [DESTDIR]
+#	sh host/release-pack.sh [VERSION] [DESTDIR]	# VERSION = the tag, without the v
 #
-# VERSION defaults to the VERSION file, DESTDIR to $BUILD/dist.  Writes, for
+# VERSION defaults to what `git describe' says this checkout is, DESTDIR to
+# $BUILD/dist.  Writes, for
 # the host it is run on:
 #
 #	c900-toolchain-vX.Y.Z-<host>.tar.gz|.zip   deliverables 1|2 + 3
@@ -29,7 +30,24 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
 . "$HERE/publish.sh"			# $BUILD
 
-V=${1:-$(cat "$ROOT/VERSION")}
+# THE TAG IS THE VERSION, and it is the only statement of it: there is no
+# VERSION file in this repository to disagree with the tag that started the
+# release.  Given as an argument (CI passes the tag it was triggered by), or
+# read from the checkout's own description when packing by hand.  A tree with no
+# tag reachable cannot name what it is packing, and is refused rather than
+# guessed at -- an archive called 0.0.0 outlives whoever knew what it held.
+# `|| true' is not decoration: under set -e an assignment whose command
+# substitution fails takes the script with it, and a tagless tree would exit 128
+# having said nothing at all.  The refusal below is the diagnosis.
+V=${1:-}
+[ -n "$V" ] || V=$(git -C "$ROOT" describe --tags --match 'v[0-9]*' --dirty 2>/dev/null || true)
+V=${V#v}
+[ -n "$V" ] || {
+	echo "release-pack.sh: no version." >&2
+	echo "  The tag names it: pass it as the first argument, or pack from a" >&2
+	echo "  checkout with a v* tag reachable (git describe finds none here)." >&2
+	exit 2
+}
 DEST=${2:-$BUILD/dist}
 case $(uname -s) in
 Linux)			HOSTTAG=linux-x86_64;   ARCH=tar; X= ;;
@@ -59,7 +77,7 @@ esac
 # .provenance names a commit that describes the sources exactly.
 #
 # ITS .provenance IS ASKED FIRST, and that order is load-bearing.  `make deps'
-# unpacks the snapshot at deps/, which is inside THIS repository's working tree
+# unpacks the snapshot at external/, which is inside THIS repository's working tree
 # -- gitignored, but still inside it -- so `git rev-parse' run there answers
 # with the TOOLCHAIN's commit, and the archive would name this repository as the
 # source of somebody else's C library.  It did, once, before this test moved up.
@@ -162,7 +180,8 @@ cp "$BUILD/libc-z8001/crt0.o" "$BUILD/libc-z8001/libc-z8001.a" "$A/native/"
 # to build them itself has to have the OS tree and the harnesses -- which is to
 # say, has to be a source checkout after all.
 cp "$BUILD/libm-z8001/libm-z8001.a" "$BUILD/libmisc-z8001/libmisc-z8001.a" "$A/native/"
-cp "$ROOT/VERSION" "$ROOT/LICENSE" "$ROOT/README.md" "$A/"
+echo "$V" > "$A/VERSION"			# written, not copied: the tag said it
+cp "$ROOT/LICENSE" "$ROOT/README.md" "$A/"
 cp "$S" "$A/.provenance"
 
 # ---- host/: the checkout-shaped view of the same files ----
@@ -215,8 +234,38 @@ done
 mkdir -p "$Z/native" "$Z/usr"
 cp "$A"/native/* "$Z/native/"
 cp -r "$COHERENT_OS/include" "$Z/usr/include"
-cp "$ROOT/VERSION" "$ROOT/LICENSE" "$Z/"
+echo "$V" > "$Z/VERSION"
+cp "$ROOT/LICENSE" "$Z/"
 cp "$S" "$Z/.provenance"
+
+# ---- one mode rule, so the two hosts agree by construction ----
+#
+# In the archive a file is executable iff THIS HOST can run it, and that is
+# decided from the file rather than inherited from the build tree.
+#
+# Inheriting it does not survive the crossing.  as-z8001 and ld-z8001 chmod
+# their output +x -- so crt0.o and native/cc,as,ld arrive 0755 -- and those are
+# l.out files for the machine, which no host can execute.  MSYS does not store
+# mode bits at all: it derives them from the content, calls a PE image or a #!
+# script executable and everything else not, and the tarball's 0755 on an l.out
+# object is simply gone by the time zip stats it.  The layouts then differ on
+# five entries, in the one direction that cannot be fixed by chmod.
+#
+# So the rule is MSYS's own, applied on both sides: PE, ELF or #! is 0755, the
+# rest 0644.  A consumer loses nothing -- it copies native/ to the machine,
+# where the modes are the installer's business.  -type f skips the symlinks in
+# host/, which must not be chmod'd through to their targets.
+canon_modes() {			# canon_modes <dir>
+	find "$1" -type d -exec chmod 755 {} +
+	find "$1" -type f -print | while read -r f; do
+		case $(dd if="$f" bs=4 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n') in
+		7f454c46*|4d5a*|2321*)	chmod 755 "$f" ;;
+		*)			chmod 644 "$f" ;;
+		esac
+	done
+}
+canon_modes "$A"
+canon_modes "$Z"
 
 ( cd "$W" && case $ARCH in
 	tar) tar czf "$name.tar.gz" "$name" ;;

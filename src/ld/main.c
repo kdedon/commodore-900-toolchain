@@ -96,7 +96,7 @@ char	*argv[];
 		} else
 #endif
 		{
-			if ((outputf[i] = fopen(ofname, "r+w"))==NULL)
+			if ((outputf[i] = fopen(ofname, OUMODE))==NULL)
 				fatal("cannot open %s (seg %d)", ofname, i);
 			fseek(outputf[i], sgp->daddr, 0);
 		}
@@ -120,7 +120,7 @@ char	*argv[];
 				/* make defined symbol relative to virtual 0 */
 				sp->s.ls_addr += oseg[segn].vbase;
 			} else if (segn==L_SYM) {
-				spmsg(sp, "references symbol segment");
+				sperr(sp, "references symbol segment");
 			} else if (sp->s.ls_type!=(L_GLOBAL|L_REF)) {
 				;	/* leave absolutes alone */
 			} else if (sp->s.ls_addr==0) {
@@ -136,7 +136,7 @@ char	*argv[];
 				 * missing and cannot be supplied.
 				 */
 				if (!reloc && !isbuiltin(sp))
-					spmsg(sp, "undefined");
+					sperr(sp, "undefined");
 			} else if (dcomm) {
 				/* define commons */
 				addr = sp->s.ls_addr;
@@ -193,11 +193,19 @@ char	*argv[];
 			outbuf[i] = *((char *)&oldh + i);
 		fwrite(outbuf, 1, (int)daddr, ofp);
 	}
+	/*
+	 * nerror, not just nundef.  A module with a bad symbol segment or an
+	 * unresolvable relocation is reported and then skipped, so the image
+	 * gets written either way; returning 0 for it told every caller that
+	 * reads only the status -- make, a build script, CI -- that the link
+	 * succeeded, and the corruption surfaced much later as a wrong answer.
+	 * The file is still produced, because it is worth inspecting.
+	 */
 	if (nundef==0 || dcomm) {
 		chmod(ofname, statbuf.st_mode|S_IEXEC|(S_IEXEC>>3)|(S_IEXEC>>6));
-		return(0);
+		return(nerror!=0);
 	} else if (reloc)
-		return(0);
+		return(nerror!=0);
 	else
 		return(nundef);
 }
@@ -320,9 +328,9 @@ setoutput()
 	register FILE *fp;
 	int	e;
 
-	if ((fp = fopen(ofname, "w"))==NULL) {
+	if ((fp = fopen(ofname, OWMODE))==NULL) {
 		e = errno;
-		if (unlink(ofname)==0 && (fp = fopen(ofname, "w"))==NULL)
+		if (unlink(ofname)==0 && (fp = fopen(ofname, OWMODE))==NULL)
 			e = errno;
 		if (fp==NULL)
 			fatal("cannot create %s: %s", ofname, strerror(e));
@@ -545,7 +553,7 @@ int	sn, ldrv;
 	} else if (ldrv) {
 		return;
 	} else {
-		spmsg(sp, "redefines builtin");
+		sperr(sp, "redefines builtin");
 	}
 }
 

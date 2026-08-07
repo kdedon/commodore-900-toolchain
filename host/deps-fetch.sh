@@ -11,9 +11,9 @@
 # consulted at build time.
 #
 # DEPS is `name kind url ref [asset] [dest]', one line per edge, # for a
-# comment.  <dest> names the directory under deps/ and defaults to the url's
+# comment.  <dest> names the directory under external/ and defaults to the url's
 # basename, which is right when the asset IS that repository's product and
-# wrong when one repository publishes another's -- deps/commodore-900-toolchain
+# wrong when one repository publishes another's -- external/commodore-900-toolchain
 # holding COHERENT's sources would read as a mistake.
 #
 #   kind git      one of OUR repositories.  Cloned to ../<basename of url> on
@@ -29,7 +29,7 @@
 #                 passed over -- `make deps' that exits 0 having placed nothing
 #                 is indistinguishable from one that placed everything.
 #   kind release  a third-party BINARY.  <ref> is a TAG, unpacked into
-#                 deps/<basename of url>/, which is gitignored.  Pinned
+#                 external/<basename of url>/, which is gitignored.  Pinned
 #                 because we cannot fix it and nothing about a binary is
 #                 recoverable from our own history: "which one ran this" has
 #                 to be a number chosen in advance.  <asset> is the release
@@ -41,7 +41,7 @@
 #                 deps' work on one of them only.
 #
 # Idempotent, and it never writes over an existing checkout: a dependency that
-# already resolves -- by variable, by deps/, by $PATH or by a sibling -- is
+# already resolves -- by variable, by external/, by $PATH or by a sibling -- is
 # reported and left alone, so running this in a tree that is already set up
 # changes nothing.
 set -e
@@ -105,25 +105,50 @@ fetch_release() {
 	from=$2/releases/download/$3/$asset
 	tmp=$4.tmp.$$
 	rm -rf "$tmp"
-	mkdir -p "$tmp"
+	# Inside a function `set -e' is suspended, so an unchecked mkdir leaves the
+	# download writing into a path that is not a directory and the failure is
+	# reported against the release instead of the filesystem.
+	mkdir -p "$tmp" || {
+		echo "$1: cannot create $tmp" >&2
+		return 1
+	}
 	echo "$1: downloading $from"
-	if ! curl -fL --retry 2 -o "$tmp/$asset" "$from"; then
+	curl -fL --retry 2 -o "$tmp/$asset" "$from"
+	rc=$?
+	if [ $rc -ne 0 ]; then
 		rm -rf "$tmp"
-		echo "$1: no release asset at $from" >&2
-		echo "  The tag in DEPS is the pin: it is deliberate and bumped by hand," >&2
-		echo "  so a missing one means that release has not been published yet." >&2
-		echo "  Until it is, build the dependency yourself and name it by variable;" >&2
-		echo "  the resolver's refusal says which variable." >&2
+		case $rc in
+		22) echo "$1: no release asset at $from" >&2
+		    echo "  The tag in DEPS is the pin: it is deliberate and bumped by" >&2
+		    echo "  hand, so a missing one means that release is not published." >&2
+		    echo "  Until it is, build the dependency yourself and name it by" >&2
+		    echo "  variable; the resolver's refusal says which variable." >&2 ;;
+		23) echo "$1: could not WRITE $tmp/$asset (curl 23)." >&2
+		    echo "  The asset was reachable; this is a local filesystem failure," >&2
+		    echo "  not a missing release.  Check the path exists and is writable." >&2 ;;
+		*)  echo "$1: curl exit $rc fetching $from" >&2
+		    echo "  Neither a 404 (22) nor a write failure (23); the transfer" >&2
+		    echo "  itself failed.  Nothing is said here about the pin." >&2 ;;
+		esac
 		return 1
 	fi
+	# A partial extraction must not read as a placed dependency: tar stops at
+	# the first member it cannot create, and what follows would move a half
+	# tree into place.
 	case "$asset" in
-	*.tar.gz|*.tgz) tar xzf "$tmp/$asset" -C "$tmp" ;;
-	*.zip)          unzip -q "$tmp/$asset" -d "$tmp" ;;
+	*.tar.gz|*.tgz) tar xzf "$tmp/$asset" -C "$tmp" || uz=$? ;;
+	*.zip)          unzip -q "$tmp/$asset" -d "$tmp" || uz=$? ;;
 	*) echo "$1: don't know how to unpack $asset" >&2; rm -rf "$tmp"; return 1 ;;
 	esac
+	if [ -n "${uz:-}" ]; then
+		echo "$1: $asset did not unpack cleanly (exit $uz)" >&2
+		echo "  Nothing is placed; a partial tree would look like a success." >&2
+		rm -rf "$tmp"
+		return 1
+	fi
 	rm -f "$tmp/$asset"
 	# The asset carries one top directory (bin/, rom/, disk/ inside it); it is
-	# stripped so deps/<name>/bin/c900 is the path the resolvers search for.
+	# stripped so external/<name>/bin/c900 is the path the resolvers search for.
 	inner=
 	for d in "$tmp"/*; do
 		[ -d "$d" ] || { inner=; break; }
@@ -150,7 +175,7 @@ while read -r name kind url ref asset dest <&3; do
 	case "$kind" in
 	git)     fetch_git "$name" "$url" "$ref" "$(cd "$root/.." && pwd)/$dir" || rc=1 ;;
 	local)   fetch_local "$name" || rc=1 ;;
-	release) fetch_release "$name" "$url" "$ref" "$root/deps/$dir" "$asset" || rc=1 ;;
+	release) fetch_release "$name" "$url" "$ref" "$root/external/$dir" "$asset" || rc=1 ;;
 	*)       echo "$name: unknown kind \`$kind' in DEPS" >&2; rc=1 ;;
 	esac
 	got=$(resolve "$name") || got=

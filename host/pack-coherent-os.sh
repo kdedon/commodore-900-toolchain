@@ -85,6 +85,27 @@ for d in $DIRS; do
 	cp -R "$COHERENT_OS/$d" "$stage/coherent-os/$d"
 done
 
+# A file whose basename is a reserved DOS device name cannot be extracted on
+# Windows, and tar stops there -- so one such file makes the whole archive
+# unusable on a host this repository ships a compiler for.  They are dropped,
+# but only after proving nothing here compiles against them: a silent omission
+# would be a header that is present on one host and absent on another.
+res='^(con|prn|aux|nul|com[1-9]|lpt[1-9])$'
+dropped=
+for f in $(cd "$stage/coherent-os" && find . -type f | sed 's|^\./||'); do
+	b=$(basename "$f"); b=${b%%.*}
+	echo "$b" | grep -qiE "$res" || continue
+	if grep -rqE "include[[:space:]]*[<\"][^>\"]*$(basename "$f")[>\"]" "$stage/coherent-os"; then
+		echo "pack-coherent-os.sh: $f has a reserved DOS basename AND is" >&2
+		echo "  included by something in this archive.  Dropping it would make" >&2
+		echo "  the Windows and Linux archives compile different code; rename it" >&2
+		echo "  at the source instead." >&2
+		exit 2
+	fi
+	rm -f "$stage/coherent-os/$f"
+	dropped="$dropped $f"
+done
+
 cat > "$stage/coherent-os/.provenance" <<EOF
 # The COHERENT OS sources this repository compiles, cut from a checkout.
 # Read by host/coherent-os.sh, which says so whenever a build resolves here
@@ -92,11 +113,16 @@ cat > "$stage/coherent-os/.provenance" <<EOF
 commit $commit
 date $date
 dirs $DIRS
+dropped$dropped
 EOF
 
-# The tag and the asset are one name, so DEPS pins with `@REF@.tar.gz' and the
-# tag alone says which OS snapshot a build used.
-tag=coherent-os-$date-$short
-tar czf "$out/$tag.tar.gz" -C "$stage" coherent-os
-echo "pack-coherent-os.sh: $out/$tag.tar.gz ($commit)"
-echo "  Publish it as a release tagged $tag, then set that tag in DEPS."
+# Normally its own asset, named for the snapshot it holds.  host/pack-fallback.sh
+# overrides the name so this ships as a third asset of the ONE fallback release
+# rather than as a second tag: the bootstrap is one thing to publish and one
+# thing to retire, and two tags that must be bumped together are two tags that
+# will not be.
+name=${C900_OS_ASSET:-coherent-os-$date-$short}
+tar czf "$out/$name.tar.gz" -C "$stage" coherent-os
+echo "pack-coherent-os.sh: $out/$name.tar.gz ($commit)"
+[ -n "${C900_OS_ASSET:-}" ] ||
+	echo "  Publish it as a release tagged $name, then set that tag in DEPS."

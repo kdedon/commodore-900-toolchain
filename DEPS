@@ -18,7 +18,7 @@
 # edge is satisfied only by a checkout the operator already has.  No line uses
 # it today; `make deps' still implements it.
 #
-# kind release = a third-party BINARY, PINNED by tag and unpacked into deps/,
+# kind release = a third-party BINARY, PINNED by tag and unpacked into external/,
 # which is gitignored.  We cannot fix the emulator and nothing about a binary is
 # recoverable from our own history, so "which emulator ran this test" has to be
 # a number chosen in advance.  Bump it deliberately.
@@ -43,15 +43,21 @@
 # day it was cut, which is the whole objection to it -- so three things answer
 # that rather than leaving it implicit:
 #
-#   * a CHECKOUT WINS.  host/deps.sh searches siblings first and deps/ last, so
+#   * a CHECKOUT WINS.  host/deps.sh searches siblings first and external/ last, so
 #     anyone with the OS tree builds against the tree, not the snapshot.
 #   * IT SAYS SO.  The archive carries .provenance naming the commit and the
 #     date, and host/coherent-os.sh prints both, on stderr, in every build that
 #     resolves to it.  "Built against COHERENT as of some Tuesday" is exactly
 #     the failure mode; it cannot happen silently.
-#   * THE TAG IS THE VERSION.  The release is tagged coherent-os-DATE-COMMIT
-#     and the asset is that name, so bumping the pin is one legible edit and
-#     the diff says which OS a build moved to.
+#   * .provenance IS THE VERSION, not the tag.  This rides along as a third
+#     asset of the ONE fallback release the toolchain publishes -- the two
+#     compiler dists consumers place, and this, which only this repository
+#     wants.  One bootstrap, one tag, one thing to retire; two tags that must
+#     be bumped in step are two tags that will not be.  The cost is that
+#     `fallback-1' is re-cut in place, so it names the ROLE and not a set of
+#     bytes: read `commit' in external/coherent-os/.provenance for which OS a build
+#     used, and `rm -rf external/coherent-os' to force a re-fetch, because
+#     `make deps' leaves an already-unpacked edge alone.
 #
 # The packer refuses a dirty or unversioned tree for the same reason.  When
 # commodore-900-coherent is published this line becomes `coherent git <url>
@@ -68,5 +74,5 @@
 # Stating it rather than implying it: a dependency on a fork of a third party's
 # work should not be something anybody discovers later.
 
-coherent  release  https://github.com/kdedon/commodore-900-toolchain  coherent-os-2026-08-05-1cd93190  @REF@.tar.gz  coherent-os
+coherent  release  https://github.com/kdedon/commodore-900-toolchain  fallback-1  @REF@-coherent-os.tar.gz  coherent-os
 emu       release  https://github.com/kdedon/commodore-900-emulator   v0.1  c900-@REF@-@HOST@

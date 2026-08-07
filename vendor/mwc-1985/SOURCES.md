@@ -16,30 +16,15 @@ Commodore 900, recovered from the machine's hard-disk image.
 
 Dated June 1985. 
 
-## root/ -- what those tools compile and link against
+## What they are NOT
 
-A guest filesystem skeleton: the 1985 C library, the C runtime startup, and
-the three header trees the system's own sources include.
-
-| path | what | sha256 |
-|---|---|---|
-| root/lib/libc.a | /lib/libc.a, 76062 bytes | 18ae9fda3d418608 |
-| root/lib/crts0.o | /lib/crts0.o, 255 bytes | 4680e1f8a41dd318 |
-| root/usr/include | /usr/include, 59 headers | |
-| root/usr/sys/h | /usr/sys/h, 31 headers | |
-| root/usr/sys/z8001/h | /usr/sys/z8001/h, 24 headers | |
-
-A consumer copies `root/` and overlays the tools; `c900 --exec` reroots the
-guest's absolute paths at it, so `-I/usr/sys/z8001/h` and `/lib/libc.a` mean
-what they meant on the machine.
-
-These are not a convenience.  Until they were here, anything driving the 1985
-passes needed a stock COHERENT 0.7.3 hard-disk image to read them out of --
-which is large, private, and in no repository, so no CI run could build the
-ROM at all.  The forward-ported COHERENT headers are NOT a substitute: they
-are a later system, and compiling against them does not give the 1985 objects.
-Neither is COHERENT 0.8's tree -- its headers differ in ktty.h, machine.h,
-mdata.h and alloc.h, and its `slibc.a` is half the size.
+The COMPILER, and nothing it compiles against.  The 1985 C library, the C
+runtime startoff and the `/usr/include`, `/usr/sys/h` and `/usr/sys/z8001/h`
+header trees are a 1985 SYSTEM; nothing in this repository is built against
+them, and they are held by the repository that builds a 1985 artifact --
+`commodore-900-bios`, at its own `vendor/mwc-1985`, which is self-contained.
+`make env CCENV=mwc1985` composes these binaries over a root named by
+`$C900_STOCK_ROOT` and does not guess at one.
 
 ## Why they are in this repository
 
@@ -53,14 +38,17 @@ They are Z8001 executables: they run on a C900, or under the emulator.  Once
 a build happens inside the emulator over a host-mapped directory, selecting
 the 1985 compiler is a version choice, not a separate procedure.
 
+`commodore-900-bios` has its own copy of these same tools, because it must
+build with them from a clone and nothing else.  Two copies is what each
+repository standing alone costs; they are recovered artifacts and do not
+change, so the copies cannot drift except by one of them being replaced.
+
 ## Binaries, in a repository that otherwise holds none
 
 Deliberate, and the test is REGENERABILITY.  The no-binaries rule keeps build
 output out of a source tree; nothing here can reproduce these, because the
 compiler that emitted them exists only as these files.  Losing them would be
-permanent, and they came within one disk of being lost already.  `libc.a` and
-`crts0.o` pass the same test for the same reason: the sources they were built
-from are not in any holding, and the compiler that built them is the one above.
+permanent, and they came within one disk of being lost already.
 
 ## Licence
 

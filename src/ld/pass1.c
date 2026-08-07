@@ -19,7 +19,7 @@ char	*fname;
 	int	found;
 	FILE	*ifp;
 
-	if ((ifp=fopen(fname, "r"))==NULL)
+	if ((ifp=fopen(fname, ORMODE))==NULL)
 		return (0);
 	fstat(fileno(ifp), &arstat);
 	if (fread(&magic, sizeof magic, 1, ifp)!=1)
@@ -37,7 +37,7 @@ char	*fname;
 		} else if (arstat.st_mtime > arh.ar_date+SLOPTIME) {
 			filemsg(fname, "outdated ranlib");
 		} else {
-			FILE	*xfp = fopen(fname, "r");
+			FILE	*xfp = fopen(fname, ORMODE);
 			ars_t	ars;
 
 			if (watch)
@@ -95,22 +95,22 @@ char	*fname, mname[];
 	unsigned int	nsym;
 
 	if (fread(&ldh, sizeof ldh, 1, fp)!=1) {
-		modmsg(fname, mname, "can't read");
+		moderr(fname, mname, "can't read");
 		return (0);
 	}
 	canldh(&ldh);
 	if (ldh.l_magic!=L_MAGIC) {
-		modmsg(fname, mname, "bad header");
+		moderr(fname, mname, "bad header");
 		return (0);
 	}
 	if ((ldh.l_flag & LF_32) == 0) {
-		modmsg(fname, mname, "not a 32-bit l.out");
+		moderr(fname, mname, "not a 32-bit l.out");
 		return (0);
 	}
 	fseek(fp, symoff(&ldh), 1);
 	for (nsym=ldh.l_ssize[L_SYM]/sizeof lds; nsym; nsym--) {
 		if (fread(&lds, sizeof lds, 1, fp)!=1) {
-			modmsg(fname, mname, "bad symbol segment");
+			moderr(fname, mname, "bad symbol segment");
 			return (0);
 		}
 		canshort(lds.ls_type);
@@ -143,16 +143,16 @@ char	*fname, mname[];
 	if (watch)
 		modmsg(fname, mname, "adding");
 	if (fread(&ldh, sizeof ldh, 1, fp)!=1) {
-		modmsg(fname, mname, "can't read");
+		moderr(fname, mname, "can't read");
 		return (0);
 	}
 	canldh(&ldh);
 	if (ldh.l_magic!=L_MAGIC) {
-		modmsg(fname, mname, "bad header");
+		moderr(fname, mname, "bad header");
 		return (0);
 	}
 	if ((ldh.l_flag & LF_32) == 0) {
-		modmsg(fname, mname, "not 32-bit load module");
+		moderr(fname, mname, "not 32-bit load module");
 		return (0);
 	}
 	if ((ldh.l_flag & LF_SLIB) != 0) {
@@ -163,7 +163,7 @@ char	*fname, mname[];
 		return (0);
 	}
 	if (ldh.l_flag&LF_SEP) {
-		modmsg(fname, mname, "cannot load separated I/D");
+		moderr(fname, mname, "cannot load separated I/D");
 		return (0);
 	}
 	if (oldh.l_machine==0) {
@@ -182,12 +182,12 @@ char	*fname, mname[];
 			lorder = HILO;
 			break;
 		default:
-			modmsg(fname, mname, "can't load %s code (yet)",
+			moderr(fname, mname, "can't load %s code (yet)",
 				mchname[machine]);
 			exit(1);
 		}
 	} else if (ldh.l_machine!=machine) {
-		modmsg(fname, mname, "inconsistent machine");
+		moderr(fname, mname, "inconsistent machine");
 		return (0);
 	}
 	if (lmodel)
@@ -218,7 +218,7 @@ char	*fname, mname[];
 	fseek(fp, symoff(&ldh), 1);
 	for (i=0; i < nsym; i++) {
 		if (fread(&lds, sizeof lds, 1, fp)!=1) {
-			modmsg(fname, mname, "bad symbol segment");
+			moderr(fname, mname, "bad symbol segment");
 			mp->nsym = i;
 			break;
 		} else {
@@ -376,9 +376,9 @@ sym_t	*sp;
 mod_t	*mp;
 {
 	if (mp->mname[0]=='\0')
-		spmsg(sp, "redefined in file %s", mp->fname);
+		sperr(sp, "redefined in file %s", mp->fname);
 	else
-		spmsg(sp, "redefined in file %s: module %.*s",
+		sperr(sp, "redefined in file %s: module %.*s",
 			mp->fname, DIRSIZ, mp->mname);
 }
 
@@ -395,10 +395,10 @@ lds_t	*lsp;
 	if (type!=L_PRVI && type!=L_SHRI)
 		return (1);
 	if (dmp->mname[0]==0)
-		mpmsg(cmp, "common %.*s: conflicts with code in file %s",
+		mperr(cmp, "common %.*s: conflicts with code in file %s",
 			NCPLN, lsp->ls_id, dmp->fname);
 	else
-		mpmsg(cmp, "common %.*s: conflicts with code in file %s: module %.*s",
+		mperr(cmp, "common %.*s: conflicts with code in file %s: module %.*s",
 			NCPLN, lsp->ls_id, dmp->fname, DIRSIZ, dmp->mname);
 	return (0);
 }
@@ -417,27 +417,27 @@ char	*modnam;
 	sym_t	*sp;
 	int	i;
 
-	if ((fp=fopen(modnam, "r"))==NULL)
+	if ((fp=fopen(modnam, ORMODE))==NULL)
 		fatal("can't open %s", modnam);
 	if (fread(&ldh, sizeof ldh, 1, fp)!=1)
 		return;		/* allow null input file */
 	canldh(&ldh);
 	if (ldh.l_magic!=L_MAGIC) {
-		filemsg(modnam, "bad header");
+		filerr(modnam, "bad header");
 		return;
 	}
 	if ((ldh.l_flag & LF_32) == 0) {
-		filemsg(modnam, "not 32-bit load module");
+		filerr(modnam, "not 32-bit load module");
 		return;
 	}
 	if (ldh.l_machine != machine) {
-		filemsg(modnam, "inconsistent machine");
+		filerr(modnam, "inconsistent machine");
 		return;
 	}
 	fseek(fp, symoff(&ldh), 1);
 	for (i=ldh.l_ssize[L_SYM]/sizeof lds; i; i--) {
 		if (fread((char *)&lds, sizeof lds, 1, fp) != 1) {
-			filemsg(modnam, "bad symbol segment");
+			filerr(modnam, "bad symbol segment");
 			return;
 		} else {
 			canshort(lds.ls_type);

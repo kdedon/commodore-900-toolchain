@@ -23,6 +23,15 @@
 #		libc.a			makelib() builds "lib" + "c" + ".a"
 #	usr/include/			the system headers cc0 reads with -I
 #
+# `mwc1985' carries two more trees, usr/sys/h and usr/sys/z8001/h, and the
+# others do not.  A USERLAND compiler environment wants /usr/include and
+# nothing else; the 1985 one is also what SYSTEM artifacts are built with --
+# the kernel, the drivers and the boot ROM -- and those name the kernel header
+# trees by absolute guest path (`cc -I/usr/sys/z8001/h').  So the asymmetry is
+# the difference between the two jobs, not an omission from `ours': a consumer
+# whose $N2ROOT is an mwc1985 root can compile the ROM, and the guest paths in
+# its makefile mean on a host what they mean on the machine.
+#
 # Mounted at /mnt, nothing is where cc looks, so the environment is used in one
 # of two ways -- both documented in docs/ENVIRONMENTS.md, neither invented here:
 #
@@ -54,7 +63,7 @@
 #              and usr/include, exactly as that tree installs them.
 #   mwc1985    the ORIGINAL Mark Williams binaries recovered from the machine:
 #              the driver, assembler, linker and archiver from vendor/mwc-1985,
-#              its C library and headers from vendor/mwc-1985/root, and the
+#              its C library and headers from $C900_STOCK_ROOT, and the
 #              PASSES (cpp cc0 cc1 cc2 cc3) from a commodore-900-coherent
 #              checkout's src/dist/lib, which is the only place they exist.  The
 #              date is part of a THIRD PARTY's artifact, not a claim about this
@@ -142,7 +151,7 @@ env_ours() {
 	inst 755 "$ENV/obj/ar" bin/ar
 	rm -rf "$ENV/obj"
 
-	copy_headers "$COHERENT_OS/include"
+	copy_headers "$COHERENT_OS/include" usr/include
 	echo "this repository's compiler, self-hosted, over the extended tree's libc" \
 		> "$ENV/CCENV"
 	PROV="coherent $(os_origin)"
@@ -175,7 +184,7 @@ env_inherited() {
 		[ -f "$R/lib/$f" ] && inst 755 "$R/lib/$f" "lib/$f"
 	done
 	chmod 755 "$ENV/lib/cc0" "$ENV/lib/cc1" "$ENV/lib/cc2"
-	copy_headers "$R/usr/include"
+	copy_headers "$R/usr/include" usr/include
 	echo "the stock COHERENT tree's own compiler, as that tree installs it" \
 		> "$ENV/CCENV"
 	PROV="stock-root $R"
@@ -184,15 +193,20 @@ env_inherited() {
 # ---------------------------------------------------------------- mwc1985
 env_mwc1985() {
 	V="$ROOT/vendor/mwc-1985"
-	# The 1985 C library and headers are vendored beside the binaries, so this
-	# environment composes with no OS tree at all.  $C900_STOCK_ROOT still
-	# wins, for composing the same compiler over a library somebody built.
-	R=${C900_STOCK_ROOT:-$V/root}
-	if [ ! -d "$R/lib" ]; then
+	# This repository vendors the 1985 COMPILER and nothing it compiles
+	# against: the C library, the C runtime startoff and the kernel header
+	# trees are a 1985 SYSTEM, not a compiler, and they live with the
+	# repository that builds a 1985 artifact -- commodore-900-bios, at its
+	# vendor/mwc-1985.  So the root to compose over is named, never guessed.
+	R=${C900_STOCK_ROOT:-}
+	if [ -z "$R" ] || [ ! -d "$R/lib" ]; then
 		echo "build-env.sh: the 1985 binaries are a COMPILER only; they need a C" >&2
-		echo "  library and headers to compile against, and there are none at $R." >&2
-		echo "  Set C900_STOCK_ROOT to a built COHERENT staging root (lib/ +" >&2
-		echo "  usr/include/), or restore vendor/mwc-1985/root." >&2
+		echo "  library, a C runtime startoff and headers to compile against," >&2
+		echo "  and this repository does not carry them." >&2
+		echo "  Set C900_STOCK_ROOT to a guest root holding lib/libc.a," >&2
+		echo "  lib/crts0.o, usr/include, usr/sys/h and usr/sys/z8001/h --" >&2
+		echo "  a built COHERENT staging root, or commodore-900-bios's" >&2
+		echo "  vendor/mwc-1985, which is the 1985 originals." >&2
 		exit 2
 	fi
 	# The PASSES are not vendored: cpp/cc0/cc1/cc2/cc3 survive only in the
@@ -211,7 +225,10 @@ env_mwc1985() {
 		echo "  C900_MWC1985_PASSES at it, or put that checkout beside this one." >&2
 		exit 2
 	fi
-	for f in cc ccx as ld ar nm size; do
+	# nld as well as ld: cc2 emits the 32-bit object format (l_flag LF_32)
+	# and nld is the loader for it.  A consumer linking what these passes
+	# produced needs that one, and it survives nowhere else either.
+	for f in cc ccx as ld nld ar nm size; do
 		need "$V/$f" "vendor/mwc-1985 is missing -- see its SOURCES.md"
 		inst 755 "$V/$f" "bin/$f"
 	done
@@ -223,13 +240,35 @@ env_mwc1985() {
 		need "$R/lib/$f" "build the stock libraries in \$C900_STOCK_ROOT"
 		inst 644 "$R/lib/$f" "lib/$f"
 	done
-	copy_headers "$R/usr/include"
+	copy_headers "$R/usr/include" usr/include
+	# The kernel header trees, at the guest paths they are named by.  A
+	# system artifact compiles with -I/usr/sys/z8001/h and includes
+	# <../../h/...> across into /usr/sys/h, so the two are staged together
+	# or neither is usable.  They are absent from a stock staging root that
+	# installed only /usr/include, and that is refused rather than composed:
+	# an environment that cannot build a kernel is not this environment.
+	for t in usr/sys/h usr/sys/z8001/h; do
+		[ -d "$R/$t" ] || {
+			echo "build-env.sh: no $R/$t." >&2
+			echo "  The 1985 environment builds SYSTEM artifacts -- the kernel," >&2
+			echo "  the drivers, the boot ROM -- and those compile with" >&2
+			echo "  -I/usr/sys/z8001/h.  Point C900_STOCK_ROOT at a root that" >&2
+			echo "  has the kernel headers too." >&2
+			exit 2; }
+		copy_headers "$R/$t" "$t"
+	done
+	# The variant word cc0/cc1/cc2 must be run with is a property of THESE
+	# binaries, so it travels with them: a consumer that unpacked a dist has
+	# no vendor/mwc-1985 to read it out of, and the wrong word silently
+	# produces objects that are not the ones the machine shipped.
+	need "$V/VARIANT" "vendor/mwc-1985 is missing -- see its SOURCES.md"
+	inst 644 "$V/VARIANT" VARIANT
 	echo "Mark Williams 1985 originals over the stock COHERENT library" \
 		> "$ENV/CCENV"
 	# The 1985 parts are recovered artifacts: what identifies them is the
 	# tree they were taken from, at the commit that held them.
 	_pr=$(cd "$P/../../.." && pwd)
-	PROV="library $(if [ "$R" = "$V/root" ]; then echo "vendor/mwc-1985/root@$(repo_origin "$ROOT" "$V/root")"; else echo "$R"; fi)
+	PROV="library $R
 passes $(repo_origin "$_pr" "$P")"
 }
 
@@ -242,14 +281,19 @@ passes $(repo_origin "$_pr" "$P")"
 # -- <sys/bootinfo.h>, which now lives in the loader alone -- disappears here on
 # the next build for that reason and no other.  Anything that stages headers
 # incrementally instead reintroduces the copy the guest then compiles against.
+#
+# copy_headers <srcdir> <dest relative to the environment root>.  The
+# destination is the GUEST path the tree stands at, because that is what the
+# consumer's -I names once $N2ROOT points at this root.
 copy_headers() {
 	src=$1
-	mkdir -p "$ENV/usr/include"
+	dst=$ENV/$2
+	mkdir -p "$dst"
 	( cd "$src" && find . -type f -name '*.h' -print ) | while read -r h; do
-		mkdir -p "$ENV/usr/include/$(dirname "$h")"
-		cp -f "$src/$h" "$ENV/usr/include/$h"
+		mkdir -p "$dst/$(dirname "$h")"
+		cp -f "$src/$h" "$dst/$h"
 	done
-	find "$ENV/usr/include" -type f -exec chmod 644 {} +
+	find "$dst" -type f -exec chmod 644 {} +
 }
 
 # ------------------------------------------------------------- provenance

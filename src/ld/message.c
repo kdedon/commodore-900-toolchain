@@ -81,3 +81,44 @@ char	*args;
 	else
 		mpmsg(sp->mod, "symbol %.*s: %r", NCPLN, sp->s.ls_id, &args);
 }
+
+/*
+ * The same four reports, counted.  A diagnostic saying an INPUT is broken goes
+ * through these, and nerror decides the exit status: a bad symbol segment or an
+ * unresolvable relocation leaves an image whose contents mean nothing, and a
+ * caller that reads only the status has to be told.  The plain *msg forms above
+ * stay for what is merely worth saying -- the watch trace, a stale ranlib.
+ */
+void
+filerr(fname, args)
+char	*fname, *args;
+{
+	nerror++;
+	filemsg(fname, "%r", &args);
+}
+
+void
+moderr(fname, mname, args)
+char	*fname, mname[DIRSIZ], *args;
+{
+	nerror++;
+	modmsg(fname, mname, "%r", &args);
+}
+
+void
+mperr(mp, args)
+mod_t	*mp;
+char	*args;
+{
+	nerror++;
+	mpmsg(mp, "%r", &args);
+}
+
+void
+sperr(sp, args)
+sym_t	*sp;
+char	*args;
+{
+	nerror++;
+	spmsg(sp, "%r", &args);
+}

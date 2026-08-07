@@ -14,6 +14,23 @@
 #include <ar.h>
 #include <stat.h>
 
+/*
+ * Modes for the object files read and the image written -- every stream this
+ * program opens.  On Windows the C runtime translates one it has not been told
+ * is binary: 0x0A is written as 0x0D 0x0A, a 0x0D 0x0A read collapses to one
+ * byte, and a 0x1A ends the read wherever it appears.  An l.out header ten
+ * bytes in can hold a 0x1A, and the object then reads as empty.
+ */
+#ifdef	_WIN32
+#define	ORMODE	"rb"
+#define	OWMODE	"wb"
+#define	OUMODE	"r+b"
+#else
+#define	ORMODE	"r"
+#define	OWMODE	"w"
+#define	OUMODE	"r+w"
+#endif
+
 #define	LADDR	LADDR
 #ifdef	LADDR
 typedef	unsigned long	uaddr_t;	/* universal address type */
@@ -57,6 +74,7 @@ sym_t	*symtable[NHASH];	/* hashed symbol table */
 mod_t	*modhead, *modtail;	/* module list head and tail */
 seg_t	oseg[NLSEG];		/* output segment descriptors */
 int	nundef;			/* number of undefined symbols */
+int	nerror;			/* inputs found broken; the exit status */
 uaddr_t	commons;		/* accumulate size of commons */
 int	machine;			/* Machine type */
 sym_t	*etext_s, *edata_s, *end_s;	/* special loader generated symbols */
@@ -187,3 +205,4 @@ void	putlong();
 unsigned short	getword(), getlohi(), gethilo();
 unsigned long getlong(), getaddr();
 void	message(), fatal(), usage(), filemsg(), modmsg(), mpmsg(), spmsg();
+void	filerr(), moderr(), mperr(), sperr();

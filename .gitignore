@@ -5,4 +5,4 @@
 __pycache__/
 *.pyc
 # `make deps` unpacks pinned third-party release binaries here (DEPS).
-/deps/
+/external/

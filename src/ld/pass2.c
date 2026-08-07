@@ -38,8 +38,8 @@ mod_t	*mp;
 		if (fname!=mp->fname) {
 			if (fname!=NULL)
 				fclose(inputf[segn]);
-			if ((inputf[segn]=fopen(mp->fname, "r"))==NULL) {
-				filemsg(mp->fname, "can't open (pass 2)");
+			if ((inputf[segn]=fopen(mp->fname, ORMODE))==NULL) {
+				filerr(mp->fname, "can't open (pass 2)");
 				exit(1);
 			}
 		}
@@ -65,7 +65,7 @@ mod_t	*mp;
 		if (segn==L_BSSI
 		 || segn==L_BSSD
 		 || segn==L_SYM) {
-			mpmsg(mp, "bad relocation address %06lo", (long)addr);
+			mperr(mp, "bad relocation address %06lo", (long)addr);
 			continue;
 		}
 		ifp = inputf[segn];
@@ -79,9 +79,9 @@ mod_t	*mp;
 		case L_SYM:
 			symno = getsymno(irfp, irsp);
 			if (symno>=mp->nsym) {
-				mpmsg(mp, "bad reloc. sym. no. %d", symno);
+				mperr(mp, "bad reloc. sym. no. %d", symno);
 			} else if ((sp=mp->sym[symno])==NULL) {
-				mpmsg(mp, "symbol %d not kept", symno);
+				mperr(mp, "symbol %d not kept", symno);
 			} else if (sp->s.ls_type==(L_GLOBAL|L_REF)) {
 				if (orfp!=NULL) {
 					putbyte(opcode, orfp, orsp);
@@ -122,7 +122,7 @@ mod_t	*mp;
 		switch (opcode&LR_OP) {
 		default:
 		BadCode:
-			mpmsg(mp, "bad relocation opcode %03o", opcode);
+			mperr(mp, "bad relocation opcode %03o", opcode);
 			break;
 		case LR_BYTE:
 			bias += getbyte(ifp, isgp);

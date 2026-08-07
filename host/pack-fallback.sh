@@ -4,13 +4,18 @@
 #
 #	sh host/pack-fallback.sh [OUTDIR]
 #
-# EXACTLY TWO, and never a third.  This is not an environment-publishing
-# system: it is the bootstrap for the toolchain <-> OS cycle, which cannot be
-# broken from either side while commodore-900-coherent is unpublished.  The
-# images belong in that repository's dist package permanently -- it owns libc,
-# csu and the headers -- and when it ships one, this pair is frozen and every
-# consumer repoints one DEPS line.  Adding a third dist here is therefore a
-# deliberate edit to this file, not a parameter somebody passes.
+# EXACTLY TWO COMPILER DISTS, and never a third: `ours' and `mwc1985'.  This is
+# not an environment-publishing system, it is the bootstrap for the toolchain
+# <-> OS cycle, which cannot be broken from either side while
+# commodore-900-coherent is unpublished.  The images belong in that
+# repository's dist package permanently -- it owns libc, csu and the headers --
+# and when it ships one, this pair is frozen and every consumer repoints one
+# DEPS line.  Adding a third COMPILER dist here is a deliberate edit to this
+# file, not a parameter somebody passes.
+#
+# The release carries a third ASSET that is not a compiler dist: the OS source
+# subset this repository itself compiles.  See the end of this file for why it
+# rides along rather than taking a tag of its own.
 #
 # What a dist IS: the directory host/build-env.sh composes, tarred whole.  A
 # consumer unpacks it and compiles with it; it needs no checkout of anything,
@@ -38,6 +43,15 @@ mkdir -p "$out"
 # only when somebody decides it should.  Which commit it was cut from is not
 # lost: .provenance inside each root records it, along with the COHERENT commit
 # behind `ours' libc and headers.  Bump N when a new pair is published.
+#
+# AND THE TAG IS MUTABLE.  A bootstrap edge is re-cut in place -- fallback-1's
+# assets are overwritten -- so the tag names the ROLE, not a set of bytes, and
+# two roots tagged fallback-1 need not be the same ones.  What distinguishes
+# them is the `toolchain <commit>' line in .provenance, which is why that line
+# is not optional and why a dirty tree is refused.  Consequences a consumer
+# lives with: `make deps' leaves an already-unpacked dist alone, so a machine
+# or CI cache holding the previous cut keeps it silently, and `rm -rf external/<x>'
+# is what forces the new one.
 git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1 || {
 	echo "pack-fallback.sh: $ROOT is not a git checkout." >&2
 	echo "  Each dist names the commit it was cut from; an unversioned tree" >&2
@@ -61,7 +75,17 @@ pack() {
 		echo "pack-fallback.sh: no environment at $env" >&2
 		echo "  Compose it first: make env CCENV=$1" >&2
 		exit 2; }
-	for f in .provenance CCENV lib/cc0 lib/cc1 lib/cc2 bin/as bin/ld; do
+	want=".provenance CCENV lib/cc0 lib/cc1 lib/cc2 bin/as bin/ld"
+	# mwc1985 is also the SYSTEM compiler -- the kernel, the drivers and the
+	# boot ROM are built with it -- so its dist must carry the kernel header
+	# trees, the 32-bit linkage editor cc2's objects need, and the variant
+	# word the passes are run with.  A dist missing any of them links and
+	# reads as complete and cannot build the ROM; requiring them here is what
+	# stops one being published.  `ours' is a userland compiler environment
+	# and wants none of it -- see host/build-env.sh on why they differ.
+	[ "$1" = mwc1985 ] &&
+		want="$want bin/nld VARIANT usr/sys/h usr/sys/z8001/h"
+	for f in $want; do
 		[ -e "$env/$f" ] || {
 			echo "pack-fallback.sh: $env has no $f." >&2
 			echo "  A dist is a working compiler; this tree is not one." >&2
@@ -90,5 +114,18 @@ pack() {
 pack ours
 pack mwc1985
 
-echo "pack-fallback.sh: publish both as ONE release tagged $tag ($commit),"
+# And the OS SOURCE SUBSET, as a third asset of the same release.
+#
+# It is not a compiler dist and does not count against the two: a consumer
+# never wants it.  THIS repository wants it, to build the C library, libm and
+# libmisc a release archive ships and to run S2/S3 -- work that needs SOURCE,
+# because it produces libraries, and no arrangement of prebuilt roots can
+# substitute for that.
+#
+# One release rather than two tags, because they retire together: when the OS
+# repository ships its own dist package, this whole bootstrap goes, and two
+# tags that must be bumped in step are two tags that will not be.
+C900_OS_ASSET=$tag-coherent-os sh "$HERE/pack-coherent-os.sh" "$out"
+
+echo "pack-fallback.sh: publish all three as ONE release tagged $tag ($commit),"
 echo "  then pin that tag in each consumer's DEPS."

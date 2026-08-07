@@ -59,10 +59,10 @@ char *argv[];
 #if CPM
 	ofp = fopen(ofn, "wb");
 #else
-	ofp = fopen(ofn, "w");
+	ofp = fopen(ofn, OWMODE);
 #if !INTEL
 	if (ofp != NULL)
-		ofp = freopen(ofn, "r+w", ofp);
+		ofp = freopen(ofn, OUMODE, ofp);
 #endif
 #endif
 	if (ofp == NULL) {

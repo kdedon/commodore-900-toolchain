@@ -48,6 +48,49 @@ by adjacency (`src/cc/coh/cc.c`):
 `ar` is not a compiler pass, but a build that makes a library needs it and the
 guest this serves is minimal on purpose, so it ships here.
 
+### `mwc1985` carries more, because it is the **system** compiler
+
+`ours` and `inherited` are userland compiler environments and `usr/include` is
+all they need. The 1985 binaries are also what the kernel, the loadable
+drivers and the boot ROM were built with, and those name the kernel headers by
+absolute guest path — `cc -I/usr/sys/z8001/h`, with `<../../h/…>` reaching
+across into `/usr/sys/h`. So `mwc1985` carries three trees, not one:
+
+```
+host/build/env/mwc1985/
+    bin/   cc ccx as ld nld ar nm size
+    lib/   cpp cc0 cc1 cc2 cc3 crts0.o libc.a
+    usr/include/        59 headers
+    usr/sys/h/          31 headers    the kernel's own
+    usr/sys/z8001/h/    24 headers    the Z8001 machine tree
+    VARIANT             the variant word each kind of artifact is compiled with
+    CCENV
+```
+
+and two files the others do not:
+
+* **`nld`** — `cc2` emits the 32-bit object format (`l_flag` carries `LF_32`),
+  and `nld`, not `ld`, is the loader for it. A consumer linking what these
+  passes produced needs it, and it survives nowhere else either.
+* **`VARIANT`** — the bit-vector word `cc0`/`cc1`/`cc2` must be run with, per
+  kind of artifact, with the evidence for each written beside it. It is a
+  property of *these binaries*, so it travels with them: a consumer that
+  unpacked a dist has no `vendor/mwc-1985` to read it out of, and the wrong
+  word silently produces objects that are not the ones the machine shipped.
+  `commodore-900-bios` keeps its own copy of it beside its own copy of them,
+  for the same reason.
+
+The asymmetry is the difference between the two jobs, not an omission from
+`ours`.
+
+**The three trees are not vendored here.** A C library, a C runtime startoff
+and kernel headers are a 1985 *system*, and nothing in this repository compiles
+against them; `commodore-900-bios` holds its own copy beside its own copy of
+these tools, and reproduces the V1.0 boot ROM byte for byte from a clone and an
+emulator. So composing `mwc1985` means naming a root:
+`C900_STOCK_ROOT=…/commodore-900-bios/vendor/mwc-1985` for the 1985 originals,
+or a built COHERENT staging root for a later library under the same passes.
+
 ## Using it from the guest
 
 Mounted at `/mnt`, nothing is where `cc` looks. Two ways, both real:
@@ -85,7 +128,7 @@ script per flavour.
 |---|---|---|
 | `ours` | this repository's, built for the target: the `cc0/cc1/cc2` self-host fixpoint (`build-selfhost.sh`) + driver/assembler/linker (`build-native.sh`) | the extended COHERENT tree at `$COHERENT_OS` |
 | `inherited` | the COHERENT tree's own — the Mark Williams lineage as that tree builds and installs it — taken from a stock staging root | that same root |
-| `mwc1985` | `vendor/mwc-1985` — the original Mark Williams driver, `as`, `ld`, `ar` — plus the passes (`cpp cc0 cc1 cc2 cc3`), which survive only in a `commodore-900-coherent` checkout's `src/dist/lib` | `vendor/mwc-1985/root`, or a stock root |
+| `mwc1985` | `vendor/mwc-1985` — the original Mark Williams driver, `as`, `ld`, `nld`, `ar` — plus the passes (`cpp cc0 cc1 cc2 cc3`), which survive only in a `commodore-900-coherent` checkout's `src/dist/lib` | `$C900_STOCK_ROOT`: `commodore-900-bios/vendor/mwc-1985` for the 1985 originals, or a stock root |
 
 **`CCENV` selects a compiler. It is not the OS tree's dist axis.** A dist name
 in `commodore-900-coherent` (`stock`, `extended`) says what an owner of a real
@@ -109,11 +152,11 @@ which is a fact that cannot rot, not a claim about what this tree currently is.
 `inherited` is **selected** from a tree built elsewhere and takes that root as an
 input: `C900_STOCK_ROOT=/path/to/commodore-900-coherent/build/root`.
 `build-env.sh` refuses with one line naming the variable rather than guessing at
-a sibling checkout. `mwc1985` defaults its library and headers to the vendored
-`vendor/mwc-1985/root`, so it needs no OS tree for those — but it still needs a
-`commodore-900-coherent` **checkout** for the passes (`C900_MWC1985_PASSES`
-overrides), because `src/dist/lib` is the only place they exist and the OS-source
-snapshot does not carry it.
+a sibling checkout. `mwc1985` is selected the same way and takes **two** inputs
+from elsewhere: `$C900_STOCK_ROOT` for the library, the startoff and the three
+header trees, and a `commodore-900-coherent` **checkout** for the passes
+(`C900_MWC1985_PASSES` overrides), because `src/dist/lib` is the only place
+those exist and the OS-source snapshot does not carry it.
 
 One wrinkle in `mwc1985`: its `cc` is a two-line shell script that execs
 `/bin/ccx` by **absolute** path, so it must be installed into the guest's own
@@ -126,6 +169,26 @@ assets (`host/pack-fallback.sh`), and every root carries `.provenance` naming
 the commits it was composed from. Consumers place them with their own `make
 deps` and compile with them: no toolchain checkout, no OS checkout, no compiler
 build.
+
+`ours` is the one with consumers. `mwc1985` was cut for `commodore-900-bios`,
+which now vendors the 1985 tools and the 1985 system itself and fetches
+neither; nothing else places it. It is still cuttable — `make env
+CCENV=mwc1985 C900_STOCK_ROOT=…` then `make env-fallback` — and is kept
+against a second consumer wanting the 1985 compiler without a checkout.
+
+`host/pack-fallback.sh` refuses to pack a root that is not a working compiler,
+and for `mwc1985` it also requires `bin/nld`, `VARIANT`, `usr/sys/h` and
+`usr/sys/z8001/h` — so a dist that cannot build a system artifact cannot be
+cut.
+
+**The tag is mutable by design.** `fallback-N` is re-cut in place rather than
+renumbered, so it names the **role** and two roots carrying one tag need not
+hold the same bytes. What tells them apart is the `toolchain <commit>` line in
+`.provenance`, which is why a dirty tree is refused. Two consequences a
+consumer lives with: `make deps` leaves an already-unpacked dist alone, so a
+machine or CI cache holding an earlier cut keeps it silently — `rm -rf
+external/<name>` forces the new one — and a CI cache keyed on the tag should not
+exist.
 
 **Exactly two, and never a third.** This is the bootstrap for the
 toolchain ↔ OS cycle while `commodore-900-coherent` is unpublished. The images

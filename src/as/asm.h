@@ -7,6 +7,21 @@
 #include <l.out.h>
 #endif
 
+/*
+ * Modes for the OBJECT file (the source is read as text, which is right on
+ * every host).  On Windows the C runtime translates a stream it has not been
+ * told is binary: 0x0A is written as 0x0D 0x0A, a 0x0D 0x0A read collapses to
+ * one byte, and a 0x1A ends the read wherever it appears.  An object holds all
+ * three as ordinary data.
+ */
+#ifdef	_WIN32
+#define	OWMODE	"wb"
+#define	OUMODE	"r+b"
+#else
+#define	OWMODE	"w"
+#define	OUMODE	"r+w"
+#endif
+
 /* Basic */
 #define	HUGE	1000		/* A huge number */
 #define NERR	10		/* Errors per line */

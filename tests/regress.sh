@@ -1,7 +1,7 @@
 #!/bin/sh
 # Z8001 codegen regression: compile a C snippet through the WHOLE shipped toolchain --
 # cc0-z8001 -> cc1-z8001 -> cc2-z8001 -> ld-z8001 -> execute (host/runner.sh, the C
-# emulator; the private simulator has no part in this or any other gate here) --
+# emulator; no simulator is involved in this or any other gate here) --
 # and assert the returned R1.  Nothing here reads a compiler's in-memory state: every
 # assertion is made against a linked l.out, which is what the machine would run.
 # Usage: tests/regress.sh
@@ -50,6 +50,39 @@ printf '\t.globl\tSS\nSS = 0\n' > "$RG".ss.s; "$AS" -o "$RG".ss.o "$RG".ss.s 2>/
 # It exists so two runs of this suite can be compared case by case rather than by their
 # totals: equal totals do not mean the same cases passed.
 rgcase=0
+# THE RUNNER IS PROVED BEFORE ANYTHING IS SCORED.  A runner that emits nothing
+# makes every value assertion fail and leaves only the assertions that execute
+# no code -- so the suite reports a tidy "N passed" that describes the harness
+# and not the compiler.  One known answer, checked here; if it does not come
+# back, this stops rather than grading 600 cases against silence.
+printf 'int f(x,y) int x; int y; { return x+y; }\n' > "$RG".c
+# Stderr is KEPT here, unlike in the scored cases: this is the one failure that
+# stops the suite, and every pass below it is silenced, so the diagnosis has to
+# come from this block or from nowhere.
+if { "$O/cc0-z8001" $VAR "$RG".c "$RG".z0 &&
+     "$O/cc1-z8001" $VAR "$RG".z0 "$RG".z1 &&
+     "$O/cc2-z8001" ${PEEP:-0010} "$RG".z1 "$RG".ro "$RG".rscr 0 &&
+     "$LD" -R 0x200 -e f_ -o "$RG".rout "$RG".ro "$RG".ss.o
+   } 2>"$RG".pfe; then
+	pf=$("$N2" -runobjint "$RG".rout 3 4 2>>"$RG".pfe |
+	     grep -oE 'signed -?[0-9]+' | grep -oE '\-?[0-9]+')
+else
+	pf=
+fi
+if [ "$pf" != 7 ]; then
+	echo "*** regress: the runner did not return 3+4 -- it gave [$pf]." >&2
+	echo "***   $N2" >&2
+	echo "*** Every value assertion would fail and the only passes would be the" >&2
+	echo "*** ones that execute nothing.  Nothing is scored." >&2
+	if [ -s "$RG".pfe ]; then
+		echo "*** The compile-and-run said:" >&2
+		sed 's/^/***   /' "$RG".pfe >&2
+	else
+		echo "*** Neither the compiler nor the runner said anything." >&2
+	fi
+	exit 1
+fi
+
 chkrun() { # "<label>" a b want   -- the C source is already in $RG.c
   rgcase=$((rgcase+1)); v=FAIL
   # cc0's status is checked like every other pass's.  Unchecked, a cc0 that
@@ -141,7 +174,11 @@ chkmatch() { # <dump> <regex> yes|no "<label>" <oracle>
   if [ -z "$1" ]; then
     echo "  FAIL($5) [$4] the $5 oracle produced no output"; fail=$((fail+1)); return
   fi
-  if printf '%s\n' "$1" | sed "$rgnorm" | grep -qE "^$2"; then got=yes; else got=no; fi
+  # The oracle's stdout is a TEXT stream, so on Windows every line arrives
+  # ending CR LF.  A pattern anchored with `$' then matches nothing, and one
+  # anchored absence would report absent for the wrong reason.  tr rather than a
+  # sed escape: \r is a GNU extension.
+  if printf '%s\n' "$1" | tr -d '\015' | sed "$rgnorm" | grep -qE "^$2"; then got=yes; else got=no; fi
   if [ "$got" = "$3" ]; then pass=$((pass+1));
   else echo "  FAIL($5) [$4] $2 present=$got want=$3"; fail=$((fail+1)); fi
 }
@@ -1600,8 +1637,9 @@ chkdis 'long evalint(); f(i) int i; { register char *as, *s1, *s2; register int 
 # here, carried on the SAME line as the totals because a transcript is read by its
 # last line and "719 passed, 0 failed" over a suite that quietly skipped a third of
 # its instruction-stream assertions is a lie of omission.  It counted chkdis
-# assertions given up when the Go disassembler was unbuildable -- which needed the
-# private simulator.  The oracle is now cc3's selection dump and cc2's emit listing,
+# assertions given up when the Go disassembler was unbuildable -- it decodes through
+# a simulator, which is not here.  The oracle is now cc3's selection dump and cc2's
+# emit listing,
 # both built from src/ here, so nothing can be absent and nothing can skip: the
 # counter could only ever print 0, and a branch that is never taken is not a
 # safeguard, it is an unread claim that one exists.

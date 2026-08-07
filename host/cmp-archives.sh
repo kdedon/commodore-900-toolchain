@@ -16,7 +16,10 @@
 #                    executable, or a plain file.  A Windows executable is
 #                    named cc0-z8001.exe and a Linux one cc0-z8001, so `.exe'
 #                    is normalised away -- it is the only difference between the
-#                    two layouts that is allowed to exist.
+#                    two layouts that is allowed to exist.  `fx' means THIS
+#                    HOST can run it: release-pack.sh sets the mode from the
+#                    file's own magic, because MSYS stores no mode bits and
+#                    derives them that way whatever the archive said.
 #   dangling links   host/ is a view over bin/ made of relative symlinks, and a
 #                    link naming a file that is not there is a path a consumer
 #                    resolves to nothing.  That is how the .exe suffix breaks a

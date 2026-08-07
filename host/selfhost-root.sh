@@ -51,7 +51,20 @@ mkdir -p "$R/usr" "$R/work/h2" "$R/work/t2"
 ln -sfn "$ROOT/src/cc" "$R/src"
 ln -sfn ../tables "$R/tables"		# relative: valid in staging and published
 ln -sfn "$COHERENT_OS/include" "$R/usr/include"
-ln -sfn "$BUILD/libc-z8001" "$R/lib"
+# lib only if there is a libc to point at.  The host-only side of the fixpoint
+# (-hostonly, which is what the Windows runner does) compiles and never links,
+# so it needs no library and never runs `make libc'.  Linking to something
+# absent is harmless on a POSIX host -- a dangling symlink nothing opens -- but
+# MSYS copies rather than links, so the missing target is a hard error there and
+# stopped the whole stage.  Say it rather than leave root/lib quietly absent.
+if [ -d "$BUILD/libc-z8001" ]; then
+	ln -sfn "$BUILD/libc-z8001" "$R/lib"
+else
+	rm -f "$R/lib"
+	echo "selfhost root: no $BUILD/libc-z8001, so root/lib is ABSENT."
+	echo "  Nothing that compiles needs it; a target-run pass that LINKS does."
+	echo "  \`make libc' builds it, and needs \$COHERENT_OS."
+fi
 
 echo "selfhost root: $R"
 # end of selfhost-root.sh

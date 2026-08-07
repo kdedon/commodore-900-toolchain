@@ -51,7 +51,11 @@ jobs:
       - name: The OS source this release is built from
         working-directory: src
         run: |
-          make deps DEP=coherent || true
+          # Announced here, refused below.  A release may not be built without
+          # the OS source, so this failing is fatal -- but the refusal names
+          # the missing edge, not the reason it is missing, and both matter.
+          make deps DEP=coherent || \
+            echo "::warning title=The OS snapshot was not placed::make deps DEP=coherent failed; the refusal below is its consequence."
           p=$(sh host/deps.sh coherent)
           [ -n "$p" ] || {
             echo "no COHERENT OS source: the pinned snapshot could not be placed."
@@ -67,14 +71,17 @@ jobs:
           cat "$p/.provenance" 2>/dev/null || :
           echo "COHERENT OS source: $p ($(git -C "$GITHUB_WORKSPACE/coherent" rev-parse HEAD))"
 
-      # The tag and the VERSION file are two statements of the same number, and
-      # a release where they disagree is a release nobody can reason about.
-      - name: The tag is the VERSION file
-        working-directory: src
+      # THE TAG IS THE VERSION.  It is stated once, by the person who pushes it,
+      # and everything downstream derives from $V -- there is no VERSION file to
+      # disagree with.  A dispatch run has no tag and is not a release: it packs
+      # under 0.0.0-<sha> so an archive from one cannot be mistaken for an
+      # archive from the other.
+      - name: The version is the tag
         run: |
-          v=$(cat VERSION)
-          t=${GITHUB_REF_NAME#v}
-          [ "$v" = "$t" ] || { echo "tag $GITHUB_REF_NAME does not match VERSION=$v"; exit 1; }
+          case "$GITHUB_REF" in
+          refs/tags/v*) echo "V=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV" ;;
+          *)            echo "V=0.0.0-$(echo "$GITHUB_SHA" | cut -c1-8)" >> "$GITHUB_ENV" ;;
+          esac
 
       - name: Place the pinned emulator
         working-directory: src
@@ -83,11 +90,11 @@ jobs:
       - name: Gates S0-S3
         working-directory: src
         env:
-          C900_EMU: ${{ github.workspace }}/src/deps/commodore-900-emulator/bin/c900
+          C900_EMU: ${{ github.workspace }}/src/external/commodore-900-emulator/bin/c900
         run: |
           make all
           make check
-          make libc selfhost native
+          make libc libm libmisc selfhost native
           make check-selfhost
 
       # The version, the emulator pin and the COHERENT commit are the packer's
@@ -95,7 +102,7 @@ jobs:
       # and one built by hand carry the same stamp.
       - name: Package
         working-directory: src
-        run: sh host/release-pack.sh
+        run: sh host/release-pack.sh "$V"
       - uses: actions/upload-artifact@v4
         with:
           name: linux-dist
@@ -118,7 +125,14 @@ jobs:
           msystem: MINGW64
           install: >-
             mingw-w64-x86_64-gcc make perl python zip unzip tar
-            diffutils coreutils gawk curl
+            diffutils coreutils findutils gawk grep sed patch curl git
+
+      - name: The version is the tag
+        run: |
+          case "$GITHUB_REF" in
+          refs/tags/v*) echo "V=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV" ;;
+          *)            echo "V=0.0.0-$(echo "$GITHUB_SHA" | cut -c1-8)" >> "$GITHUB_ENV" ;;
+          esac
 
       # Refused here as well as in the Linux job: this one packs the zip, and a
       # zip packed without usr/include is an archive a consumer cannot compile
@@ -126,7 +140,11 @@ jobs:
       - name: The OS source this release is built from
         working-directory: src
         run: |
-          make deps DEP=coherent || true
+          # Announced here, refused below.  A release may not be built without
+          # the OS source, so this failing is fatal -- but the refusal names
+          # the missing edge, not the reason it is missing, and both matter.
+          make deps DEP=coherent || \
+            echo "::warning title=The OS snapshot was not placed::make deps DEP=coherent failed; the refusal below is its consequence."
           p=$(sh host/deps.sh coherent)
           [ -n "$p" ] || {
             echo "no COHERENT OS source beside this checkout: it must hold"
@@ -143,7 +161,7 @@ jobs:
       - name: Gates S0-S1, and the corpus for the cross-host comparison
         working-directory: src
         run: |
-          export C900_EMU=$(pwd)/deps/commodore-900-emulator
+          export C900_EMU=$(pwd)/external/commodore-900-emulator
           make all
           make check
           sh host/selfhost-root.sh
@@ -171,9 +189,8 @@ jobs:
         working-directory: src
         run: |
           set -e
-          v=$(cat VERSION)
-          tar xzf ../dist-linux/c900-toolchain-v$v-z8001.tar.gz -C ..
-          z=../c900-toolchain-v$v-z8001/native
+          tar xzf ../dist-linux/c900-toolchain-v$V-z8001.tar.gz -C ..
+          z=../c900-toolchain-v$V-z8001/native
           B=host/build
           mkdir -p $B/native $B/libc-z8001 $B/libm-z8001 $B/libmisc-z8001
           cp $z/cc $z/as $z/ld $B/native/
@@ -184,7 +201,7 @@ jobs:
         working-directory: src
         run: |
           set -e
-          sh host/release-pack.sh
+          sh host/release-pack.sh "$V"
       # Only the zip.  release-pack.sh emits every asset for the host it runs
       # on, and the -z8001 and -codegen archives are host-independent: the
       # released ones are the Linux job's, and two artifacts of the same name
@@ -220,7 +237,7 @@ jobs:
         with: { name: windows-dist, path: dist/windows }
       - name: The two archives are one archive
         run: |
-          v=$(cat src/VERSION)
+          v=${GITHUB_REF_NAME#v}
           sh src/host/cmp-archives.sh \
              dist/linux/c900-toolchain-v$v-linux-x86_64.tar.gz \
              dist/windows/c900-toolchain-v$v-windows-x86_64.zip \
@@ -228,7 +245,10 @@ jobs:
 
   publish:
     needs: [ linux, windows, equivalence ]
-    if: startsWith(github.ref, 'refs/tags/v')
+    # BOTH hosts must have passed.  A release is the two archives and the
+    # equivalence between them; publishing the Linux one alone would hand out a
+    # tag that promises three deliverables and carries two.
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -239,12 +259,6 @@ jobs:
         with: { name: linux-dist, path: dist }
       - uses: actions/download-artifact@v4
         with: { name: windows-dist, path: dist }
-
-      # The PATCH promise, enforced.  The previous tag published its own codegen
-      # archive; if this tag only bumps PATCH, every one of the 86 objects must
-      # still be identical, and the release is refused if any byte moved.  A
-      # first release, or one where the previous tag published no such archive,
-      # is allowed and says so.
       - name: A PATCH bump may not move an emitted byte
         working-directory: src
         env:

@@ -24,7 +24,7 @@
 # ccz's system include path) rather than the toolchain itself.
 #
 # Search order for each: the variable wins; then (emulator only) the pinned
-# release under deps/ and a c900 on $PATH; then a sibling checkout, walking
+# release under external/ and a c900 on $PATH; then a sibling checkout, walking
 # outward AT MOST THREE PARENTS, then one inside a `repos/' directory beside
 # this repository.  Three parents is what reaches the enclosing workspace from
 # a repository staged at <workspace>/repos/<repo>; further out is not a
@@ -59,7 +59,7 @@ case "$dep" in
 emu)
 	VAR="C900_EMU"
 	WANT="the Commodore 900 emulator"
-	LIST="$root/deps/commodore-900-emulator"
+	LIST="$root/external/commodore-900-emulator"
 	p=$(command -v c900 2>/dev/null) && LIST="$LIST $p"
 	LIST="$LIST $(siblings commodore-900-emulator)"
 	[ -n "$given" ] || given=${C900_EMU:-}
@@ -95,7 +95,7 @@ coherent)
 	# A checkout first, the unpacked snapshot last: the fallback is what
 	# there is when the OS repository is not to hand, never a thing that
 	# quietly outranks a tree somebody is editing.
-	LIST="$(siblings commodore-900-coherent) $root/deps/coherent-os"
+	LIST="$(siblings commodore-900-coherent) $root/external/coherent-os"
 	[ -n "$given" ] || given=${COHERENT_OS:-}
 	# The variable has always named the OS tree itself (.../os), and a
 	# checkout of the OS repository holds it one level down; both are

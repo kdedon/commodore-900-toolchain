@@ -1,13 +1,12 @@
 # commodore-900-toolchain
 
-A C compiler, assembler and linker targeting the **Zilog Z8001** as fitted to the
-**Commodore 900**. It emits COHERENT `l.out` objects and executables, in the
-segmented (`VLARGE`) memory model, for a machine with 16-bit `int`, 32-bit
-`long`, far pointers and no floating-point unit. 
-
-**Lineage.** The machine-independent passes, the assembler and the linker derive
-from Mark Williams Company COHERENT 4.2.12, released under BSD 3-Clause by
-Robert Swartz in 2015. The Z8001 machine layer is new work. 
+The **Mark Williams C compiler, assembler and linker from COHERENT 4.2.12**,
+carrying a new **Zilog Z8001** machine layer for the **Commodore 900**. It emits
+COHERENT `l.out` objects and executables in the segmented (`VLARGE`) memory
+model, for a machine with 16-bit `int`, 32-bit `long`, far pointers and no
+floating-point unit. MWC released 4.2.12 under BSD 3-Clause (Robert Swartz,
+2015); the machine-independent passes, the assembler and the linker are theirs,
+and everything under a `z8001/` directory is ours.
 
 ## Building, on a Linux host
 
@@ -23,9 +22,14 @@ Robert Swartz in 2015. The Z8001 machine layer is new work.
                                 all 86 compiler sources and byte-compare the objects with
                                 this build's.  The only check that can see a host workaround
                                 which should have been part of the source.
+    make check-native           RUN the native as and ld: their output against the host
+                                tools' byte for byte, and a corrupt object against ld's
+                                exit status.  The fixed point covers cc0/cc1/cc2 only.
     make env                    a COMPILER ENVIRONMENT: a directory tree a GUEST compiles
                                 from.  CCENV selects which compiler (ours, inherited,
-                                mwc1985); see docs/ENVIRONMENTS.md.  Needs $COHERENT_OS.
+                                mwc1985); see docs/ENVIRONMENTS.md.  `ours' needs
+                                $COHERENT_OS; the other two are composed over a library
+                                and headers named by $C900_STOCK_ROOT.
     make deps                   acquire what DEPS says this repository consumes
     make clean
 
@@ -44,25 +48,6 @@ on the machine, and the host cross-build exists for speed. Host-only workarounds
 are *shims*, applied to a scratch copy by `host/build-cc.sh` and never committed
 to `src/`; `docs/PATCHES.md` classifies each edit as BAKED or HOST SHIM.
 
-## Releases
-
-`VERSION` holds `MAJOR.MINOR.PATCH`, and the number is a statement about
-codegen, not about the interface: **PATCH cannot change an emitted byte**, MINOR
-means the compiler's output moved, MAJOR means the contract did (calling
-convention, `l.out` layout, driver options). A consumer pinning a version is
-pinning codegen. The PATCH promise is checked rather than asserted —
-`host/check-patch-bump.sh` compares the fixed point's 86 objects against the
-previous tag's and the release refuses to publish a PATCH bump whose objects
-moved.
-
-A `v*` tag publishes three deliverables — a Linux archive and a Windows archive,
-each carrying the host compiler *and* the native Z8001 one, and the native
-binaries on their own for a consumer who wants nothing else — plus a fourth
-asset, `-codegen.tar.gz`, which is not a deliverable but the evidence the next
-release's PATCH check compares against. An unpacked archive is self-contained:
-`bin/ccz` finds its passes, its libc and its headers inside the archive, with no
-OS tree and no variables set.
-
 ## What a link must supply: `SS`
 
 A Z8001 address word carries a segment, so every reference to a local or an
@@ -78,8 +63,8 @@ one-word or the two-word address form:
         .globl  SS
     SS = 0x3F3F                 / a stack in segment 0x3F
 
-An object with no frame references never asks for it. Everything already in
-these repositories does, one way or another:
+An object with no frame references never asks for it. Everything that runs on
+the machine does, one way or another:
 
 | what you are linking | `SS` | where |
 |---|---|---|
@@ -102,29 +87,34 @@ politely if it is missing.
 
 `DEPS` states the two edges that are whole repositories, and `make deps`
 acquires what it can: the emulator, which we do not build, is pinned by tag and
-unpacked into a gitignored `deps/`; our own repositories are cloned as siblings
-and left floating on their branch. It is not another way to *find* things — it
-puts them where `host/deps.sh` already looks, so setting `C900_EMU` or
+unpacked into a gitignored `external/`. It is not another way to *find* things —
+it puts them where `host/deps.sh` already looks, so setting `C900_EMU` or
 `COHERENT_OS` by hand works exactly as before and still wins.
 
-The COHERENT edge is marked `local`, which means it is not published and there
-is nothing to fetch: `make deps` says so and exits nonzero, naming the variable.
-Nothing the toolchain itself needs is behind it — **`make` and `make check` need
-only the emulator**, which `make deps DEP=emu` places. What is behind it is the
-handful of targets that build *OS artifacts* with this compiler (`make libc`,
-`native`, `selfhost`, `check-selfhost`, `env`) and, therefore, a release: an
-archive carries `usr/include` and the Z8001 libraries, and `host/release-pack.sh`
-refuses to pack one without recording the COHERENT commit they came from. A
-*released* toolchain needs no OS tree at all — that is the point of shipping
-them.
+The COHERENT edge is a **snapshot**: the few directories this repository
+compiles, cut from that tree and published as a release of ours until the tree
+itself is published. A checkout always wins over it — `host/deps.sh` searches
+siblings first and `external/` last — and any build that does resolve to the
+snapshot says so on stderr, naming the commit it was cut from and the date. That
+is deliberate: "built against COHERENT as of some Tuesday" is the failure mode,
+so it cannot happen quietly.
+
+Nothing the toolchain itself needs is behind that edge — **`make` and `make
+check` need only the emulator**, which `make deps DEP=emu` places. What is
+behind it is the handful of targets that build *OS artifacts* with this
+compiler: `make libc`, `native`, `selfhost`, `check-selfhost`, `check-native`,
+`env`.
 
 | input | variable | who needs it |
 |---|---|---|
-| the [emulator](https://github.com/MichalPleban/commodore-900-emulator), which RUNS compiled code | `C900_EMU` | `make check` and every gate in `tests/` that executes its output (`host/runner.sh` → `host/deps.sh`; also `deps/`, `$PATH`, or a sibling checkout bounded at three parents) |
-| `c900oses/gotools`, which holds the Go instruments — including `loutdis`, the `l.out` disassembler | `C900_GOTOOLS` | **no gate**: the side harnesses only (`tests/disdiff.sh`, `codesize.sh`, `effdiff*.sh`, `segrun.sh`, `segexec.sh`, `check.sh dis`), through `host/loutdis.sh`. Those tools import the private `c900`/`z8000` simulator checkouts, which is exactly why they are not here; `make check` reaches for none of it, and neither does anything under `src/` |
-| a COHERENT source tree | `COHERENT_OS` | `host/build-libc-z8001.sh`, `build-libm`, `build-libmisc`, `build-selfhost.sh`, `ccz`'s default include path, `make env` |
-| pristine MWC 4.2.12 | `MWC_DONOR` | `make check-mi` alone, which diffs `src/cc`'s MI files against the donor's and requires a `docs/PATCHES.md` row for each difference. No other target reads it |
-| the Coherent 0.7.3 userland corpus | `Z8001_DONOR` | the sweep and efficiency gates: `objsweep.sh`, `disdiff.sh`, `effdiff*.sh`, `asan_frontend.sh`, `segrun.sh`, and `tests/check.sh` which runs them all |
+| the [emulator](https://github.com/MichalPleban/commodore-900-emulator), which RUNS compiled code | `C900_EMU` | `make check`, and every gate in `tests/` that executes what it compiles. Resolved by `host/runner.sh` → `host/deps.sh`: `external/`, `$PATH`, or a sibling checkout up to three parents away |
+| a COHERENT source tree | `COHERENT_OS` | libc, libm, libmisc, `selfhost`, `native`, `ccz`'s default include path, `make env` |
+| pristine MWC 4.2.12 | `MWC_DONOR` | `make check-mi` alone: it diffs `src/cc`'s MI files against the donor's and requires a `docs/PATCHES.md` row for each difference |
+| the COHERENT 0.7.3 userland corpus | `Z8001_DONOR` | the sweep and efficiency gates — `objsweep.sh`, `asan_frontend.sh`, and `tests/check.sh`, which runs them all |
+
+`C900_BUILD` moves the build directory, which defaults to `host/build`. A
+consumer building against a checkout rather than a release archive sets it, so
+that two of them do not share one tree.
 
 `make check` runs `tests/regress.sh`, which compiles each case through the whole
 shipped pipeline (cc0 → cc1 → cc2 → ld) and **executes the linked binary**.

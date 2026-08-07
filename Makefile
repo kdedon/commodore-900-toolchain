@@ -10,12 +10,13 @@
 #   make check-isa  the opcode inventory vs MWC's own assembler table
 #   make check-mi   every MI divergence from the donor is justified
 #   make check-shims  the host shims still match src/cc
+#   make check-paths  every tracked name survives a Windows checkout
 #   make check-sources  every .c under src/ is declared by the native build
 #   make check-cc3tab  every table indexed by generated/opcode.h, vs opcode.h
 #   make check-selfhost  the byte-identity fixed point: the TARGET-built passes
 #                   reproduce this compiler's objects exactly, all 86 of them
 #   make env        stage a compiler environment for a guest (docs/ENVIRONMENTS.md)
-#   make libc selfhost native   parts of the `ours' env; each needs $COHERENT_OS
+#   make libc libm libmisc selfhost native   parts of the `ours' env; each needs $COHERENT_OS
 #   make env-fallback  cut the two compiler dists consumers place with `make deps'
 #   make deps       acquire what DEPS says this repository consumes
 #   make clean      remove host/build
@@ -27,9 +28,11 @@
 SHELL = /bin/sh
 .DELETE_ON_ERROR:
 .PHONY: all cc as ld check check-isa check-cc3tab check-mi check-shims check-sources \
+	check-paths \
 	mi-baseline mi-table \
-	check-selfhost \
-	deps os-fallback env-fallback clean env env-ours env-inherited env-mwc1985 libc selfhost native
+	check-selfhost check-native check-tools \
+	deps os-fallback env-fallback clean env env-ours env-inherited env-mwc1985 \
+	libc libm libmisc selfhost native
 
 # Overridable so lanes sharing one checkout keep their artifacts apart; every
 # host/ script resolves it through $C900_BUILD, and artifacts are published by
@@ -66,7 +69,7 @@ ld: as
 # here: both link through ccz against libc-z8001, so they need an OS tree, and
 # segexec reads the entry segment with loutdis, which is not in this
 # repository.  They belong wherever check-selfhost lives, not in `check'.
-check: all check-sources check-mi check-shims check-cc3tab check-isa
+check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
@@ -94,6 +97,15 @@ check-sources:
 # inputs only -- no build directory, no emulator, no OS tree.
 check-shims:
 	sh tests/check-shims.sh
+
+# A name Windows cannot create aborts the whole checkout there, and nothing on
+# a Linux or macOS tree shows it -- so it belongs with the other gates over
+# committed inputs, which run on every push.
+check-tools:
+	sh tests/check-tools.sh
+
+check-paths:
+	sh tests/check-paths.sh
 
 # The rule that defines this repository -- Z8001 work goes in the machine layer,
 # the machine-independent front end is not edited -- is enforced HERE or nowhere.
@@ -206,6 +218,11 @@ env-mwc1985:
 
 libc:
 	sh host/build-libc-z8001.sh
+# Both are required by host/release-pack.sh.
+libm:
+	sh host/build-libm-z8001.sh
+libmisc:
+	sh host/build-libmisc-z8001.sh
 selfhost:
 	sh host/build-selfhost.sh
 native:
@@ -217,6 +234,14 @@ native:
 # `check': check needs only the emulator, this needs an OS tree as well.
 check-selfhost: selfhost
 	sh host/build-selfhost2.sh
+
+# The fixpoint runs cc0/cc1/cc2 and nothing else, so the native ASSEMBLER and
+# LINKER were built, shipped in the release archive, and never executed.  This
+# runs them: their output against the host tools' byte for byte, and a corrupt
+# object against ld's exit status, which is the half a byte-comparison cannot
+# see -- two linkers agreeing about a bad object still agree.
+check-native: native
+	sh tests/nativetools.sh
 
 # Never a prerequisite of a build: nothing that compiles may decide for you which
 # version of another repository it is testing against.  `make deps DEP=coherent'

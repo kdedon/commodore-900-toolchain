@@ -218,12 +218,13 @@ print(f"wrote {CCGEN/'OF_styles.h'}, {GEN/'optab.c'}")
 # (rt_z8001 driveInventory) consumes this to round-trip every codegen row against
 # the decoder -- no hand-typed bases.
 #
-# rt_z8001 is NOT in this repository: it decodes through the private z8000
-# simulator, so it lives in c900oses/gotools with the other simulator-dependent
-# Go instruments. The tree is resolved by NAME ($C900_GOTOOLS, else a search
-# beside this checkout), and when it is not on this machine the C outputs above
-# are still written and the Go row emission is SKIPPED OUT LOUD -- which is the
-# whole difference between an absent optional consumer and a silent one.
+# rt_z8001 is NOT in this repository: it decodes through a simulator rather than
+# re-implementing an ISA, so it is kept with the other simulator-dependent Go
+# instruments. The tree is resolved by NAME ($C900_GOTOOLS, else a search beside
+# this checkout), and when it is not on this machine the C outputs above are
+# still written and the Go row emission is SKIPPED OUT LOUD -- which is the whole
+# difference between an absent optional consumer and a silent one.  Nothing in
+# this repository consumes inv_data.go; no gate here reads it.
 def gotools_root():
     e = os.environ.get("C900_GOTOOLS")
     if e:
@@ -255,9 +256,10 @@ for mn, shape, base, vm, words in inv_rows:
     gd.append(f'\t{{"{mn}", "{sh}", "{style}", 0x{base:04X}, 0x{vm:04X}, {words}}},')
 gd.append("}")
 if GO is None:
-    print(f"SKIPPED inv_data.go ({len(inv_rows)} rows): no c900oses/gotools tree "
-          f"here.  Set $C900_GOTOOLS to it; rt_z8001 needs the private simulator "
-          f"and is not in this repository.")
+    print(f"SKIPPED inv_data.go ({len(inv_rows)} rows): no gotools tree here. "
+          f"Set $C900_GOTOOLS to one if you have it.  rt_z8001 is not part of "
+          f"this repository and no gate here needs it; the C outputs above, "
+          f"which are what this repository compiles, were written.")
 else:
     GO.write_text("\n".join(gd) + "\n")
     print(f"wrote {GO} ({len(inv_rows)} rows)")

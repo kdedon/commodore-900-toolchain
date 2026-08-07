@@ -5,9 +5,8 @@ and the development host can run.
 
 **This is a standalone tool with no consumer in this repository.** It was written
 for an i386 reference harness that host-built the *donor's* i386 compiler out of
-`$MWC_DONOR`; that harness has been deleted (it required a private holding, and
-because it compiled the donor's back end rather than `src/cc`, it could not test
-this tree's code generator). There is no i386 back end under `src/cc`. What
+`$MWC_DONOR`; that harness has been deleted, because it compiled the donor's
+back end rather than `src/cc` and so could not test this tree's code generator. There is no i386 back end under `src/cc`. What
 remains here is self-contained: `make` and `make test` need only gcc with `-m32`.
 The sections below describe the pipeline it was built for, in which the format
 conventions it encodes were established.

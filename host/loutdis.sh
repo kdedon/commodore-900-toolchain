@@ -8,19 +8,19 @@
 # `make check' asserts through cc3's selection dump and cc2's post-peephole
 # listing, which are shipped compilers built out of src/.
 #
-# It is not in this repository, and that is deliberate: it decodes through the
-# private z8000 simulator's cpu.Decode rather than re-implementing an ISA, so it
-# lives in c900oses/gotools with the other simulator-dependent Go instruments.
-# A public checkout therefore has the whole toolchain and every gate, and none
-# of the differential harnesses -- which already need $Z8001_DONOR and extracted
-# original binaries they cannot ship either.
+# It is not in this repository, and that is deliberate: it decodes through a
+# simulator's decoder rather than re-implementing an ISA, so it is kept with the
+# other simulator-dependent instruments.  A checkout therefore has the whole
+# toolchain and every gate, and none of the differential harnesses -- which
+# already need $Z8001_DONOR and extracted original binaries they cannot ship
+# either.
 #
 # Resolution order, the same shape as host/runner.sh's, and for the same reason
 # -- a checkout is named, never counted off in `../..':
 #
 #   $LOUTDIS         explicit, wins; the built binary
-#   $C900_GOTOOLS    the gotools tree; built through its Makefile if need be
-#   a gotools beside c900oses, then one and two levels further out
+#   $C900_GOTOOLS    a gotools tree; built through its Makefile if need be
+#   a gotools beside this checkout, then one and two levels further out
 #
 # Callers use:  LD="${LOUTDIS:-$(sh "$H/host/loutdis.sh")}"
 # so $LOUTDIS still overrides everything.
@@ -52,10 +52,11 @@ else
 fi
 
 if [ -z "$gt" ]; then
-	echo "loutdis.sh: no c900oses/gotools tree found beside $ROOT or up to two" >&2
-	echo "            levels out.  Set \$C900_GOTOOLS to it, or \$LOUTDIS to a built" >&2
-	echo "            loutdis.  It is not in this repository: it decodes through the" >&2
-	echo "            private z8000 simulator, and no gate here needs it." >&2
+	echo "loutdis.sh: no l.out disassembler.  Set \$LOUTDIS to one." >&2
+	echo "            It is not part of this repository and NO GATE NEEDS IT:" >&2
+	echo "            \`make', \`make check' and every stage of CI pass without" >&2
+	echo "            it.  Only the differential harnesses read a disassembly," >&2
+	echo "            and those already need \$Z8001_DONOR as well." >&2
 	exit 1
 fi
 

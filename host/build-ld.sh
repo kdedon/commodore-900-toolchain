@@ -74,16 +74,27 @@ sed -i 's/%D/%ld/g' "$OUT/pass1.c" "$OUT/pass2.c" "$OUT/main.c"
 grep -q "all NCPLN chars matched" "$OUT/pass1.c" || { echo "src/ld pass1.c: eq() 16-char fix MISSING"; exit 1; }
 grep -q "calloc(1, sizeof(\*mp))" "$OUT/pass1.c" || { echo "src/ld pass1.c: calloc(1,n) fix MISSING"; exit 1; }
 sed -i 's/^void\tmessage(), fatal.*/void message(char*,...),fatal(char*,...),usage(char*,...),filemsg(char*,char*,...),modmsg(char*,char*,char*,...),mpmsg(mod_t*,char*,...),spmsg(sym_t*,char*,...);/' "$OUT/data.h"
+# The counted forms need prototypes for the same reason: a varargs call made
+# through a K&R declaration does not set up the register-argument ABI.
+sed -i 's/^void\tfilerr(), moderr.*/void filerr(char*,char*,...),moderr(char*,char*,char*,...),mperr(mod_t*,char*,...),sperr(sym_t*,char*,...);/' "$OUT/data.h"
+grep -q 'void filerr(char\*' "$OUT/data.h" || { echo "src/ld data.h: filerr/moderr/mperr/sperr decl not rewritten"; exit 1; }
 
 # message.c uses Coherent's old-style varargs (callers pass &args as a fake va_list)
 # + a recursive %r printf format -- both broken on x86-64 (args are in registers).
 # Replace with real <stdarg.h>: each message fn builds its prefix directly and a
-# mini vrender() handles the %s/%.*s/%d/%lo/%x/%c subset ld uses (no %r nesting).
+# mini vrender() handles the %s/%.*s/%d/%lo/%x/%c subset ld uses, %r included --
+# the *err forms below reach it, so the nesting has to work on both ABIs.
 cat > "$OUT/message.c" <<'MSGEOF'
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
-static void vrender(FILE *f, char *fmt, va_list ap) {
+/*
+ * va_list BY POINTER.  On SysV x86-64 it is an array type, so passing it decays
+ * to a pointer and a nested call's consumption is visible to the caller; on
+ * Win64 it is a char *, passed by value, and %r would then leave the outer list
+ * where it started and read every following argument from the wrong place.
+ */
+static void vrender(FILE *f, char *fmt, va_list *ap) {
 	for (; *fmt; fmt++) {
 		int zero=0,width=0,prec=-1,star=0,lng=0,c; char nbuf[96],spec[16],*sp;
 		if (*fmt!='%') { putc(*fmt,f); continue; }
@@ -93,22 +104,27 @@ static void vrender(FILE *f, char *fmt, va_list ap) {
 		if (*fmt=='.'){ fmt++; if(*fmt=='*'){star=1;fmt++;} else { prec=0; while(*fmt>='0'&&*fmt<='9') prec=prec*10+(*fmt++ -'0'); } }
 		while (*fmt=='l'||*fmt=='h'){ if(*fmt=='l')lng=1; fmt++; }
 		c=*fmt;
-		if (c=='s'){ int p= star? va_arg(ap,int): prec; char *s=va_arg(ap,char*); if(p<0) fputs(s,f); else { int i; for(i=0;i<p&&s[i];i++) putc(s[i],f); } }
-		else if (c=='d'||c=='u'||c=='o'||c=='x'){ sp=spec; *sp++='%'; if(zero)*sp++='0'; if(width){sprintf(sp,"%d",width); sp+=strlen(sp);} if(lng)*sp++='l'; *sp++=(char)c; *sp=0; if(lng) sprintf(nbuf,spec,va_arg(ap,long)); else sprintf(nbuf,spec,va_arg(ap,int)); fputs(nbuf,f); }
-		else if (c=='c') putc(va_arg(ap,int),f);
-		else if (c=='r'){ char *nf=va_arg(ap,char*); vrender(f,nf,ap); }
+		if (c=='s'){ int p= star? va_arg(*ap,int): prec; char *s=va_arg(*ap,char*); if(p<0) fputs(s,f); else { int i; for(i=0;i<p&&s[i];i++) putc(s[i],f); } }
+		else if (c=='d'||c=='u'||c=='o'||c=='x'){ sp=spec; *sp++='%'; if(zero)*sp++='0'; if(width){sprintf(sp,"%d",width); sp+=strlen(sp);} if(lng)*sp++='l'; *sp++=(char)c; *sp=0; if(lng) sprintf(nbuf,spec,va_arg(*ap,long)); else sprintf(nbuf,spec,va_arg(*ap,int)); fputs(nbuf,f); }
+		else if (c=='c') putc(va_arg(*ap,int),f);
+		else if (c=='r'){ char *nf=va_arg(*ap,char*); vrender(f,nf,ap); }
 		else if (c=='%') putc('%',f);
 		else { putc('%',f); putc((char)c,f); }
 	}
 }
-void message(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,ap); fputc('\n',stderr); va_end(ap); }
-void fatal(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,ap); fputc('\n',stderr); va_end(ap); exit(1); }
-void usage(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,ap);
+void message(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void fatal(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); exit(1); }
+void usage(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,&ap);
 	fputs("\nUsage: ld [-d][-e entry][-i][-l<name>][-m][-n][-o file][-r][-s][-u sym][-x] file ...\n",stderr); va_end(ap); exit(1); }
-void filemsg(char *fname, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); vrender(stderr,fmt,ap); fputc('\n',stderr); va_end(ap); }
-void modmsg(char *fname, char mname[], char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); if(mname[0]) fprintf(stderr,"module %.16s: ",mname); vrender(stderr,fmt,ap); fputc('\n',stderr); va_end(ap); }
-void mpmsg(mod_t *mp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",mp->fname?mp->fname:"?"); if(mp->mname[0]) fprintf(stderr,"module %.16s: ",mp->mname); vrender(stderr,fmt,ap); fputc('\n',stderr); va_end(ap); }
-void spmsg(sym_t *sp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %.16s: ",sp->s.ls_id); vrender(stderr,fmt,ap); fputc('\n',stderr); va_end(ap); }
+void filemsg(char *fname, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void modmsg(char *fname, char mname[], char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); if(mname[0]) fprintf(stderr,"module %.16s: ",mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void mpmsg(mod_t *mp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",mp->fname?mp->fname:"?"); if(mp->mname[0]) fprintf(stderr,"module %.16s: ",mp->mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void spmsg(sym_t *sp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %.16s: ",sp->s.ls_id); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+/* the counted forms; nerror decides main()'s exit status */
+void filerr(char *fname, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void moderr(char *fname, char mname[], char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); if(mname[0]) fprintf(stderr,"module %.16s: ",mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void mperr(mod_t *mp, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",mp->fname?mp->fname:"?"); if(mp->mname[0]) fprintf(stderr,"module %.16s: ",mp->mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void sperr(sym_t *sp, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %.16s: ",sp->s.ls_id); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 MSGEOF
 
 cd "$OUT"

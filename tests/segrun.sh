@@ -13,8 +13,8 @@ H="$(cd "$(dirname "$0")/.." && pwd)"
 B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR=800000020800; PEEP=0010
-# loutdis is RESOLVED, not guessed at: it lives in c900oses/gotools (it decodes
-# through the private simulator), and host/loutdis.sh finds or builds it and
+# loutdis is RESOLVED, not guessed at: it is not part of this repository (it
+# decodes through a simulator), and host/loutdis.sh finds or builds it and
 # names the variable to set when it cannot.  A hardcoded path to a tool that is
 # not there silently empties `es' and fails every case as a wrong ANSWER.
 LOUTDIS=$(sh "$H/host/loutdis.sh")
