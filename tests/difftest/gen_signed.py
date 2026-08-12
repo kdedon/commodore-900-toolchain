@@ -26,12 +26,10 @@ def u(vars,d,rng):
     if r<0.90: return '(U16)('+u(vars,d-1,rng)+'%'+udiv(vars,rng)+')'
     return '(U16)('+u(vars,d-1,rng)+'<<'+str(rng.randint(0,15))+'U)'
 def udiv(vars,rng):
-    # a NONZERO unsigned divisor in [1,0x7FFF].  Bit 15 stays CLEAR: a variable divisor
-    # with the top bit set takes the signed divide (zero-extend + DIV computes the
-    # SIGNED quotient) -- the original MWC Z8001 compiler emits the identical unguarded
-    # sequence, so this is faithful-to-original.
-    # (A CONSTANT top-bit divisor is fine: MI rewrites it to a compare.)
-    return '(U16)((('+u(vars,1,rng)+')&0x7FFFU)|1U)'
+    # a NONZERO unsigned divisor over the FULL U16 range, top bit included: an unsigned
+    # word divide widens a divisor the one-word signed DIV cannot hold and divides with
+    # DIVL, so 0x8000..0xFFFF is ordinary coverage rather than a corner to steer around.
+    return '(U16)(('+u(vars,1,rng)+')|1U)'
 def sval(vars,d,rng):
     # a signed I16 value (reinterpret a defined unsigned expr; no signed overflow involved)
     return '(I16)('+u(vars,d,rng)+')'

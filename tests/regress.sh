@@ -278,6 +278,50 @@ chkf 'int f(x) int x; { int *p; p=&x; *p=*p+1; return x; }' 5 0 6
 chkf 'int g(p) int *p; { return *p; } int f(x) int x; { return g(&x); }' 8 0 8
 chkf 'int f(x) int x; { int *p; int **pp; p=&x; pp=&p; return **pp; }' 7 0 7
 chkf 'int sw(a,b) int *a; int *b; { int t; t=*a; *a=*b; *b=t; return 0; } int f(x,y) int x; int y; { sw(&x,&y); return x-y; }' 3 8 5
+# THE ADDRESS OF A CHAR PARAMETER (TASK #321), fixed.  A char argument is
+# promoted to int by the call, so the parameter owns a 16-bit slot; the donor
+# handed out the address of the whole slot -- LDA R1,0x0006(R13) -- and on this
+# big-endian machine that names the HIGH byte, which is 0 for every ASCII
+# character.  Measured: `PUSH @R15,#0x0041' puts 0x00 at +6 and 0x41 at +7, and
+# the compiler handed out +6.  Correct on the little-endian i8086 this backend
+# descends from, which is why it stood.  The parameter now keeps its declared
+# byte type and is bound at the low-order byte of its word, +7 (bindargs, and
+# the MI-PATCHES row `char-parameter-address').
+#
+# THESE ASSERT A VALUE, and they have to: the fixpoint gate cannot see this class
+# at all.  A compiler that reads the wrong byte agrees with itself about it, so
+# it rebuilds itself byte-identically and reports 86/86 -- exactly as it could
+# not see the linker addend carry (#308).  Only running the code says anything.
+# They were chkxf expected-fail until the fix landed; they are ordinary
+# assertions now, and the first four are the two directions (read and write)
+# times the two byte types.
+chkf 'int f(x,y) char x; char y; { char *p; p = &x; return *p; }' 65 0 65
+chkf 'int f(x,y) char x; char y; { char *p; p = &x; *p = 90; return x; }' 65 0 90
+chkf 'int g(p) char *p; { return *p; } int f(x,y) char x; char y; { return g(&x); }' 65 0 65
+chkf 'int f(x,y) unsigned char x; unsigned char y; { unsigned char *p; p = &x; return *p; }' 200 0 200
+# The SECOND parameter too: its word slot has to start at +8 whatever the first
+# one's declared size is, or a byte parameter shifts everything after it.
+chkf 'int f(x,y) char x; char y; { char *p; p = &y; return *p; }' 0 66 66
+# ... and the write through the address must be visible to the by-value read too.
+chkf 'int f(x,y) char x; char y; { char *p; p = &x; *p = 33; return x == 33; }' 65 0 1
+# The by-value reads themselves, which is what a placement fix could plausibly
+# break: each byte parameter reads its OWN byte, and the promoted word the caller
+# pushed still carries the sign or zero extension the byte read reproduces.
+chkf 'int f(x,y) char x; char y; { return x; }' 65 0 65
+chkf 'int f(x,y) char x; char y; { return y; }' 65 66 66
+chkf 'int f(x,y) char x; char y; { return x + y; }' 65 1 66
+chkf 'int f(x,y) char x; int y; { return y; }' 65 1234 1234
+chkf 'int f(x,y) unsigned char x; int y; { return x; }' 200 0 200
+chkf 'int f(x,y) char x; int y; { return x; }' -3 0 -3
+# A `register' byte parameter is not given a register (grabreg takes word types
+# only, exactly as for a `register char' auto), so it is an addressable
+# parameter like any other -- and must be bound at the same low-order byte.
+chkf 'int f(x,y) register char x; int y; { return x + y; }' 65 1 66
+chkf 'int f(x,y) register char x; int y; { char *p; p = &x; return *p; }' 65 1 65
+# The local-copy convention libcurses and hunt now use.  It is correct on either
+# byte order, and it is the thing a parameter-binding fix must not disturb.
+chkf 'int g(p) char *p; { return *p; } int f(x,y) char x; char y; { char c; c = x; return g(&c); }' 65 0 65
+chkf 'int f(x,y) char x; char y; { char c; char *p; c = x; p = &c; *p = 90; return c; }' 65 0 90
 # sign correctness: unary neg/not (P_SLT share-left-temp), signed mul/div/rem with
 # negatives, unsigned div/rem (CLR zero-extend, kept unsigned through return-coerce)
 chk 'return -x;' 20 9 -20;        chk 'return -x;' -7 4 7
@@ -694,13 +738,8 @@ chkf 'int n; struct s{int a;int b;}; struct s mk(){ struct s r; n=n+1; r.a=n; r.
 chkf 'struct s{int a;int b;}; struct s mk(x) int x;{ struct s r; r.a=x;r.b=x+1; return r;} int f(x) int x;{ return mk(x).a + mk(x).b; }' 5 0 11
 
 # a struct assignment whose DESTINATION address is computed (`t[y] = u',
-# `q[y] = u', `t[y+1] = t[y]').  The inline unroll used to hand every member store
-# THE SAME address subtree, making the statement a DAG -- which crashed cc1
-# (outtree on a node selection had already relabelled REG) and, once that was
-# dodged, silently miscompiled: one member's folded offset landed on the shared
-# base, so the first store went to the wrong word and the rest walked off the
-# object.  Each store now gets its own dupnode copy.  These check the LAST member
-# (was written to the wrong place) and the FIRST (was never written at all).
+# `q[y] = u', `t[y+1] = t[y]').  Each store gets its own dupnode copy.
+# These check the LAST member and the FIRST.
 chkf 'struct s{int a;int b;}; struct s t[8]; struct s u; int f(y) int y; { u.a=11;u.b=42; t[y]=u; return t[3].a*100+t[3].b; }' 3 0 1142
 chkf 'struct s{int a;int b;int c;}; struct s t[8]; struct s u; int f(y) int y; { u.a=1;u.b=2;u.c=3; t[y]=u; return t[4].a*100+t[4].b*10+t[4].c; }' 4 0 123
 chkf 'struct s{int a;int b;}; struct s t[8]; struct s *q; struct s u; int f(y) int y; { q=t; u.a=11;u.b=42; q[y]=u; return t[3].a*100+t[3].b; }' 3 0 1142
@@ -758,6 +797,90 @@ chkf 'int f(x) unsigned x; { return x % 0xC000; }' 40000 0 -25536
 # same strength reduction at 32 bits (constant divisor >= 2^31).  n = 40000*100000 = 4e9.
 chkf 'int f(x) unsigned x; { unsigned long n; n=x; n=n*100000; return n / 0x90000000; }' 40000 0 1
 chkf 'int f(x) unsigned x; { unsigned long n; n=x; n=n*10000;  return n / 0x90000000; }' 40000 0 0
+# UNSIGNED WORD DIVIDE, RUNTIME DIVISOR.  The Z8000 has no unsigned divide and its
+# one-word DIV reads a divisor with bit 15 set as NEGATIVE, so every divisor >= 0x8000
+# needs the wider divisor of DIVL: the divide is done with a zero-extended 32-bit
+# divisor over a 64-bit dividend (div/rem/adiv/arem.t UWORD + LONG right).  Divisors
+# below, at and above 0x8000, both operators, exact and inexact, and 0xFFFF as divisor
+# and as dividend.  These values are the whole point of the rule -- a divisor under
+# 0x8000 passes on the one-word DIV too, which is why small-constant tests never saw
+# this.  Also the fread(bp,size,1,fp) shape, whose `(size*nitems-nb)/size' returned -1
+# for any size >= 0x8000.
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 40000 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 40000 40000 0
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 40000 32768 1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 40000 32768 7232
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 40000 32767 1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 40000 32767 7233
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 65535 65535 1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 65535 65535 0
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 65535 1 -1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 65535 1 0
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 32767 32768 0
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 32767 32768 32767
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/y; }' 65535 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%y; }' 65535 40000 25535
+# the mixed forms the usual arithmetic conversions produce: one signed operand makes
+# the whole divide unsigned, so the same rule has to serve it
+chkf 'int f(x,y) unsigned x; int y; { return x/y; }' 40000 40000 1
+chkf 'int f(x,y) int x; unsigned y; { return x/y; }' 40000 40000 1
+chkf 'int f(x,y) int x; unsigned y; { return x%y; }' 40000 40000 0
+# compound assignment takes the same widening and stores a 16-bit result
+chkf 'int f(x,y) unsigned x; unsigned y; { x /= y; return x; }' 40000 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { x %= y; return x; }' 40000 40000 0
+chkf 'int f(x,y) unsigned x; unsigned y; { x /= y; return x; }' 65535 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { x %= y; return x; }' 65535 40000 25535
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned z; z=y; z%=x; return z; }' 32768 65535 32767
+# fread's return expression, with nitems=1 and nothing left unread
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned size; unsigned nb; size=x; nb=y; return (size*1-nb)/size; }' 40000 0 1
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned size; unsigned nb; size=x; nb=y; return (size*1-nb)/size; }' 32768 0 1
+# a constant divisor keeps the one-word DIV: same answers, no widening
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/40000; }' 65535 0 1
+chkf 'int f(x,y) unsigned x; unsigned y; { return x/10; }' 40000 0 4000
+chkf 'int f(x,y) unsigned x; unsigned y; { return x%10; }' 40007 0 7
+chkf 'int f(x,y) unsigned x; unsigned y; { x /= 10; return x; }' 40000 0 4000
+chkf 'int f(x,y) unsigned x; unsigned y; { x %= 10; return x; }' 40007 0 7
+# UNSIGNED LONG DIVIDE, RUNTIME DIVISOR >= 2^31.  DIVL is the widest divide the machine
+# has and it is SIGNED, so a divisor with bit 31 set reads as negative; such a divisor is
+# over half the U32 range, so the quotient is 0 or 1 and the remainder the dividend or the
+# dividend less the divisor, and the rules test the divisor's sign and take that arm
+# (div/rem/adiv/arem.t FU32 with an ADR right operand).  Both operands are built at run
+# time from an int argument so no constant folding can reach them.  Divisors above, at and
+# below 2^31, 0xFFFFFFFF, and 1 (whose quotient does not fit a SIGNED 32-bit result).
+# Remainders are scaled down by a constant divisor to fit the int return.
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; return a/b; }' 42949 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; return (a%b)/1000000; }' 42949 40000 294
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; return a/b; }' 30000 40000 0
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; return (a%b)/1000000; }' 30000 40000 3000
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; return a/b; }' 40000 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; return a%b; }' 40000 40000 0
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*65536; return a/b; }' 40000 32768 1
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*65536; return (a%b)/1000000; }' 40000 32768 1852
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*65536; return a/b; }' 21474 32768 0
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*65536; return (a%b)/1000000; }' 21474 32768 2147
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=0; b=~b; return a/b; }' 40000 0 0
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=0; b=~b; return (a%b)/1000000; }' 40000 0 4000
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; return (a/b)/100000; }' 40000 1 -25536
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; return a%b; }' 40000 1 0
+# a divisor UNDER 2^31 takes the ordinary DIVL through the same rule
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*10000; return a/b; }' 40000 40000 10
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*10000; return (a%b)/100000; }' 40007 40000 7
+# the compound assignments take the same arm and store a 32-bit result
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; a /= b; return a; }' 42949 40000 1
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; a %= b; return a/1000000; }' 42949 40000 294
+chkf 'int f(x,y) unsigned x; unsigned y; { unsigned long a; unsigned long b; a=x; a=a*100000; b=y; b=b*100000; a %= b; return a/1000000; }' 30000 40000 3000
+# a divisor that is a sign-extended int is >= 2^31 exactly when the int is negative, and
+# the unsigned quotient of such a divide is then 0 or 1 (strtol/printf divide by a base).
+chkf 'int f(x,y) unsigned x; int y; { unsigned long a; a=x; a=a*100000; return a/y; }' 40000 -1 0
+chkf 'int f(x,y) unsigned x; int y; { unsigned long a; a=x; a=a*100000; return (a%y)/1000000; }' 40000 -1 4000
+chkf 'int f(x,y) unsigned x; int y; { unsigned long a; a=x; a=a*100000; return (a/y)/100000; }' 40000 10 4000
+# CONSTANT divisor >= 2^31: strength-reduced to a compare, in every context.  The value
+# context needs the compare's int result widened back to the long the node is.
+chkf 'int f(x) unsigned x; { unsigned long n; unsigned long q; n=x; n=n*100000; q = n / 0x90000000; return q; }' 40000 0 1
+chkf 'int f(x) unsigned x; { unsigned long n; unsigned long q; n=x; n=n*100000; q = n % 0x90000000; return q/1000000; }' 40000 0 1584
+chkf 'int f(x) unsigned x; { unsigned long n; n=x; n=n*100000; n /= 0x90000000; return n; }' 40000 0 1
+chkf 'int f(x) unsigned x; { unsigned long n; n=x; n=n*100000; n %= 0x90000000; return n/1000000; }' 40000 0 1584
+chkf 'int f(x) unsigned x; { unsigned long n; unsigned long q; n=x; n=n*10000; q = n / 0x90000000; return q; }' 40000 0 0
 # unsigned long compares that CROSS the 2^31 boundary are correct (native CPL carry).
 chkf 'int f(x) unsigned x; { unsigned long n; n=x; n=n*100000; return n > 0x90000000; }' 40000 0 1
 chkf 'int f(x) unsigned x; { unsigned long a; unsigned long b; a=x; a=a*100000; b=x; b=b*50000; return a > b; }' 40000 0 1
@@ -1643,5 +1766,11 @@ chkdis 'long evalint(); f(i) int i; { register char *as, *s1, *s2; register int 
 # both built from src/ here, so nothing can be absent and nothing can skip: the
 # counter could only ever print 0, and a branch that is never taken is not a
 # safeguard, it is an unread claim that one exists.
+# A known-fail counter rode here too, for the same reason, while the char-
+# parameter address cases (#321) were expected-fail: a suite reporting "719
+# passed, 0 failed" over a documented wrong answer reads as a clean compiler.
+# The fix landed, those cases are ordinary assertions above, and the counter went
+# with them rather than stay a branch nothing takes.  Re-add `chkxf' (git log
+# 664eece) if a defect is ever parked again -- it is a mechanism, not a fixture.
 echo "=== regression: $pass passed, $fail failed ==="
 [ $fail = 0 ]

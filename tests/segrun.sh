@@ -46,11 +46,8 @@ chk 'int n; n=4; return n<2 ? n : n*10;' 40
 chk 'int a[4],i,s; for(i=0;i<4;i=i+1)a[i]=i*i; s=0; for(i=0;i<4;i=i+1)s=s+a[i]; return s;' 14
 chk 'long x; x=100000L; return (int)(x/7L);' 14285
 
-# Regression: long-CONSTANT stores through a pointer.  The i8086
-# word-split used to emit near stores through the far pointer's halves
-# (CLR @Rseg twice for 0L; a seg-0 X-mode for other constants) -- correct
-# results ONLY under a flat link, silently wrong at seg 3.  These compare
-# flat vs seg-3, which is exactly the discriminator.
+# Regression: long-CONSTANT stores through a pointer.
+# Flat vs seg-3 discriminates a mis-compiled constant store.
 chk 'long v; long *p; v=1L; p=&v; *p=0L; return (int)v;' 0
 chk 'long v; long *p; v=1L; p=&v; *p=5L; return (int)v;' 5
 chk 'long a[3]; long *p; int i; for(i=0;i<3;i=i+1)a[i]=1L; p=a; p[1]=7L; p[2]=0L; return (int)(a[0]+a[1]+a[2]);' 8
@@ -103,18 +100,13 @@ whole 'struct s{char b[20];}; struct s a[3]; struct s *vp; int f(){ vp=a; vp++; 
 whole 'struct s{char b[20];}; struct s a[3]; struct s *vp,*r; int f(){ vp=a; r=vp++; return (int)((char*)r-(char*)a)*1000+(int)((char*)vp-(char*)a); }' 20
 whole 'struct s{char b[40];}; struct s a[3]; struct s *vp; int f(){ vp=&a[2]; --vp; return (int)((char*)vp-(char*)a); }' 40
 # aggregate copy from a POINTER-DEREFERENCE source: `dst = q[i]' / `dst = *q'
-# copies a struct/union word by word; the per-word re-evaluation of the far-pointer
-# source address used to re-deref the base register (reading *q as an address) so only
-# the first word was right.  Bind &src into a temp once.  A static array source `arr[i]'
-# is addressed by a constant base and is unaffected.  Value here is dst's second word
-# (an int at offset 2 after a char*): the miscompile left it 0.
+# copies a struct/union word by word.
+# A static array source `arr[i]' is unaffected by indirect address issues.
+# Value here is dst's second word (an int at offset 2 after a char*).
 whole 'struct s{char *p; int x;}; struct s dst,a[4],*q; int f(){ a[1].x=77; q=a; dst=q[1]; return dst.x; }' 77
 whole 'struct s{char *p; int x;}; struct s dst,a[4],*q; int f(){ a[0].x=55; q=a; dst=*q; return dst.x; }' 55
-# store an immediate FAR POINTER at a NEGATIVE index through a register far pointer
-# (sh's makargl `app[-1] = p'): the EA-immediate store has no BA form, so genins steps
-# the pair's offset register to the operand -- the step can be negative (offset DOWN),
-# which irstep used to botch ("@RR+disp step out of range", 575B).  slots[1] gets the
-# value stored via slots[2]-relative [-1]; return marks correct placement.
+# store an immediate FAR POINTER at a NEGATIVE index through a register far pointer.
+# Return marks correct placement via slots[2]-relative addressing.
 whole 'char *slots[4]; int f(){ register char **p; p=&slots[2]; p[-1]=(char*)0x1234; p[0]=(char*)0x5678; return (slots[1]==(char*)0x1234 && slots[2]==(char*)0x5678)?42:0; }' 42
 # a far-pointer REGVAR passed as a call argument: the regvar is already a
 # materialized pair, so no PFNARG rule survives outtree for the bare REG leaf --

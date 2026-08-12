@@ -1,14 +1,8 @@
 # provenance.sh -- shared build-provenance stamping, for `.' not for exec.
 #
-# WHY.  Several lanes build into one filesystem namespace on one machine, so an
-# artifact's identity is not implied by its path.  A toolchain built from a
-# working tree with uncommitted edits in it once manufactured a compiler ICE in
-# gzip that was relayed to another lane as a real source bug: two wrong
-# diagnoses and hours, because nothing in any transcript said which source the
-# compiler came from.  Isolating the ARTIFACT (build/z8001 is an atomically
-# renamed symlink now) does not isolate the SOURCE.  Provenance does not prevent
-# that incident; it makes it self-announcing, which is the difference between an
-# hour and a session.
+# Several lanes build into one filesystem namespace, so an artifact's
+# identity is not implied by its path.  Provenance records which source
+# feeds each artifact, making build-provenance issues self-announcing.
 #
 # WHAT IS RECORDED, and the one design decision that matters.  A whole-tree
 # `git status --porcelain' is useless as an alarm here: this tree normally
@@ -32,16 +26,8 @@
 # A stamp is `key=value' lines, one per line, values free of newlines.
 
 # prov_repo [dir]: the git worktree containing <dir>, falling back to the
-# caller's cwd.  The fallback matters: a stamp may legitimately be written to a
-# scratch path outside the tree, and the tree it should NAME is still the one
-# the build is running in.
-#
-# Prints nothing and SUCCEEDS when there is no git tree at all.  Every caller
-# here runs under `set -e', so returning git's 128 would abort the build that
-# just finished -- which is what happened the first time this toolchain was
-# built from an exported tarball: the compiler linked, the smoke test passed,
-# and the build then died stamping it.  Not being in a repository is a
-# legitimate state for a source release; it costs the commit id, not the build.
+# caller's cwd.  Prints nothing and SUCCEEDS when there is no git tree --
+# legitimate for a source release, where it costs the commit id, not the build.
 prov_repo() {
 	git -C "${1:-.}" rev-parse --show-toplevel 2>/dev/null ||
 	git rev-parse --show-toplevel 2>/dev/null ||

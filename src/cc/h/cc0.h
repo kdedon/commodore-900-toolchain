@@ -534,6 +534,7 @@ extern	SYM	*fixlevel();
 extern	SYM	*declare();
 extern	long	fieldalign();
 extern	int	salign();
+extern	int	subwordparm();
 extern	ival_t	iconexpr();
 extern	sizeof_t ssize();
 extern	sizeof_t tsize();

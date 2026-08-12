@@ -74,6 +74,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
 	sh tests/regclob.sh
+	sh tests/asbytes.sh
 	sh tests/float-e2e.sh
 
 # What each program is MADE OF, declared once by the build that runs on the

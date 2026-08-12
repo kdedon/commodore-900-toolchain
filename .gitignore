@@ -2,6 +2,11 @@
 # the only one that exists is host/build.  An unanchored rule is how a committed
 # tree gets silently shadowed in a repository that later grows a src/*/build.
 /host/build/
+# The published view a consuming repository reads: hostbuild/build/.ulsrcmap is
+# the one relative path every producer in this project publishes its source map
+# at, so dist spells it once (host/build-env.sh writes it).  Generated, like
+# everything else under a build directory.
+/hostbuild/
 __pycache__/
 *.pyc
 # `make deps` unpacks pinned third-party release binaries here (DEPS).

@@ -120,7 +120,8 @@ unsigned long	x2;
 	if (oc == C_ARG) {
 		dp = ndp;
 		if (dp == NULL || isfunction(dp)) {
-			t = fixtype(t, sp, "parameter");
+			if (!subwordparm(t))
+				t = fixtype(t, sp, "parameter");
 			if (istruct(t))
 				notbook();
 		} else if (dp->d_type == D_ARRAY) {

@@ -44,8 +44,7 @@ publish_at() {	# publish_at <path> -- point <path> at its staging directory
 	if [ -L "$1" ]; then
 		_old=$(readlink "$1")
 	elif [ -d "$1" ]; then
-		# Migration off the plain directory these used to be.  The rename
-		# is what keeps the gap to a single syscall.
+		# The rename keeps the gap to a single syscall.
 		_old="$_b.legacy.$$"
 		mv -T "$1" "$_d/$_old"
 	fi

@@ -155,7 +155,7 @@ TREE		*ptp;
 					 * GID names a pointer OBJECT, which loads and stores like
 					 * any other scalar.  An array or function decays to
 					 * ADDR(GID) -- an address VALUE -- and that keeps the
-					 * pooled/LDA path. #16a */
+					 * pooled/LDA path. */
 		    && (seg == SANY || seg == SDATA || seg == SBSS
 		     || (seg == SPURE && isvariant(VRAM))
 		     || (seg == SSTRN && notvariant(VROM)))))

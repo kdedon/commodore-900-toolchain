@@ -286,6 +286,26 @@ register SYM	*sp;
 }
 
 /*
+ * Is 't' a parameter type that the call promotes to a WIDER machine object than
+ * the parameter itself?  On this target that is char and unsigned char only: a
+ * short is already a word, and float is promoted to double by both the call and
+ * the parameter (mysizes says so, and this asks mysizes rather than naming
+ * types, so a machine where char is a word answers no and keeps the promotion).
+ *
+ * The front end asks before it retypes such a parameter to int.  Keeping the
+ * declared byte type is what makes `&c' name the byte the caller's low-order
+ * half occupies -- see bindargs() -- and on a BIG-ENDIAN machine that is not
+ * the address of the promoted word.
+ */
+subwordparm(t)
+register int t;
+{
+	if (t != T_CHAR && t != T_UCHAR)
+		return 0;
+	return (mysizes[t] < mysizes[T_INT]);
+}
+
+/*
  * Bind arguments.
  */
 bindargs()
@@ -313,10 +333,33 @@ bindargs()
 		sp = args[i];
 		if (sp->s_class != C_PREG)
 			sp->s_class = C_PAUTO;
-		sp->s_value = offset;
-		offset += ssize(sp);
-		if (isvariant(VALIGN) && (offset & 1) != 0)
-			++offset;
+		/*
+		 * A one-byte parameter still arrives in a full word: K&R promotes
+		 * a char argument to int at the call, and PUSH is word-granular
+		 * anyway.  The Z8000 is BIG-ENDIAN, so the caller's byte is the
+		 * SECOND byte of that word, and the parameter object -- the thing
+		 * `&c' hands out and a `char *' dereferences -- has to be placed
+		 * there.  Given +6 for the word, the object is at +7 and the next
+		 * parameter still starts at +8.  The word slot is not conditional on
+		 * VALIGN: the caller pushes a word whatever the stack variant says,
+		 * so a byte parameter that consumed one byte would put every later
+		 * parameter at the wrong address.
+		 *
+		 * The donor i8086 layer placed it at the word's own address, which
+		 * is the low-order byte only because that machine is little-endian:
+		 * here it named the high byte, which is 0 for every ASCII
+		 * character, so `write(fd,&c,1)' inside `f(c) char c;' wrote a NUL
+		 * (libcurses waddch, kermit).
+		 */
+		if (sp->s_dp == NULL && ssize(sp) == 1) {
+			sp->s_value = offset + 1;
+			offset += 2;
+		} else {
+			sp->s_value = offset;
+			offset += ssize(sp);
+			if (isvariant(VALIGN) && (offset & 1) != 0)
+				++offset;
+		}
 		if ((short)offset != offset)
 		    cerror("parameter \"%s\" is not addressible", sp->s_id);
 	}

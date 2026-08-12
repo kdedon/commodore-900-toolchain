@@ -1,12 +1,7 @@
 #!/bin/sh
-# Execution regression for cc2-z8001: compile a no-argument f() through cc0 -> cc1 ->
-# cc2-z8001, link with ld, run it, and require the result to equal a FIXED expected value.
-# Every want below was cross-checked against gcc compiling the same body with 16-bit ints
-# (short) -- an independent oracle, which is what this gate used to lack: it compared cc2
-# against a second implementation of the same backend, so a shared misunderstanding of the
-# language would have agreed with itself.  The bodies are chosen to exercise the peephole's
-# transforms (store/reload, self-copy, held-operand substitution), which is where an
-# encoder-only gate is blind.
+# Execution regression for cc2-z8001: compile f() -> cc0 -> cc1 -> cc2-z8001,
+# link, run, and verify the result against gcc (16-bit int).  The bodies exercise
+# peephole transforms (store/reload, self-copy, held-operand substitution).
 H="$(cd "$(dirname "$0")/.." && pwd)"
 B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
@@ -86,6 +81,19 @@ chk2 'int gv[4]; void init(){ int i; for(i=0;i<4;i=i+1) gv[i]=i*10; }' \
      'extern int gv[4]; extern void init(); int f(){ init(); return gv[3]; }' 30
 chk2 'char gc; int setc(){ gc = 7; return 0; }' \
      'extern char gc; int f(){ setc(); return gc + 1; }' 8
+# A NEGATIVE index on an EXTERN array.  The -1 is folded into the array's address,
+# so it reaches ld as an addend against the symbol, and adding the two in one
+# linear space carried out of the 16-bit offset into the segment byte: the store
+# went to a segment the program has not got, and the read below returned the
+# untouched 66 instead of 90.  Both spellings are here because they arrive in
+# different bytes -- a SIGNED index makes cc2 pre-borrow the segment, an UNSIGNED
+# one leaves the addend as +0xFFFF -- and only the second was ever wrong.  This is
+# a VALUE assertion on purpose: the objects are identical either way, so nothing
+# that compares two builds of the compiler can see it.
+chk2 'char W[512];' \
+     'extern char W[]; int f(){ int k; W[0]=65; W[1]=66; k=2; W[k-1]=90; return W[1]; }' 90
+chk2 'char W[512];' \
+     'extern char W[]; int f(){ unsigned k; W[0]=65; W[1]=66; k=2; W[k-1]=90; return W[1]; }' 90
 
 # Double/float soft-float path (regressions: negate, compound-assign, double
 # CONSTANT format/byte-order + int<->double conversion, double return through a call).

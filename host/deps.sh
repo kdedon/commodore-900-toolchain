@@ -75,11 +75,7 @@ emu)
 			else echo "$1/bin/c900.exe"; fi
 		else echo "$1"; fi
 	}
-	# -f as well as -x: EVERY directory is executable, so testing -x alone
-	# accepted a checkout path and printed it as if it were the binary.  The
-	# tests then "ran" a directory, got no output, and reported 652 wrong
-	# answers -- a compiler bug report, from a variable pointed at a
-	# directory.
+	# -f as well as -x: every directory is executable, so test both.
 	ok() { [ -f "$1" ] && [ -x "$1" ]; }
 	HOW="  The emulator RUNS Z8001 code on the host (\`c900 --exec'), which is how a
   compiler test executes what it just compiled.  It is not built here:
@@ -94,8 +90,11 @@ coherent)
 	WANT="a COHERENT OS source tree"
 	# A checkout first, the unpacked snapshot last: the fallback is what
 	# there is when the OS repository is not to hand, never a thing that
-	# quietly outranks a tree somebody is editing.
-	LIST="$(siblings commodore-900-coherent) $root/external/coherent-os"
+	# quietly outranks a tree somebody is editing.  commodore-900-coherent was
+	# renamed commodore-900-coh-userland (see RELEASE-STYLES.md §H.3).
+	# Both names are searched: the new one for a renamed checkout, the old one
+	# because a plain `git clone' of the unrenamed GitHub repository still lands there.
+	LIST="$(siblings commodore-900-coh-userland) $root/external/coherent-os"
 	[ -n "$given" ] || given=${COHERENT_OS:-}
 	# The variable has always named the OS tree itself (.../os), and a
 	# checkout of the OS repository holds it one level down; both are

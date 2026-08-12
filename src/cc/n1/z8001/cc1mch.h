@@ -200,7 +200,21 @@ typedef	char	INDEX;		/* Index type				*/
  * mapssize come from mch.h. The Z8001 has no ES-load (ZLDES) and no x87
  * top-of-stack / star addressing, so these are identities / no-ops.
  */
-#define	mapcode(c, tp)	(c)		/* no opcode remap needed	*/
+/*
+ * Table conditional jumps. The Z8000 has ONE conditional jump and a 4-bit cc, so
+ * a .t rule cannot name `JR PL' as an opcode: the encoded form ZJREL|cc lands
+ * above M_ORG, where out.c reads a macro byte as an operand escape. Each
+ * condition a table body needs therefore gets an opcode INDEX in the free band
+ * between the last real opcode (NZOPCODE) and M_ORG, and mapcode turns it into
+ * ZJREL|cc on the way out; from there it is the byte gencbr emits and n2's
+ * 0xD0..0xDF jump band decodes. The target is [LAB0]/[LAB1], defined by
+ * [DLAB0]/[DLAB1] in the same rule.
+ */
+#define	ZJRPL	(NZOPCODE+0)	/* JR PL,lab  -- sign clear	*/
+#define	ZJRULT	(NZOPCODE+1)	/* JR ULT,lab -- unsigned <	*/
+
+#define	mapcode(c, tp)	((c) == ZJRPL  ? (ZJREL|CC_PL)  : \
+			 (c) == ZJRULT ? (ZJREL|CC_ULT) : (c))
 #define	mappfx(tp, opv, pfx, npfxp)	cbotch("mappfx")	/* unused	*/
 #define	gentos(x,y)			/* no top-of-stack required	*/
 #define	genstar(x,y,z,zz)		/* no star address required	*/

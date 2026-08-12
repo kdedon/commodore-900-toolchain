@@ -20,7 +20,8 @@ mod_t	*mp;
 	sym_t	*sp;
 	int	opcode, relseg;
 	int	segn;
-	uaddr_t	addr, bias;
+	int	symadd;
+	uaddr_t	addr, bias, field;
 	unsigned int	symno;
 	FILE	*ifp, *irfp, *ofp, *orfp;
 	static	FILE	*inputf[NLSEG];
@@ -75,6 +76,7 @@ mod_t	*mp;
 		while (isgp->vbase < addr)
 			putbyte(getbyte(ifp, isgp), ofp, osgp);
 		bias = 0;
+		symadd = 0;
 		switch (relseg = opcode&LR_SEG) {
 		case L_SYM:
 			symno = getsymno(irfp, irsp);
@@ -90,6 +92,7 @@ mod_t	*mp;
 				}
 			} else {
 				bias = sp->s.ls_addr;
+				symadd = 1;
 				if (orfp!=NULL) {
 					putbyte(sp->s.ls_type&LR_SEG
 						|opcode&~LR_SEG,
@@ -133,13 +136,54 @@ mod_t	*mp;
 			putword((short)bias, ofp, osgp);
 			break;
 		case LR_LONG:
-			bias += vtop(getlong(ifp, isgp));
-#if 0
-			if (segoff && (bias&0x00FF0000L)==0x00FF0000L) {
-				bias &= ~0x00FF0000L;
-				bias += 0x01000000L;
-			}
-#endif
+			field = vtop(getlong(ifp, isgp));
+			/*
+			 * A SEGMENTED long operand relocated against a SYMBOL
+			 * carries no address of its own: the field is the
+			 * present bit (0x80 in the segment byte) plus a 16-bit
+			 * offset ADDEND, and the address is the symbol's.  Both
+			 * producers write it that way -- as/z8001 outrl() lays
+			 * down 0x80000000+value, cc2's patchaddr() the same sum
+			 * in 24 bits -- so a NEGATIVE addend borrows out of the
+			 * segment byte and leaves 0x7F there.
+			 *
+			 * Add the halves separately: a virtual address is not a
+			 * number, and the offset must wrap inside the segment
+			 * rather than carry into it.  No single object may
+			 * exceed 64K, so an addend on a symbol cannot leave the
+			 * symbol's own segment -- which is what makes the wrap
+			 * right and the carry wrong.  `Word[strlen(Word) - 1]'
+			 * on an extern array is the form that produced it: the
+			 * -1 reaches ld as an addend of 0xFFFF and the carry out
+			 * of the offset made the store segment 5 for a symbol in
+			 * segment 4.  Taking the low 16 bits of the sum absorbs
+			 * the borrow of the negative form and the wrap of the
+			 * unsigned one alike, so both spellings of -1 land on
+			 * the same byte.
+			 *
+			 * The SEGMENT-relative kinds are NOT this case and
+			 * are left alone: there the field IS an address inside
+			 * the module's own segment and `bias' is a linear base
+			 * delta, so an offset that runs past 64K belongs in the
+			 * next segment and the carry is what puts it there.  A
+			 * relocation still to be written out (an unresolved
+			 * L_REF, bias untouched) is left alone too: its addend
+			 * has to reach the next link in the bytes it arrived in.
+			 *
+			 * MWC left a disabled attempt at this symptom here: it
+			 * tested the finished sum for a 0xFF segment byte, and
+			 * compensated with +0x01000000, which ptov() discards --
+			 * so enabling it would only have forced such a
+			 * relocation into segment 0.  Neither producer above
+			 * leaves 0xFF in the segment byte anyway.
+			 */
+			if (segoff && symadd && (opcode&LR_PCR)==0
+			 && ((field&0x00FF0000L)==0x00800000L
+			  || (field&0x00FF0000L)==0x007F0000L))
+				bias = (bias&0x00FF0000L) | 0x00800000L
+					| ((bias+field)&0xFFFFL);
+			else
+				bias += field;
 			putlong((long)ptov(bias), ofp, osgp);
 			break;
 		}

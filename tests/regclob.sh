@@ -8,12 +8,8 @@ B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"
 VAR=800000000800; PEEP="${1:-0010}"
-# Every case's verdict has to reach the exit status.  Both bad paths below --
-# a build that did not produce a binary, and a binary that returned the wrong
-# value -- used to be a bare `echo', and `return' with no argument yields the
-# status of that echo, which is 0.  The script's own status was then whatever
-# the LAST run() left behind, so six register-clobber assertions could all
-# report WRONG and the caller (tests/check.sh) would read a pass.
+# Every case's verdict must reach the exit status.
+# FAIL flag tracks whether any case failed; exit 0 only if all pass.
 FAIL=0
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s" 2>/dev/null

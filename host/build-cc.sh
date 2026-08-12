@@ -39,13 +39,9 @@ trap 'rm -rf "$W" "$OUT"' EXIT INT TERM
 mkdir -p "$W/shim" "$OUT/n0" "$OUT/n1" "$OUT/n2" "$OUT/n3" "$OUT/common" "$OUT/commch"
 cp -r "$SRC"/h "$SRC"/common "$SRC"/n0 "$SRC"/n1 "$SRC"/n2 "$SRC"/n3 "$SRC"/coh "$SRC"/generated "$W/"
 
-# src/cc/generated/ is the ONE copy of the machine-generated opcode tables:
-# genz8001tab writes opcode.h straight into it and the compile below includes it
-# from there.  (The generator itself is not in this repository -- it drives a
-# decoder that is not public -- so opcode.h is a committed artifact here and
-# nothing in this build regenerates it; see src/cc/generated/README.md.)  There used to be a second copy under
-# z8001-backend/generated and a diff guard here to catch them drifting; with one
-# copy there is nothing to drift.
+# src/cc/generated/ is the ONE copy of the machine-generated opcode tables.
+# opcode.h is committed; nothing in this build regenerates it.
+# See src/cc/generated/README.md for details.
 
 # ---- host shims (host/shims/*.patch; the verdict table is docs/PATCHES.md) ----
 . "$HERE/shims.sh"
@@ -127,13 +123,9 @@ set -e
 # Stamped INSIDE $OUT, so it is published by the same rename as the binaries and
 # can never describe a different toolchain than the one at build/z8001.
 #
-# The scope is the compiler's OWN source, not the whole worktree.  A whole-tree
-# dirty flag is on permanently here (several lanes, one checkout, 100+ modified
-# files at any moment) and a warning that is always on gets read as decoration.
-# `dirtysrc' counts only src/{cc,as,ld} plus this script -- it is nonzero
-# exactly when these binaries correspond to no commit, which is the condition
-# that once turned a local edit into a phantom compiler ICE reported to another
-# lane as a source bug.
+# The scope is the compiler's OWN source, not the whole worktree.
+# `dirtysrc' counts only src/{cc,as,ld} plus this script -- nonzero when
+# binaries correspond to no commit.
 #
 # `tcid' is the same scope reduced to one name: the id a consumer records and
 # compares against on its next build, so a compiler swapped underneath a half

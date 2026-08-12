@@ -677,16 +677,50 @@ TREE		*ptp;
 	if ((op==SHR || op==ASHR) && rp!=NULL && rp->t_op==ICON && rp->t_ival > 0)
 		rp->t_ival = -rp->t_ival;
 	/*
-	 * Unsigned word divide/remainder by a CONSTANT with bit 15 set: the signed
-	 * Z8000 DIV misreads such a divisor, but the quotient is just 0 or 1 (the
-	 * dividend < 0x10000 < 2*C).  x / C -> (x >= C); x % C -> (x >= C) ? x-C : x.
-	 * Cheap, and emitted only for this constant corner (the common path is
-	 * untouched).  REM duplicates the dividend, so skip a side-effecting one.
+	 * Unsigned divide/remainder by a CONSTANT with its top bit set: the signed
+	 * Z8000 DIV/DIVL reads such a divisor as negative, but the quotient is just
+	 * 0 or 1 (the dividend < 2^N < 2*C).  x / C -> (x >= C); x % C -> (x >= C) ?
+	 * x-C : x.  Cheap, and emitted only for this constant corner (the common
+	 * path is untouched).  REM duplicates the dividend, so skip a side-effecting
+	 * one -- the word case then falls into the 32-bit divide below.
+	 *
+	 * A compound assignment is rewritten to its binary form first (`x /= C' ->
+	 * `x = x / C'), so that the quotient below serves it too: there is no wider
+	 * divisor for a 32-bit divide to widen into, so the constant would otherwise
+	 * reach DIVL and be read as negative.  The lvalue is read a second time, so
+	 * this needs one that can be: a leaf names a variable and nothing more.
 	 */
+	if ((op==ADIV || op==AREM) && tt==U32
+	&&  rp!=NULL && rp->t_op==LCON && (upper(rp->t_lval) & 0x8000)
+	&&  lp!=NULL && (lp->t_flag&T_LEAF) != 0) {
+		register TREE	*bin;
+
+		bin = makenode(op - (AADD - ADD), tt);
+		bin->t_size = tp->t_size;
+		bin->t_lp = copynode(lp);
+		bin->t_rp = rp;
+		tp->t_op = ASSIGN;
+		tp->t_rp = bin;
+		return (tp);
+	}
 	if ((op==DIV || op==REM)
 	&& ((tt==U16 && rp!=NULL && rp->t_op==ICON && (rp->t_ival & 0x8000))
 	||  (tt==U32 && rp!=NULL && rp->t_op==LCON && (upper(rp->t_lval) & 0x8000)))) {
 		if (op==DIV) {
+			/*
+			 * The compare's value is an int.  At 16 bits that is the width the
+			 * node already has, so the node becomes the compare; a 32-bit
+			 * quotient needs the int widened back, and the node becomes that
+			 * CONVERT (a relational typed long matches no selection rule).
+			 */
+			if (islong(tt)) {
+				tp1 = leftnode(UGE, lp, TRUTH);
+				tp1->t_rp = rp;
+				tp->t_op = CONVERT;
+				tp->t_lp = tp1;
+				tp->t_rp = NULL;
+				return (tp);
+			}
 			tp->t_op = UGE;
 			return (tp);
 		}
@@ -702,6 +736,25 @@ TREE		*ptp;
 			tp->t_rp = tp3;
 			return (tp);
 		}
+	}
+	/*
+	 * Unsigned WORD divide/remainder whose divisor the compiler cannot bound:
+	 * the Z8000 has no unsigned divide, and its one-word DIV reads a 16-bit
+	 * divisor with bit 15 set as NEGATIVE, so that instruction can only serve a
+	 * divisor known to be under 0x8000 -- which only a constant is here.
+	 * Widen the DIVISOR to 32 bits (zero-extended, hence positive)
+	 * and divide with DIVL, whose divisor is a full word wider than any U16
+	 * value: the UWORD rules with a LONG right operand in div/rem/adiv/arem.t
+	 * take the 16-bit dividend into the low word of the 64-bit DIVL dividend and
+	 * leave a 16-bit result, so the node's own type and the lvalue store are
+	 * unchanged.  A divisor that is a constant with bit 15 clear keeps the
+	 * one-word DIV above; a constant with bit 15 set was rewritten above.
+	 */
+	if ((op==DIV || op==REM || op==ADIV || op==AREM) && tt==U16
+	&&  rp!=NULL && !islong(rt)
+	&& !(rp->t_op==ICON && (rp->t_ival & 0x8000) == 0)) {
+		tp->t_rp = leftnode(CONVERT, rp, U32, 4);
+		return (tp);
 	}
 	/*
 	 * Long MUL, DIV and REM are always a function call.

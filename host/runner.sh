@@ -5,11 +5,7 @@
 # emulated against the host filesystem.  It is how a compiler test RUNS the code
 # it just compiled, so most of tests/ needs it and nothing in src/ does.
 #
-# This is the C emulator (commodore-900-emulator, `c900 --exec`).  It replaced a
-# Go program that reached into two sibling simulator checkouts for a decoder --
-# a dependency this repository should not have, and a POSITIONAL one, so it broke
-# whenever the checkout moved.  Hence the search ends in an error naming the
-# variable to set, rather than in another guess about directory layout.
+# This is the C emulator (commodore-900-emulator, `c900 --exec`).
 #
 # Resolution order (host/deps.sh holds it, with every other edge of this
 # repository):

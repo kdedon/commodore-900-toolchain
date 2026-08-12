@@ -76,11 +76,11 @@
 #define FSPTB	040000
 
 /* ---- target value typedefs ---------------------------------------------
- * EXACT-WIDTH (CROSS_COMPILER_PLAN.md S4 Tier 1): these must hold the TARGET's
- * 16/32-bit values correctly regardless of the HOST word size, so constant
- * folding is correct on a 64-bit Linux host AND identical on the 16-bit
- * Z8001 self-host. Do NOT bind them to host int/long like the i8086 original.
- * (On the 16-bit self-host these stdint types resolve to int/long anyway.)
+ * EXACT-WIDTH: these must hold the TARGET's 16/32-bit values correctly
+ * regardless of the HOST word size, so constant folding is correct on a 64-bit
+ * Linux host AND identical on the 16-bit Z8001 self-host. Do NOT bind them to
+ * host int/long like the i8086 original. (On the 16-bit self-host these
+ * stdint types resolve to int/long anyway.)
  */
 #include <stdint.h>
 typedef int16_t  ival_t;	/* target int  (16-bit) */

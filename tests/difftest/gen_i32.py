@@ -2,8 +2,10 @@ import random, sys
 BIN=['+','-','*','&','|','^']
 # Every op and constant wrapped (U32) so the host (where UL is 64-bit) truncates to 32 bits
 # at each step -- matching Z8001 unsigned long (32-bit).  div/mod operands explicitly (U32)
-# so the dividend/divisor are 32-bit BEFORE the (non-mod-2^32-commuting) divide.  Divisor
-# &0x7FFFFFFF | 1 keeps it 1..0x7FFFFFFF (the >=0x80000000 signed-DIVL corner is shared, #23).
+# so the dividend/divisor are 32-bit BEFORE the (non-mod-2^32-commuting) divide.  The divisor
+# is |1 for nonzero and otherwise spans the WHOLE U32 range: an unsigned long divide by a
+# divisor with bit 31 set takes its own arm (the DIVL the Z8001 has is signed), so
+# 0x80000000..0xFFFFFFFF is ordinary coverage rather than a corner to steer around.
 def k(rng): return '(U32)'+str(rng.randint(0,0xFFFFFFFF))+'UL'
 def e(vars,d,rng):
     if d<=0 or (rng.random()<0.3 and vars):
@@ -11,7 +13,7 @@ def e(vars,d,rng):
     r=rng.random()
     if r<0.55: return '(U32)('+e(vars,d-1,rng)+rng.choice(BIN)+e(vars,d-1,rng)+')'
     if r<0.70:
-        op=rng.choice(['/','%']); return '(U32)((U32)('+e(vars,d-1,rng)+')'+op+'(((U32)('+e(vars,d-1,rng)+')&(U32)0x7FFFFFFFUL)|(U32)1UL))'
+        op=rng.choice(['/','%']); return '(U32)((U32)('+e(vars,d-1,rng)+')'+op+'((U32)((U32)('+e(vars,d-1,rng)+')|(U32)1UL)))'
     if r<0.85: return '(U32)('+e(vars,d-1,rng)+rng.choice(['<<','>>'])+str(rng.randint(0,31))+'UL)'
     if r<0.95: return '(U32)('+e(vars,d-1,rng)+rng.choice(['<','>','<=','>=','==','!='])+e(vars,d-1,rng)+')'
     return '(U32)('+e(vars,d-1,rng)+'?'+e(vars,d-1,rng)+':'+e(vars,d-1,rng)+')'

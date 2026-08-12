@@ -6,12 +6,16 @@
 #     link -- ld-z8001 (crt0 + objects + libc-z8001.a) -> runnable C900 l.out
 #
 # Usage:
-#   ccz [-c] [-o OUT] [-I DIR]... [-R BASE] [-s] [-nostdlib] FILE...
+#   ccz [-c] [-o OUT] [-I DIR]... [-R BASE] [-s] [-i|-noshare] [-nostdlib] FILE...
 #     -c         compile/assemble each FILE to an object; do not link
 #     -o OUT     output file (default: a.out when linking, FILE.o with -c)
 #     -I DIR     add an include directory (repeatable)
 #     -R BASE    link relocation base (default 0x100)
 #     -s         strip the symbol table (ld -s) -- deliverable binaries
+#     -i         separated I/D with SHARED text (ld -n -i): one physical copy
+#                of the text per inode, however many processes run it
+#     -noshare   separated I/D, text NOT shared (ld -i): same layout, one
+#                l_flag bit less, a private text copy per process
 #     -nostdlib  link without crt0 + libc (freestanding)
 #   FILE may be .c, .s, or .o (objects pass straight to the link).
 #
@@ -35,13 +39,15 @@ else
 	LIBC="$BUILD/libc-z8001"
 	. "$HERE/coherent-os.sh"; OS="$COHERENT_OS"	# see coherent-os.sh
 fi
-# Records the sources compiled when $C900_BUILD_LOG is set, and does nothing at
-# all when it is not.  The fallback keeps ccz working in a layout that does not
+# Records the sources compiled when $C900_BUILD_LOG is set, and what each
+# invocation produced them for when $C900_BUILD_MAP is set; does nothing at all
+# when neither is.  The fallback keeps ccz working in a layout that does not
 # carry the file (an older unpacked release).
 if [ -r "$HERE/buildlog.sh" ]; then
 	. "$HERE/buildlog.sh"
 else
 	c900_buildlog() { :; }
+	c900_buildmap() { :; }
 fi
 VAR="${CCZ_VAR:-800000020800}"			# includes VREADONLY (ctype.h's `readonly')
 # base unset -> ld uses its Coherent userbase (segment 3), producing a real multi-segment
@@ -63,10 +69,13 @@ while [ $# -gt 0 ]; do
 	# text SHARED (LF_SHR): ssalloc() inode-registers a text segment only when
 	# it is SFSHRX, so without it two concurrent copies of a program each hold
 	# a private copy of its text.  Byte-identical output otherwise -- only
-	# l_flag differs -- so it is on by default and -I asks for the old,
-	# unshared form.
+	# l_flag differs.  Sharing is not a default of this driver: a bare `ccz'
+	# links neither flag, and every caller in the tree asks for -i.
 	-i) sep="-n -i";;
-	-I) sep="-i";;		# separated I/D, text NOT shared
+	# The unshared form of the same layout.  It cannot be spelled -I: that is
+	# the include-path option, matched above, which is what made this arm dead
+	# code while the comment above it advertised it.
+	-noshare) sep="-i";;	# separated I/D, text NOT shared
 	-L) large="-L";;		# large model: text/data may span multiple 64K segments
 	-s) strip=1;;
 	-*) echo "ccz: unknown option $1" >&2; exit 2;;
@@ -84,10 +93,20 @@ for f in $files; do
 	case "$f" in
 	*.o)  objs="$objs $f";;
 	*.a)  objs="$objs $f";;	# archive: ld scans it after the objects
-	*.s)  o="$tmp/$stem.o"; c900_buildlog "$f"; "$AS" -o "$o" "$f"; objs="$objs $o";;
+	*.s)  o="$tmp/$stem.o"; c900_buildlog "$f"
+	      if [ "$compileonly" = 1 ]; then c900_buildmap "${out:-$stem.o}" "$f"; fi
+	      "$AS" -o "$o" "$f"; objs="$objs $o";;
 	*.c)
 		o="$tmp/$stem.o"
 		c900_buildlog "$f"
+		# With -c the OBJECT is this invocation's product and its name is
+		# the one a later link will name on its own command line, which is
+		# how the two records join up.  Without -c the object is a
+		# temporary inside $tmp and the product is the executable, recorded
+		# once below with every input of the link -- recording the
+		# temporary here as well would put a path that exists for the
+		# length of one compile into a map of shipped programs.
+		if [ "$compileonly" = 1 ]; then c900_buildmap "${out:-$stem.o}" "$f"; fi
 		"$O/cc0-z8001" $VAR "$f" "$tmp/$stem.z0" $incs -I"$OS/include" -I"$OS/include/sys" $defs
 		"$O/cc1-z8001" $VAR "$tmp/$stem.z0" "$tmp/$stem.z1"
 		"$O/cc2-z8001" 0010 "$tmp/$stem.z1" "$o" "$tmp/$stem.scr" 0
@@ -103,6 +122,12 @@ done
 # ---- link a complete C900 executable ----
 # With no -R, ld relocates to its userbase (segment 3); -R BASE overrides for a flat link.
 a="${out:-a.out}"
+# The link is where a program gets its name, so it is the record that can say
+# which sources the program named $a is made of.  Written BEFORE the link, and
+# not conditional on it succeeding: a failed link leaves the previous binary in
+# place (every sweep script links to a side name for exactly that reason), and a
+# record of what was attempted is the truth about what this invocation was for.
+c900_buildmap "$a" $files
 Rflag=""; [ -n "$base" ] && Rflag="-R $base"
 sflag=""; [ "$strip" = 1 ] && sflag="-s"		# -s: strip the symbol table (deliverable binaries)
 if [ "$nostdlib" = 1 ]; then

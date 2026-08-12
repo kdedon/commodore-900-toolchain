@@ -115,6 +115,21 @@ options at all. Do this on a system whose `/usr` is on the ROOT filesystem —
 way precisely so that headers installed single-user are not hidden when
 `/etc/rc` mounts a separate `/usr` over them.
 
+**3. Ship it on the image.** `os/dist/lists/toolchain.list` in
+`commodore-900-coh-dist` stages the `ours` environment permanently: `bin/*` to
+`/usr/bin`, `lib/*` to `/usr/lib`, `usr/include` to `/usr/include` — every one
+of them a path the driver's own defaults already search (`DEFPATH`,
+`DEFLIBPATH`, cpp's `DEFDISK`), so nothing needs `-B` or `-I` and nothing needs
+`/usr` to be on the root filesystem. `extended-dev` is the dist that includes
+it, and `os/tests/selfhost` in the userland repository is what proves the
+machine compiles and links with it and nothing mapped in.
+
+That path also needs a source map, which is why `build-env.sh` writes
+`hostbuild/build/.ulsrcmap` at this repository's root for `CCENV=ours` and
+deletes it for the others: the dist repository cuts a `toolchain-src` package
+from it, and the other two environments hold binaries built from trees this
+repository does not contain.
+
 `/tmp` must exist and be writable: `cc` puts its intermediates there
 (`tempnam(3)`, `P_tmpdir`).
 

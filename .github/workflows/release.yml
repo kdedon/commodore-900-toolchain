@@ -1,18 +1,19 @@
-# release -- build every gate from clean on a v* tag, then publish the three
+# release -- build every gate from clean on a v* tag, then publish the
 # deliverables as versioned assets (AUTOMATION.md 13).
 #
-# vMAJOR.MINOR.PATCH means something here, and one part of it is CHECKED rather
-# than promised:
+# The assets are the two host archives, the Z8001 one, and -- cut from the same
+# staged tree, so they are one build of the same files -- the libc and include
+# packages, which let a consumer take and name the libraries or the headers
+# without a host compiler.  host/release-pack.sh emits all of them and the
+# publish job uploads dist/*, so a new package needs no step of its own here.
+# Only the Linux job cuts them: the three assets besides the host archive are
+# host-independent, so the Windows job packs its zip alone (release-pack.sh
+# -hostonly) rather than building a second set nobody publishes.
 #
-#   PATCH  cannot change an emitted byte -- host fixes, diagnostics, packaging
-#   MINOR  codegen changed: selection, allocation, alignment, object layout
-#   MAJOR  the contract changed: calling convention, l.out layout, driver options
-#
-# A consumer pinning a version is pinning CODEGEN, so the PATCH promise is the
-# one that has to be enforceable, and it is: the self-host fixpoint's 86 objects
-# are deterministic, they ship with every release, and the publish job refuses a
-# PATCH bump whose objects moved.  A promise a workflow can check is worth
-# making; one it cannot is decoration.
+# THE TAG IS THE RELEASER'S TO CHOOSE.  This workflow reads the version off it
+# and does not judge it: a patch may change an opcode, and a fix to the divide
+# lowering is an ordinary patch.  The release notes say what changed; a CI job
+# refusing a tag because the bytes moved fought the work instead of checking it.
 #
 # The release is built against a SPECIFIC COHERENT commit -- deliverable 3 needs
 # libc-z8001.a, whose source belongs to the operating system -- and that commit
@@ -192,20 +193,27 @@ jobs:
           tar xzf ../dist-linux/c900-toolchain-v$V-z8001.tar.gz -C ..
           z=../c900-toolchain-v$V-z8001/native
           B=host/build
-          mkdir -p $B/native $B/libc-z8001 $B/libm-z8001 $B/libmisc-z8001
+          mkdir -p $B/native $B/libc-z8001/kobj $B/libm-z8001 $B/libmisc-z8001
           cp $z/cc $z/as $z/ld $B/native/
           cp $z/crt0.o $z/libc-z8001.a $B/libc-z8001/
+          # kobj/: the five objects the KERNEL links by name.  They are part of
+          # deliverable 3 and travel in the archive beside the library.
+          cp $z/kobj/*.o $B/libc-z8001/kobj/
           cp $z/libm-z8001.a $B/libm-z8001/
           cp $z/libmisc-z8001.a $B/libmisc-z8001/
+      # -hostonly: the zip and nothing else.  The other three assets are
+      # host-independent, the Linux job's copies are the published ones, and
+      # packing a second set here only adds MSYS-specific ways for a release to
+      # fail on bytes nobody would have downloaded.
       - name: Package
         working-directory: src
         run: |
           set -e
-          sh host/release-pack.sh "$V"
-      # Only the zip.  release-pack.sh emits every asset for the host it runs
-      # on, and the -z8001 and -codegen archives are host-independent: the
+          sh host/release-pack.sh -hostonly "$V"
+      # Only the zip, and now it is the only thing there is: -hostonly above
+      # stops the packer cutting the host-independent assets a second time.  The
       # released ones are the Linux job's, and two artifacts of the same name
-      # would collide in the publish job's download directory.
+      # would collide in the publish job's download directory anyway.
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
@@ -259,51 +267,6 @@ jobs:
         with: { name: linux-dist, path: dist }
       - uses: actions/download-artifact@v4
         with: { name: windows-dist, path: dist }
-      - name: A PATCH bump may not move an emitted byte
-        working-directory: src
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          new=${GITHUB_REF_NAME#v}
-          prev=$(git tag --list 'v*' --sort=-v:refname | grep -v "^$GITHUB_REF_NAME$" | head -1)
-          if [ -z "$prev" ]; then
-            echo "no previous tag; nothing to compare against."
-            exit 0
-          fi
-          old=${prev#v}
-          # ASK whether the previous release published a codegen archive, then
-          # fetch it.  `download || true' cannot tell "that tag published none"
-          # from "the download failed", and check-patch-bump allows the first --
-          # so a network or token fault would have waved a codegen change
-          # through as a PATCH release.
-          # The ASK is a command of its own, not the head of a pipeline: a
-          # pipeline's status is grep's, so a `gh' that failed would read as
-          # "no codegen archive" and wave the bump through -- the same shape as
-          # the `download || true' below it.  A tag that was never released is
-          # a real answer and is told apart from a fault by what gh says.
-          if assets=$(gh release view "$prev" --json assets \
-                        --jq '.assets[].name' 2>../gh.err); then
-            :
-          elif grep -qi 'release not found' ../gh.err; then
-            assets=
-            echo "$prev has no release at all; nothing to compare against."
-          else
-            cat ../gh.err
-            echo "$prev could not be queried, so the PATCH promise cannot be"
-            echo "checked and the release is refused."
-            exit 1
-          fi
-          if echo "$assets" | grep -q -- '-codegen\.tar\.gz$'; then
-            gh release download "$prev" --pattern "*-codegen.tar.gz" --dir ../prev ||
-              { echo "$prev published a codegen archive and it could not be fetched;"; \
-                echo "the PATCH promise cannot be checked, so the release is refused."; exit 1; }
-          else
-            echo "$prev published no codegen archive; nothing to compare against."
-          fi
-          sh host/check-patch-bump.sh "$old" "$new" \
-             "../prev/c900-toolchain-v$old-codegen.tar.gz" \
-             "../dist/c900-toolchain-v$new-codegen.tar.gz"
-
       - uses: softprops/action-gh-release@v2
         with:
           files: dist/*

@@ -854,7 +854,9 @@ register struct expr *esp;
 			aerr();
 		t = esp->e_type;
 		if (t == E_AREG) {
-			esp->e_mode = BX + (int)reg.e_addr;
+			t = BX + (int)esp->e_addr;
+			*esp = reg;
+			esp->e_mode = t;
 			return;
 		}
 		esp->e_mode = X + (int)reg.e_addr;
@@ -1008,7 +1010,7 @@ int df;
 				outab(of);
 				return;
 			}
-			esp->e_addr = 0x80;
+			tesp.e_addr = 0x8000L;
 			outrw(&tesp, 0);
 			outaw(of);
 			return;

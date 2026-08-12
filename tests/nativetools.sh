@@ -14,12 +14,8 @@
 #		linker's
 #	ld	a structurally corrupt object must make it exit NONZERO
 #
-# The third is the one with history.  ld reported `bad symbol segment' and
-# fourteen relocation errors on stdout and returned 0, so a corrupt link scored
-# as a successful one; on Windows, where every object was being mangled by the C
-# runtime's text mode, that is what turned a plain failure into a scattered mess
-# of wrong answers.  Byte-identity alone cannot see it -- the two linkers would
-# agree about failing -- so the status is asserted on its own.
+# The third asserts exit status on its own, since byte-identity alone
+# cannot catch a linker that silently produces a bad result.
 #
 #	sh tests/nativetools.sh
 #

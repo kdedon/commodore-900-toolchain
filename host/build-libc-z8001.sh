@@ -95,6 +95,63 @@ if [ -n "$skip" ]; then
 	exit 1
 fi
 rm -f "$OUT/mkarz"
+
+# ---- kobj/: the five libc objects the KERNEL links ---------------------------
+#
+# The kernel calls l3tol, ltol3, ltoc, strcmp and _canw/_canl, and today it
+# COMPILES those sources itself out of the OS tree.  It must not: they are
+# library sources, so a second compile of them is a second codegen that nothing
+# compares.  They are published here as loose objects instead, and the kernel
+# NAMES them on its link line the way a program names crt0.o.
+#
+# Loose, and not the archive, deliberately.  The kernel has its own printf,
+# strlen, malloc and panic; a symbol it happens to leave undefined would be
+# satisfied SILENTLY by a userland archive member that issues system calls, and
+# ld's linear member scan reports nothing about which member won.  Five named
+# objects can only contribute the five routines that were asked for.
+#
+# These are the SAME objects as the archive's members -- one compile, published
+# twice -- and that is sound only because the five are MODEL-NEUTRAL.  A frame
+# or auto address is emitted with a segment byte of 0 plus a byte relocation
+# against the external symbol SS (n2/z8001/emit1.c, emitaddr/frameseg), and the
+# LINK supplies the segment: 0 from csu/crts0.s for a program, 0x3F from the
+# kernel's md.s.  The two .s members reference SS themselves (`SS|4(r15)').  So
+# the kernel's cc2 mode -- 0012, VPEEP|VKERN, against userland's 0010 -- cannot
+# move a byte of them.
+#
+# The loop asserts that instead of trusting it.  VKERN is a variant code no pass
+# reads today; the day one does, or the day one of these sources grows something
+# the kernel model compiles differently, THIS build fails -- instead of a kernel
+# silently linking an object built for the wrong stack segment.
+KOBJ="l3tol ltol3 ltoc strcmp canon"
+KVAR=0012				# the kernel's cc2 mode: VPEEP|VKERN
+mkdir -p "$OUT/kobj"
+for b in $KOBJ; do
+	[ -f "$OUT/obj/$b.o" ] || {
+		echo "libc-z8001: no $b.o, and the kernel links it by name" >&2; exit 1; }
+	if [ -f "$OSL/libc/gen/$b.c" ]; then
+		"$O/cc0-z8001" $VAR "$OSL/libc/gen/$b.c" "$OUT/kobj/$b.z0" $INC >/dev/null 2>&1 &&
+		"$O/cc1-z8001" $VAR "$OUT/kobj/$b.z0" "$OUT/kobj/$b.z1" >/dev/null 2>&1 &&
+		"$O/cc2-z8001" $KVAR "$OUT/kobj/$b.z1" "$OUT/kobj/$b.kv" "$OUT/kobj/$b.scr" 0 >/dev/null 2>&1 || {
+			echo "libc-z8001: $b.c does not compile in the kernel's cc2 mode $KVAR" >&2
+			exit 1; }
+	else
+		# -g is what the kernel's own assembly step passes; it must not
+		# change the object either.
+		"$AS" -g -o "$OUT/kobj/$b.kv" "$OSL/libc/gen/$b.s" 2>/dev/null || {
+			echo "libc-z8001: $b.s does not assemble with -g" >&2; exit 1; }
+	fi
+	cmp -s "$OUT/obj/$b.o" "$OUT/kobj/$b.kv" || {
+		echo "libc-z8001: $b.o IS NOT MODEL-NEUTRAL -- it differs when built in" >&2
+		echo "  the kernel's model (cc2 $KVAR / as -g), so the kernel cannot link" >&2
+		echo "  the userland object.  Publish a kernel-model object set instead of" >&2
+		echo "  this one; do not let the kernel compile the source." >&2
+		exit 1; }
+	rm -f "$OUT/kobj/$b.z0" "$OUT/kobj/$b.z1" "$OUT/kobj/$b.scr" "$OUT/kobj/$b.kv"
+	cp "$OUT/obj/$b.o" "$OUT/kobj/$b.o"
+done
+echo "libc-z8001: kobj/ =$(for b in $KOBJ; do printf ' %s.o' "$b"; done)  (model-neutral: identical under cc2 $KVAR / as -g)"
+
 publish_dir libc-z8001
 trap - EXIT INT TERM			# $OUT is published now
 

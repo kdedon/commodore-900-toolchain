@@ -47,8 +47,10 @@ compile() { printf '%s\n' "$1" > /tmp/chk.c
   e=$("$O/cc1-z8001" $VAR /tmp/chk.z0 /tmp/chk.z1 2>&1); [ -z "$e" ] || { echo "CC1-ICE: $e"; return 1; }
   echo /tmp/chk.z1; }
 
-# The gate set.  Every one of these reads cc2-z8001's own object -- compiled, linked and
-# executed -- so what `check.sh' covers is the backend that ships, end to end.
+# The gate set.  All but the last read cc2-z8001's own object -- compiled, linked and
+# executed -- so what `check.sh' covers is the backend that ships, end to end.  asbytes.sh
+# is the exception and the reason it is here: it reads AS-z8001's bytes, the encoder no
+# compiler gate ever calls, and the one every hand-written .s goes through.
 run_gates() {
   N2="$N2" sh "$HERE/tests/regress.sh"                 || return 1
   N2="$N2" sh "$HERE/tests/objsweep.sh"                || return 1
@@ -56,6 +58,7 @@ run_gates() {
   N2="$N2" sh "$HERE/tests/cc2run.sh"                  || return 1
   N2="$N2" sh "$HERE/tests/segrun.sh"                  || return 1
   N2="$N2" sh "$HERE/tests/regclob.sh"                 || return 1
+  sh "$HERE/tests/asbytes.sh"                          || return 1
   run_multiseg
 }
 

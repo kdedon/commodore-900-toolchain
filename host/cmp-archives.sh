@@ -24,14 +24,19 @@
 #                    link naming a file that is not there is a path a consumer
 #                    resolves to nothing.  That is how the .exe suffix breaks a
 #                    layout, so it is checked by name.
-#   deliverable 3    native/ and usr/ must be IDENTICAL BYTES.  One of them is
+#   deliverable 3    native/ and usr/ must be IDENTICAL BYTES -- recursively, so
+#                    native/kobj/, the loose objects the KERNEL links by name,
+#                    is inside this check and not merely in the entry list; a
+#                    loose object set is the shape that most needs it.  One of them is
 #                    copied from the other's archive precisely so that both
 #                    ship the same native compiler; that is a claim, and this
 #                    is where it is checked rather than hoped.
 #
-# This existed as neither a check nor a shared script once, and the two layouts
-# were maintained by hand in two places.  They drifted: the Windows zip lost
-# host/ entirely, along with cppz, mkarz and buildlog.sh, and no gate noticed.
+# The standalone libc and include packages are not arguments here and do not
+# need to be: release-pack.sh cuts them from the same staged tree as the host
+# archive's native/ and usr/, and this check is what ties that tree to the
+# other host's.  A comparison between a file and a copy of itself made three
+# lines earlier would report agreement it could not fail to find.
 set -e
 [ $# -ge 2 ] || { echo "usage: cmp-archives.sh ARCHIVE-A ARCHIVE-B [LABEL-A LABEL-B]" >&2; exit 2; }
 A=$1; B=$2; la=${3:-$1}; lb=${4:-$2}

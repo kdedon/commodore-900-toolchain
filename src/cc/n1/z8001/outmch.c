@@ -27,7 +27,7 @@ register TREE *tp;
 
 	if (isvariant(VALIEN)
 	&&  tp->t_lp->t_op == GID && tp->t_lp->t_seg == SALIEN)
-		cbotch("alien call (TODO)");	/* foreign-convention calls: later */
+		cbotch("alien call (TODO)");	/* foreign-convention calls not yet supported */
 
 	nb = outargs(tp->t_rp, 0);
 	iflag = 0;
