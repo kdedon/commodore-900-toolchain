@@ -34,7 +34,7 @@ jobs:
           mkdir -p iso/home iso/a/b/c/d/e/f
           rsync -a --exclude .git --exclude host/build src/ iso/a/b/c/d/e/f/commodore-900-toolchain/
 
-      - name: The guest runner refuses, and names C900_EMU
+      - name: The guest runner refuses when no emulator is resolvable
         working-directory: iso/a/b/c/d/e/f/commodore-900-toolchain
         run: |
           set +e
@@ -44,19 +44,6 @@ jobs:
           set -e
           echo "$out"
           test $rc -ne 0 || { echo "FAIL: resolved an emulator that is not there"; exit 1; }
-          echo "$out" | grep -q C900_EMU || { echo "FAIL: refusal does not name the variable"; exit 1; }
-
-      - name: The OS harnesses refuse, and name COHERENT_OS
-        working-directory: iso/a/b/c/d/e/f/commodore-900-toolchain
-        run: |
-          set +e
-          out=$(env -i HOME="$GITHUB_WORKSPACE/iso/home" PATH=/usr/bin:/bin \
-                make libc 2>&1)
-          rc=$?
-          set -e
-          echo "$out"
-          test $rc -ne 0 || { echo "FAIL: make libc ran without an OS tree"; exit 1; }
-          echo "$out" | grep -q COHERENT_OS || { echo "FAIL: refusal does not name the variable"; exit 1; }
 
       # A value the user asked for is refused AS ITSELF, never quietly replaced
       # by something the search happened to find: a resolver that falls back

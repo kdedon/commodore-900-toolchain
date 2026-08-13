@@ -133,7 +133,10 @@ set -e
 # (see prov_srcid) -- the binaries below differ between build directories even
 # when nothing was changed, so their hashes describe the build and only the id
 # describes the compiler.
-TCSCOPE="src/cc src/as src/ld host"
+# The C library, headers, crts0 and the libraries beside them are in scope too:
+# they are compiled into every deliverable this repository ships, so an edit to
+# one has to move the id a consumer compares against.
+TCSCOPE="src/cc src/as src/ld src/libc src/csu src/include src/libm src/libmisc src/malloc src/slgen src/ar host"
 # shellcheck disable=SC2086
 prov_write "$OUT/.provenance" toolchain \
 	$TCSCOPE \

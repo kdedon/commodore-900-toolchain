@@ -7,8 +7,9 @@
 #
 # kind release  a published archive, pinned to <ref>
 #
-#   coherent  self-published OS snapshot (include, libc, csu) for cross-build
 #   emu       emulator (our fork), built by our workflow
+#
+# The C library, the headers and crts0 are not an edge: they are in src/,
+# beside the compiler that builds them.
 
-coherent  release  https://github.com/kdedon/commodore-900-toolchain  fallback-1  @REF@-coherent-os.tar.gz  coherent-os
 emu       release  https://github.com/kdedon/commodore-900-emulator   v0.1  c900-@REF@-@HOST@

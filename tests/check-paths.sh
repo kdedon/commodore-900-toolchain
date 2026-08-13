@@ -7,8 +7,13 @@
 # tracked name is one Windows cannot create.  It is not a warning and there is
 # no partial clone to work in, so ONE such name makes the whole repository
 # unusable on that platform, and whoever added it sees nothing: on Linux and
-# macOS it checks out fine.  This ran nowhere until a `usr/sys/h/con.h' spent a
-# while tracked here.
+# macOS it checks out fine.
+#
+# THIS REPOSITORY specifically, and not the OS trees beside it: the toolchain
+# publishes a windows-x86_64 release and is checked out NATIVELY on Windows to
+# build it.  The kernel and the userland are built under Docker or WSL, on a
+# Linux filesystem, where a reserved DOS device name is not a constraint --
+# so this is a requirement here, not a house style to spread.
 #
 # The reserved DEVICE names are the trap: `con', `prn', `aux', `nul', `com1'..
 # `com9' and `lpt1'..`lpt9' name devices with or without an extension, so con.h

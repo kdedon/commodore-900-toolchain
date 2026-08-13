@@ -34,8 +34,17 @@ gcc -std=gnu89 -w -DBREADBOX=0 -I"$LDDIR" -o "$OUT/mkarz" "$HERE/mkarz.c" "$LDDI
 
 # ---- crt0 + the .s stubs (syscalls, string ops, soft-float) --------------------
 "$AS" -o "$OUT/crt0.o" "$OSL/csu/crts0.s"
+# dtoa.o is published LOOSE, beside crt0.o and outside obj/ so the archive glob
+# below cannot pick it up.  It defines the same _dtefg_/_dtoa_ as libc's "No
+# floating point!" stub, so a program wanting real float formatting names it on
+# the link line ahead of libc.a.  As an archive member the linear member scan
+# would decide which of the two won, and printf would format nothing.
+"$AS" -o "$OUT/dtoa.o" "$OSL/csu/dtoa.s"
+# The bare system-call stubs are GENERATED from libc/syscalls.tab; only the two
+# that do more than trap (brk, signal) are checked in under libc/sys.
+sh "$HERE/gensys.sh" "$OUT/sys"
 nas=0; asfail=""
-for s in "$OSL"/libc/sys/*.s "$OSL"/libc/gen/*.s "$OSL"/libc/crt/*.s; do
+for s in "$OUT"/sys/*.s "$OSL"/libc/sys/*.s "$OSL"/libc/gen/*.s "$OSL"/libc/crt/*.s; do
 	[ -f "$s" ] || continue
 	b=$(basename "$s" .s)
 	c900_buildlog "$s"
@@ -81,7 +90,7 @@ done
 # so an OS tree without libc-4.2 produced an archive with no malloc, free or
 # realloc in it -- and the smoke test below calls strlen and strcmp, so it
 # passed.  A missing input is a build failure, not a smaller library.
-for c in "$OSL"/libc-4.2/stdlib/malloc/malloc.c "$OSL"/libc-4.2/stdlib/malloc/realloc.c "$OSL"/libc-4.2/stdlib/malloc/memok.c; do
+for c in "$OSL"/malloc/malloc.c "$OSL"/malloc/realloc.c "$OSL"/malloc/memok.c; do
 	[ -f "$c" ] || { echo "libc-z8001: no $c -- the archive would have no malloc" >&2; exit 1; }
 	compile_c "$c"
 done

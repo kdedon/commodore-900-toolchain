@@ -104,7 +104,7 @@ env_ours() {
 	need "$LIBC/crt0.o"	"COHERENT_OS=... sh host/build-libc-z8001.sh"
 	need "$LIBC/libc-z8001.a" "COHERENT_OS=... sh host/build-libc-z8001.sh"
 	need "$COHERENT_OS/include" "a COHERENT 3.5 source tree at \$COHERENT_OS"
-	need "$COHERENT_OS/cmd/ar.c" "a COHERENT 3.5 source tree at \$COHERENT_OS"
+	need "$COHERENT_OS/ar/ar.c" "a COHERENT 3.5 source tree at \$COHERENT_OS"
 
 	inst 755 "$NAT/cc" bin/cc
 	inst 755 "$NAT/as" bin/as
@@ -124,10 +124,10 @@ env_ours() {
 	# design.  Cross-built here from the OS tree's own source, the same way
 	# libc-z8001.a is -- see coherent-os.sh on OS artifacts built WITH the
 	# toolchain.
-	echo "== ar (from \$COHERENT_OS/cmd/ar.c)"
+	echo "== ar (from \$COHERENT_OS/ar/ar.c)"
 	mkdir -p "$ENV/obj"
 	CCZ_VAR=800000020800 "$HERE/ccz" -s -i -L -o "$ENV/obj/ar" \
-		"$COHERENT_OS/cmd/ar.c" > "$ENV/obj/ar.log" 2>&1 || {
+		"$COHERENT_OS/ar/ar.c" > "$ENV/obj/ar.log" 2>&1 || {
 		echo "build-env.sh: ar failed to build:" >&2
 		tail -3 "$ENV/obj/ar.log" >&2; exit 1; }
 	inst 755 "$ENV/obj/ar" bin/ar
@@ -313,8 +313,8 @@ os_origin() {
 		# set host/pack-coherent-os.sh packs (its DIRS).
 		echo "$(repo_origin "$_r" "$COHERENT_OS/include" "$COHERENT_OS/libc" \
 			"$COHERENT_OS/csu" "$COHERENT_OS/libm" \
-			"$COHERENT_OS/libc-4.2/stdlib/malloc" \
-			"$COHERENT_OS/usr.lib-3.x/misc" "$COHERENT_OS/cmd/ar.c")" checkout
+			"$COHERENT_OS/malloc" \
+			"$COHERENT_OS/libmisc" "$COHERENT_OS/ar/ar.c")" checkout
 	fi
 }
 

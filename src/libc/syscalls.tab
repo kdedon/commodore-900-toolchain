@@ -1,0 +1,68 @@
+# syscalls.tab -- the system-call numbers libc's stubs are generated from.
+#
+#	name	number
+#
+# One line per call the C library provides an entry point for.  gensys.sh
+# turns each into a stub object of its own, so a program links only the calls
+# it makes; brk and signal are NOT here, because they are not bare traps and
+# are hand-written in libc/sys.
+#
+# The kernel's dispatch table (sys/z8001/src/tab.c, packaged as syscalls.tab)
+# is the other half of this contract; check-syscalls.sh compares them.
+access      33
+acct        51
+alarm       27
+alarm2      72
+bpt         129
+chdir       12
+chmod       15
+chown       16
+chroot      61
+close       6
+creat       8
+dup         41
+execve      11
+fcntl       66
+fork        2
+fstat       28
+ftime       35
+getegid     56
+geteuid     57
+getgid      47
+getpid      20
+getuid      24
+halt        130
+ioctl       54
+kill        37
+link        9
+lock        53
+lseek       19
+mknod       14
+mount       21
+mpx         55
+nice        34
+open        5
+pause       29
+pipe        42
+poll        67
+profil      44
+ptrace      26
+read        3
+reboot      131
+setgid      46
+setpgrp     62
+setuid      23
+sload       64
+stat        18
+stime       25
+suload      65
+sync        36
+times       43
+umask       60
+umount      22
+uname       13
+unique      45
+unlink      10
+utime       30
+wait        7
+write       4

@@ -15,21 +15,10 @@
 # lowering is an ordinary patch.  The release notes say what changed; a CI job
 # refusing a tag because the bytes moved fought the work instead of checking it.
 #
-# The release is built against a SPECIFIC COHERENT commit -- deliverable 3 needs
-# libc-z8001.a, whose source belongs to the operating system -- and that commit
-# is part of the release's identity.  host/release-pack.sh records it in the
-# stamp inside the archive, beside the binaries it describes, and refuses to
-# pack without it: an archive nobody can trace back to an OS commit cannot be
-# rebuilt, and a release that cannot be rebuilt is a binary drop.  The packer
-# does it rather than this workflow so that a release cut BY HAND -- which is
-# the only way to cut one while the OS repository is unpublished -- carries the
-# same identity as one cut here.
-#
-# WHERE build.yml SKIPS, THIS REFUSES.  A push may legitimately be tested
-# without an OS tree; a release may not be BUILT without one, because half the
-# archive comes from it.  So the OS edge is checked first and by name, and a
-# tag with nothing to build against fails loudly instead of publishing a
-# toolchain with no C library in it.
+# EVERYTHING IN THE RELEASE IS BUILT FROM THIS CHECKOUT.  The C library, the
+# headers and crts0 live in src/ beside the compiler, so a tag names one tree
+# and that tree is the whole release: the commit being built is the release's
+# identity, and host/release-pack.sh records it in the archive's stamp.
 name: release
 
 on:
@@ -46,37 +35,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { path: src, fetch-depth: 0 }
-      # Checked by CONTENT, through this repository's own resolver: what matters
-      # is that the directories are there, not that a fetch step reported
-      # success.
-      - name: The OS source this release is built from
-        working-directory: src
-        run: |
-          # Announced here, refused below.  A release may not be built without
-          # the OS source, so this failing is fatal -- but the refusal names
-          # the missing edge, not the reason it is missing, and both matter.
-          make deps DEP=coherent || \
-            echo "::warning title=The OS snapshot was not placed::make deps DEP=coherent failed; the refusal below is its consequence."
-          p=$(sh host/deps.sh coherent)
-          [ -n "$p" ] || {
-            echo "no COHERENT OS source: the pinned snapshot could not be placed."
-            echo "It must hold include/, libc/ and csu/: the release archive carries"
-            echo "usr/include and native/libc-z8001.a, libm-z8001.a and"
-            echo "libmisc-z8001.a, all built from that source, and the archive's"
-            echo ".provenance names the commit it came from."
-            echo "DEPS names the tag; publish that release, or cut this one by hand"
-            echo "from a checkout that has the OS tree."
-            exit 1
-          }
-          echo "COHERENT OS source: $p"
-          cat "$p/.provenance" 2>/dev/null || :
-          echo "COHERENT OS source: $p ($(git -C "$GITHUB_WORKSPACE/coherent" rev-parse HEAD))"
-
-      # THE TAG IS THE VERSION.  It is stated once, by the person who pushes it,
-      # and everything downstream derives from $V -- there is no VERSION file to
-      # disagree with.  A dispatch run has no tag and is not a release: it packs
-      # under 0.0.0-<sha> so an archive from one cannot be mistaken for an
-      # archive from the other.
       - name: The version is the tag
         run: |
           case "$GITHUB_REF" in
@@ -134,28 +92,6 @@ jobs:
           refs/tags/v*) echo "V=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV" ;;
           *)            echo "V=0.0.0-$(echo "$GITHUB_SHA" | cut -c1-8)" >> "$GITHUB_ENV" ;;
           esac
-
-      # Refused here as well as in the Linux job: this one packs the zip, and a
-      # zip packed without usr/include is an archive a consumer cannot compile
-      # against.
-      - name: The OS source this release is built from
-        working-directory: src
-        run: |
-          # Announced here, refused below.  A release may not be built without
-          # the OS source, so this failing is fatal -- but the refusal names
-          # the missing edge, not the reason it is missing, and both matter.
-          make deps DEP=coherent || \
-            echo "::warning title=The OS snapshot was not placed::make deps DEP=coherent failed; the refusal below is its consequence."
-          p=$(sh host/deps.sh coherent)
-          [ -n "$p" ] || {
-            echo "no COHERENT OS source beside this checkout: it must hold"
-            echo "include/, libc/ and csu/.  The Windows archive carries"
-            echo "usr/include from it, and its .provenance names the commit."
-            echo "That repository is unpublished (DEPS: coherent local)."
-            exit 1
-          }
-          echo "COHERENT OS source: $p"
-
       - name: Place the pinned emulator
         working-directory: src
         run: make deps DEP=emu

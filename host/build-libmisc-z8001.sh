@@ -1,5 +1,5 @@
 #!/bin/sh
-# build-libmisc-z8001.sh - build usr.lib-3.x/misc as libmisc-z8001.a on the host.
+# build-libmisc-z8001.sh - build libmisc as libmisc-z8001.a on the host.
 # It's the Coherent "misc" support library (alloc/fatal/usage/regexp/getline/match/
 # span/skip/qsort/...) that several utilities (cgrep, ...) link against.  Mirrors
 # build-libm-z8001.sh: cc0->cc1->cc2 each .c, mkarz into the archive.  A few files
@@ -13,7 +13,7 @@ O="$BUILD/z8001"
 LDDIR="$BUILD/ld"
 OUT=$(stagedir libmisc-z8001)
 VAR="${VAR:-800000020800}"
-INC="-I$OSL/usr.lib-3.x/misc -I$OSL/include -I$OSL/include/sys"
+INC="-I$OSL/libmisc -I$OSL/include -I$OSL/include/sys"
 trap 'rm -rf "$OUT"' EXIT INT TERM
 mkdir -p "$OUT/obj"
 
@@ -21,7 +21,7 @@ mkdir -p "$OUT/obj"
 gcc -std=gnu89 -w -DBREADBOX=0 -I"$LDDIR" -o "$OUT/mkarz" "$HERE/mkarz.c" "$LDDIR/canon.o"
 
 ncc=0; skip=""
-for c in "$OSL"/usr.lib-3.x/misc/*.c; do
+for c in "$OSL"/libmisc/*.c; do
 	[ -f "$c" ] || continue
 	b=$(basename "$c" .c)
 	c900_buildlog "$c"

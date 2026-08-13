@@ -75,66 +75,6 @@ esac
 
 . "$HERE/coherent-os.sh"		# usr/include ships WITH the archive
 
-# ---- release identity: WHICH COHERENT source is inside this archive ----
-#
-# The archive carries usr/include and native/libc-z8001.a, libm and libmisc,
-# and none of that source is in this repository.  A tag that cannot name the
-# OS commit those came from cannot be rebuilt by anybody, including us -- and
-# while the OS repository is unpublished, the commit id is the ONLY thing that
-# will still identify them on the day it is public.  A path is not an answer (it
-# names a machine), and a date is not an answer (it names nothing).  So the
-# commit is recorded here, by the packer, and the same stamp goes into every
-# archive whether it was packed by CI or by hand.
-#
-# A tree that cannot supply one is refused rather than packed with something
-# weaker.  Dirt is measured over the three directories this archive actually
-# consumes, never the whole tree: an OS checkout in use normally carries other
-# work, and an alarm that is always on is read as decoration.
-# A SNAPSHOT answers this too, and answers it better: it was cut by
-# host/pack-coherent-os.sh, which refuses a dirty or unversioned tree, so its
-# .provenance names a commit that describes the sources exactly.
-#
-# ITS .provenance IS ASKED FIRST, and that order is load-bearing.
-# `make deps' unpacks the snapshot at external/ (inside this repository's tree,
-# gitignored); reading its .provenance avoids misattributing sources to the toolchain.
-if [ -f "$COHERENT_OS/.provenance" ]; then
-	COHTREE=$COHERENT_OS
-	COHCOMMIT=$(awk '$1=="commit"{print $2}' "$COHERENT_OS/.provenance")
-	COHDIRTY=0
-	[ -n "$COHCOMMIT" ] || {
-		echo "release-pack.sh: $COHERENT_OS/.provenance names no commit." >&2
-		exit 1
-	}
-else
-	COHTREE=$(git -C "$COHERENT_OS" rev-parse --show-toplevel 2>/dev/null) || COHTREE=
-	if [ -z "$COHTREE" ]; then
-		echo "release-pack.sh: COHERENT_OS=$COHERENT_OS is neither a git checkout" >&2
-		echo "  nor an unpacked snapshot with a .provenance." >&2
-		echo "  The libraries and headers in this archive come from there, so the" >&2
-		echo "  release cannot say what it was built from and could not be rebuilt." >&2
-		echo "  Pack from a checkout, or from what \`make deps DEP=coherent' places." >&2
-		exit 1
-	fi
-	COHCOMMIT=$(git -C "$COHTREE" rev-parse HEAD)
-	COHSCOPE="$COHERENT_OS/include $COHERENT_OS/libc $COHERENT_OS/csu"
-	# shellcheck disable=SC2086
-	COHDIRTY=$(git -C "$COHTREE" status --porcelain -- $COHSCOPE | wc -l)
-fi
-if [ "$COHDIRTY" -ne 0 ]; then
-	echo "release-pack.sh: $COHDIRTY uncommitted file(s) in the OS source this" >&2
-	echo "  archive is built from -- so commit $(echo "$COHCOMMIT" | cut -c1-8) does not describe it:" >&2
-	# shellcheck disable=SC2086
-	git -C "$COHTREE" status --porcelain -- $COHSCOPE | sed 's/^/    /' >&2
-	if [ -n "${C900_RELEASE_ACCEPT_DIRTY_OS:-}" ]; then
-		echo "  C900_RELEASE_ACCEPT_DIRTY_OS is set -- packing, and the archive's" >&2
-		echo "  .provenance will say coherent_dirtysrc=$COHDIRTY." >&2
-	else
-		echo "  Commit them, or set C900_RELEASE_ACCEPT_DIRTY_OS=1 to pack a release" >&2
-		echo "  whose .provenance says it matches no OS commit." >&2
-		exit 1
-	fi
-fi
-
 # mkarz is shipped, and nothing in this repository archives anything: arz builds
 # it on first use, and its first use is in a CONSUMER's tree.  So the packer
 # asks for it rather than waiting to find it missing.
@@ -173,9 +113,6 @@ S="$W/provenance"
 	cat "$BUILD/z8001/.provenance"
 	echo "version=$V"
 	echo "emu=$(awk '$1=="emu"{print $4}' "$ROOT/DEPS")"
-	echo "coherent_commit=$COHCOMMIT"
-	echo "coherent_dirtysrc=$COHDIRTY"
-	echo "coherent_tree=$COHTREE"
 } > "$S"
 
 # Every package carries the same stamp plus its own name, so an unpacked tree
@@ -218,7 +155,7 @@ cp "$BUILD/libc-z8001/kobj/"*.o "$A/native/kobj/"
 KOBJL=$(cd "$A/native/kobj" && printf '%s ' *.o); KOBJL=${KOBJL% }
 # libm and libmisc ride with libc for the same reason libc does: they are Z8001
 # libraries this repository builds from an OS tree, the archive is already
-# identified by the COHERENT commit that produced libc, and a consumer that has
+# identified by the commit that produced libc, and a consumer that has
 # to build them itself has to have the OS tree and the harnesses -- which is to
 # say, has to be a source checkout after all.
 cp "$BUILD/libm-z8001/libm-z8001.a" "$BUILD/libmisc-z8001/libmisc-z8001.a" "$A/native/"

@@ -217,7 +217,11 @@ env-inherited:
 env-mwc1985:
 	$(MAKE) env CCENV=mwc1985
 
-libc:
+# build-libc-z8001.sh compiles C with the published cc0/cc1/cc2 and assembles
+# against the patched headers and canon.o that build-ld.sh puts under $(B)/ld.
+# Both are real inputs, not a conventional ordering: without cc every C source
+# is reported as "DID NOT COMPILE", and without ld the script refuses outright.
+libc: cc ld
 	sh host/build-libc-z8001.sh
 # Both are required by host/release-pack.sh.
 libm:
