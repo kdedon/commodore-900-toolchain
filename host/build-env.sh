@@ -191,28 +191,17 @@ env_mwc1985() {
 		echo "  vendor/mwc-1985, which is the 1985 originals." >&2
 		exit 2
 	fi
-	# The PASSES are not vendored: cpp/cc0/cc1/cc2/cc3 survive only in the
-	# COHERENT distribution tree (src/dist/lib), which is a checkout and not
-	# the OS-source snapshot.  Without them this tree holds a driver that
-	# cannot compile, so it is refused rather than composed.
-	P=${C900_MWC1985_PASSES:-}
-	if [ -z "$P" ]; then
-		_coh=$(COHERENT_OS="${COHERENT_OS:-}" sh "$HERE/deps.sh" coherent)
-		# Layout-agnostic: the split tree keeps the passes in
-		# stock/dist/lib, the pre-split one in src/dist/lib.
-		if [ -n "$_coh" ]; then
-			for _b in "$_coh" "${_coh%/*}"; do
-				for _r in stock/dist/lib src/dist/lib dist/lib; do
-					[ -f "$_b/$_r/cc0" ] && { P="$_b/$_r"; break 2; }
-				done
-			done
-		fi
-	fi
-	if [ -z "$P" ] || [ ! -f "$P/cc0" ]; then
-		echo "build-env.sh: no 1985 compiler passes at ${P:-<unresolved>}." >&2
-		echo "  cpp, cc0, cc1, cc2 and cc3 exist only in the COHERENT" >&2
-		echo "  distribution tree: commodore-900-coherent/src/dist/lib.  Point" >&2
-		echo "  C900_MWC1985_PASSES at it, or put that checkout beside this one." >&2
+	# The passes are vendored beside the driver: cpp/cc0/cc1/cc2/cc3 moved
+	# into vendor/mwc-1985 on 2026-08-21.  Before that they lived in the
+	# operating system's distribution tree, so selecting the 1985 compiler
+	# needed a checkout of the OS to find half of itself; a compiler is its
+	# passes, and nothing outside this repository is wanted to run it now.
+	# C900_MWC1985_PASSES still overrides, for a tree of passes under test.
+	P=${C900_MWC1985_PASSES:-$V}
+	if [ ! -f "$P/cc0" ]; then
+		echo "build-env.sh: no 1985 compiler passes at $P." >&2
+		echo "  cpp, cc0, cc1, cc2 and cc3 are vendored at vendor/mwc-1985;" >&2
+		echo "  see its SOURCES.md.  Unset C900_MWC1985_PASSES to use them." >&2
 		exit 2
 	fi
 	# nld as well as ld: cc2 emits the 32-bit object format (l_flag LF_32)
@@ -223,7 +212,7 @@ env_mwc1985() {
 		inst 755 "$V/$f" "bin/$f"
 	done
 	for f in cpp cc0 cc1 cc2 cc3; do
-		need "$P/$f" "a commodore-900-coherent checkout's src/dist/lib"
+		need "$P/$f" "vendor/mwc-1985 is missing a compiler pass -- see its SOURCES.md"
 		inst 755 "$P/$f" "lib/$f"
 	done
 	for f in crts0.o libc.a; do

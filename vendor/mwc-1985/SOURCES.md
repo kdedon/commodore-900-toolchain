@@ -8,13 +8,30 @@ Commodore 900, recovered from the machine's hard-disk image.
 | ar | 15782 | 28a22bc5cb937493 |
 | as | 38006 | 877a6ef07bc025c4 |
 | cc | 54 | f00940fe63cf5e5e |
+| cc0 | 46374 | 2a7622043f16844d |
+| cc1 | 59292 | 7a45bffaf20d836b |
+| cc2 | 32342 | d3561efb8c0f7f1a |
+| cc3 | 18282 | bd0ad36214400054 |
 | ccx | 15458 | 29b874ea936c6b97 |
+| cpp | 17972 | 094a0449fc3c5eca |
+| db | 40818 | 8dc68fb73e210e4d |
+| l | 9070 | 13f158e07c298431 |
 | ld | 19486 | c87a1dc1b26b85d3 |
 | nld | 20922 | 580a26a44215abac |
 | nm | 9764 | c4d31a38467f9cbd |
 | size | 7350 | 051d50306adbe92a |
 
-Dated June 1985. 
+Dated June 1985.  The five compiler passes, `db` and `l` carry a later
+timestamp only because they were recovered on a later pass over the same
+disk; the bytes are the 1985 artifacts, and the sha256 above is what
+identifies them.
+
+`cc` and `ccx` are the driver, and `cpp cc0 cc1 cc2 cc3` are what the driver
+runs.  They were apart until 2026-08-21 -- the driver here, the passes in the
+operating system's own tree -- which meant that selecting the 1985 compiler
+needed a checkout of the OS to find half of itself.  A compiler is its passes;
+they belong together, and with them here nothing outside this repository is
+needed to run it.
 
 ## What they are NOT
 
