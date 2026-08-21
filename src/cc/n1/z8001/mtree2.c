@@ -909,7 +909,7 @@ TREE		*ptp;
 			return (tp);
 		}
 		if (tt == BLK) {
-			tp = modsasg(lp, rp, tp->t_size);
+			tp = modsasg(lp, rp, tp->t_size, c != MEFFECT);
 			if (c != MEFFECT)
 				tp = leftnode(STAR, tp, BLK, tp->t_size);
 			return (tp);
@@ -1048,7 +1048,7 @@ done:
 		lp = makenode(LID, BLK, tp->t_size);
 		lp->t_label = blkflab;
 		lp->t_seg = SBSS;
-		return (modsasg(lp, tp, tp->t_size));
+		return (modsasg(lp, tp, tp->t_size, 1));
 	}
 	return (NULL);
 }
@@ -1140,14 +1140,16 @@ register TREE	*tp;
 
 /*
  * Aggregate (struct/array) assignment.  Small blocks are copied inline word by
- * word; larger blocks call the blkmv runtime helper (the i8086-style path, which
- * needs the function-call ABI).  The result type is the pointer type;
- * the size is valid.
+ * word; larger blocks become a single Z8000 LDIRB (the BLKMOVE node).  The size
+ * is valid.  `blkval' asks for the assignment's VALUE: with it the tree yields
+ * the destination address (the pointer type), for an rvalue use of the
+ * assignment or a struct return; without it the tree is effect-only.
  */
 TREE *
-modsasg(lp, rp, s)
+modsasg(lp, rp, s, blkval)
 register TREE	*lp;
 register TREE	*rp;
+int		blkval;
 {
 	register TREE	*tp;
 	TREE		*prebind, *predst;
@@ -1300,9 +1302,25 @@ register TREE	*rp;
 	}
 	rp = leftnode(ADDR, rp, nptdt);		/* src far pointer */
 	lp = leftnode(ADDR, lp, nptdt);		/* dst far pointer */
-	tp = leftnode(BLKMOVE, lp, S16);
+	tp = leftnode(BLKMOVE, blkval ? dupnode(lp) : lp, S16);
 	tp->t_rp = rp;
 	tp->t_size = s;
+	/*
+	 * The VALUE of an aggregate assignment is the destination ADDRESS, the
+	 * same contract the small-block path above ends on: the ASSIGN case
+	 * STARs it for an rvalue use (`a = b = c'), and a struct-returning
+	 * function returns it so the caller can read the result.  BLKMOVE
+	 * itself is an effect-only node (blkmv.t has a PEFFECT rule and no
+	 * other), so a value context needs `&dest' comma'd on after it.  Only
+	 * a value context gets it: in MEFFECT the address is dead and the
+	 * bare BLKMOVE is what the table wants.
+	 */
+	if (blkval) {
+		register TREE	*cm;
+		cm = leftnode(COMMA, tp, nptdt, pertype[nptdt].p_size);
+		cm->t_rp = lp;
+		tp = cm;
+	}
 	if (prebind != NULL) {			/* src address once, before the move */
 		register TREE	*cm;
 		cm = leftnode(COMMA, prebind, nptdt, pertype[nptdt].p_size);
