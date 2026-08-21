@@ -198,7 +198,15 @@ env_mwc1985() {
 	P=${C900_MWC1985_PASSES:-}
 	if [ -z "$P" ]; then
 		_coh=$(COHERENT_OS="${COHERENT_OS:-}" sh "$HERE/deps.sh" coherent)
-		[ -n "$_coh" ] && P=$(dirname "$_coh")/src/dist/lib
+		# Layout-agnostic: the split tree keeps the passes in
+		# stock/dist/lib, the pre-split one in src/dist/lib.
+		if [ -n "$_coh" ]; then
+			for _b in "$_coh" "${_coh%/*}"; do
+				for _r in stock/dist/lib src/dist/lib dist/lib; do
+					[ -f "$_b/$_r/cc0" ] && { P="$_b/$_r"; break 2; }
+				done
+			done
+		fi
 	fi
 	if [ -z "$P" ] || [ ! -f "$P/cc0" ]; then
 		echo "build-env.sh: no 1985 compiler passes at ${P:-<unresolved>}." >&2

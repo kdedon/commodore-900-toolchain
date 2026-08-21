@@ -38,6 +38,17 @@
 
 root=$(cd "$(dirname "$0")/.." && pwd)
 
+# Where the 1985 MWC compiler passes live under an OS checkout, or nothing.
+_mwcpasses() {
+	for _b in "$1" "${1%/*}"; do
+		for _r in stock/dist/lib src/dist/lib dist/lib; do
+			[ -f "$_b/$_r/cc0" ] && { echo "$_b/$_r"; return 0; }
+		done
+	done
+	return 1
+}
+
+
 # The sibling search list for a repository name: three parents, then repos/.
 siblings() {
 	_d=$root
@@ -87,7 +98,7 @@ emu)
 	;;
 coherent)
 	VAR="COHERENT_OS"
-	WANT="a COHERENT OS source tree"
+	WANT="a commodore-900-coh-userland checkout"
 	# A checkout first, the unpacked snapshot last: the fallback is what
 	# there is when the OS repository is not to hand, never a thing that
 	# quietly outranks a tree somebody is editing.  commodore-900-coherent was
@@ -100,18 +111,26 @@ coherent)
 	# checkout of the OS repository holds it one level down; both are
 	# accepted.
 	fixup() { if [ -d "$1/os/include" ]; then echo "$1/os"; else echo "$1"; fi; }
-	ok() { [ -d "$1/include" ] && [ -d "$1/libc" ] && [ -d "$1/csu" ]; }
-	HOW="  These harnesses do not build the TOOLCHAIN, they build OS artifacts WITH
-  it -- libc-z8001.a, libm, the native self-host -- so they need the C
-  library's own source, which belongs to the operating system.
+	# include/libc/csu are a vestige: this repository vendored its own copies
+	# into src/, so nothing here still needs an OS checkout for them.  The one
+	# live caller left (build-env.sh's env_mwc1985) wants the 1985 MWC compiler
+	# PASSES -- cpp/cc0/cc1/cc2/cc3 -- which survive only in the OS checkout's
+	# src/dist/lib, one level above the tree this variable names.
+	# The passes sit under the OS checkout, but where depends on its layout:
+	# the pre-split tree keeps them in src/dist/lib, the stock/extended split
+	# in stock/dist/lib.  $1 may name the checkout or the os/ tree inside it,
+	# so both it and its parent are tried.
+	ok() { _mwcpasses "$1" >/dev/null; }
+	HOW="  This is not needed to build or run the toolchain itself; the only
+  consumer is \`sh host/build-env.sh mwc1985' (env_mwc1985), which stages the
+  original 1985 MWC compiler PASSES -- cpp, cc0, cc1, cc2, cc3 -- and those
+  survive only in a commodore-900-coh-userland checkout's src/dist/lib.
+  Everything else the toolchain needs (headers, libc, csu) is vendored in
+  this repository's own src/ and does not want this variable.
   That repository is not published yet, so \`make deps DEP=coherent' places a
-  SNAPSHOT of the three directories instead -- the release DEPS pins.  Or
-  point COHERENT_OS at the os/ directory of a checkout you have, or put one
-  beside this repository; either supersedes the snapshot.
-  Everything the toolchain itself needs -- build-cc.sh, build-as.sh,
-  build-ld.sh, tests/regress.sh -- is in this repository and does not want
-  this variable.  A RELEASED toolchain does not want it either: the archive
-  ships usr/include and the Z8001 libraries already built."
+  SNAPSHOT instead -- the release DEPS pins.  Or point COHERENT_OS at a
+  commodore-900-coh-userland checkout (or its os/ directory), or put one
+  beside this repository; either supersedes the snapshot."
 	;;
 *)
 	echo "deps.sh: unknown dependency \`$dep' (emu, coherent)" >&2
