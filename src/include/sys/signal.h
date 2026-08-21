@@ -7,11 +7,15 @@
 #ifndef	 SIGNAL_H
 #define	 SIGNAL_H	SIGNAL_H
 
+extern void	(*signal())();
+extern void	(*sigset())();
+
+#ifdef _I386
 #define SIGHUP	1			/* Hangup */
 #define	SIGINT	2			/* Interrupt */
 #define SIGQUIT	3			/* Quit */
 #define SIGILL	4			/* Illegal instruction */
-#define	SIGTRAP	5			/* Trace trap */	
+#define	SIGTRAP	5			/* Trace trap */
 #define SIGIOT	6			/* IOT instruction */
 #define SIGABRT	6			/* replace by SIGIOT in the future */
 #define	SIGEMT	7			/* emulator trap */
@@ -42,9 +46,6 @@
 #define SIG_IGN (void(*)())1		/* Ignore */
 #define SIG_HOLD (void(*)())2		/* Hold */
 
-extern void	(*signal())();
-extern void	(*sigset())();
-
 #ifdef	KERNEL
 #define	SIGDEFER	0x100
 #define	SIGHOLD		0x200
@@ -52,6 +53,22 @@ extern void	(*sigset())();
 #define	SIGIGNORE	0x800
 #define	SIGPAUSE	0x1000
 #define	SIGDEFAULT	0x8000
+#endif
+
+#else
+#include <sys/msig.h>
+
+#define SIGHUP	1			/* Hangup */
+#define	SIGINT	2			/* Interrupt */
+#define SIGQUIT	3			/* Quit */
+#define SIGALRM	4			/* Alarm */
+#define SIGTERM	5			/* Software termination signal */
+#define SIGREST	6			/* Restart */
+#define SIGSYS	7			/* Bad argument to system call */
+#define	SIGPIPE	8			/* Write to pipe with no readers */
+#define SIGKILL	9			/* Kill */
+#define SIGTRAP	10			/* Breakpoint */
+#define	SIGSEGV	11			/* Segmentation violation */
 #endif
 
 #endif
