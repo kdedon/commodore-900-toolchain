@@ -25,7 +25,7 @@
 #ifdef _I386
 #define NUSEG	4
 #else
-#ifdef _Z8001
+#ifdef Z8001
 /* Eight: this machine's segment set has named slots for the shared and private
  * halves of a shared library (0.7.3's numbering, which sys/z8001/h/proc.h and
  * every preserved MD source already assume). */
@@ -95,7 +95,7 @@ typedef struct proc {
 #define SIAUXIL	4			/* Auxiliary segment */
 #define	SIBSS	0			/* overlay of SIUSERP [coh/exec.c] */
 #else
-#ifdef _Z8001
+#ifdef Z8001
 #define SIUSERP	0			/* User area segment */
 #define SISTACK	1			/* Stack segment */
 #define	SISSLIB	2			/* Shared part of shared library */

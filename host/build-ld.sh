@@ -128,8 +128,8 @@ void sperr(sym_t *sp, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); f
 MSGEOF
 
 cd "$OUT"
-gcc -std=gnu89 -w -DBREADBOX=0 -D_Z8001 -c -I. all.c
-gcc -std=gnu89 -w -DBREADBOX=0 -D_Z8001 -c -I. canon.c
+gcc -std=gnu89 -w -DBREADBOX=0 -DZ8001 -c -I. all.c
+gcc -std=gnu89 -w -DBREADBOX=0 -DZ8001 -c -I. canon.c
 gcc -std=gnu89 -w -DBREADBOX=0 -o "$OUT/ld-z8001" all.o canon.o
 echo "ld-z8001: LINKED ($(wc -c < "$OUT/ld-z8001") B)"
 

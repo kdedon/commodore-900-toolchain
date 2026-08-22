@@ -23,7 +23,7 @@
 #if	_I386
 typedef	int	jmp_buf[6];
 #else
-#ifdef	_Z8001
+#ifdef	Z8001
 typedef	int	jmp_buf[12];
 #else
 typedef	int	jmp_buf[4];

@@ -26,7 +26,7 @@ unsigned int	incr;
 	if (incr == 0)
 		return ((char *)rend);
 	oend = rend;
-#ifdef	_Z8001
+#ifdef	Z8001
 	/*
 	 * A user address is seg:off with a SIXTEEN-bit offset and pointer
 	 * arithmetic does not carry out of it, so no single object may straddle a

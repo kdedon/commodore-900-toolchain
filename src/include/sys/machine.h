@@ -17,7 +17,7 @@
 #include <sys/const.h>
 #include <sys/types.h>
 
-#ifdef	_Z8001
+#ifdef	Z8001
 #include <sys/machz8001.h>	/* the Z8001 machine layer (0.7.3-derived) */
 #else
 
@@ -173,6 +173,6 @@ extern	unsigned sds;			/* System data segment */
 extern saddr_t uasa;			/* Currently active uarea segment */
 #endif
 
-#endif	/* !_Z8001 */
+#endif	/* !Z8001 */
 
 #endif

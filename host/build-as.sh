@@ -9,7 +9,7 @@
 #   - shim <types.h> (Coherent size_t==long collides with host); canon.c
 #     (_canw/_canl: host <-> PDP-canonical); n.out.h exact-width packed on-file
 #     structs so host output is the NATIVE l.out layout.
-# Object-format headers come from host/include (vendored, -D_Z8001
+# Object-format headers come from host/include (vendored, -DZ8001
 # selects the Z8001 branches of canon.h / l.out.h, as the native cc0 predefines).
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -31,7 +31,7 @@ cp "$AS"/*.h "$AS"/z8001/*.h "$OUT"/
 grep -q 'case S_LDM:' "$OUT/machine.c" || { echo "src/as machine.c: S_LDM reconstruction MISSING"; exit 1; }
 grep -q 'n = 7;' "$OUT/asmout.c" || { echo "src/as asmout.c: outchk reservation fix MISSING"; exit 1; }
 # Object-format + machine-type headers from host/include (vendored verbatim;
-# canon.h/l.out.h select their Z8001 branches via -D_Z8001, matching the native
+# canon.h/l.out.h select their Z8001 branches via -DZ8001, matching the native
 # compiler's predefine).  The host still shims types.h + exact-width n.out.h below.
 for h in n.out.h l.out.h mtype.h canon.h; do
   cp "$HERE/include/$h" "$OUT"/
@@ -92,7 +92,7 @@ PY
 cd "$OUT"
 # canon.c is written above, not a src/as source, so it is named alongside them.
 for fc in $(for f in $ASRC; do basename "$f"; done) canon.c; do
-	gcc -std=gnu89 -w -DLADDR=1 -D_Z8001 -c -I. "$fc"
+	gcc -std=gnu89 -w -DLADDR=1 -DZ8001 -c -I. "$fc"
 done
 gcc -std=gnu89 -w -o "$OUT/as-z8001" *.o
 echo "as-z8001: LINKED ($(wc -c < "$OUT/as-z8001") B)"

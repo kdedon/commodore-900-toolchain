@@ -91,7 +91,7 @@ typedef struct inode {
  * operator ("in #if", and the compile stops).  An identifier that is not a
  * macro counts as zero in an #if for all three preprocessors, so the test
  * means the same to each of them. */
-#if _I386 || _Z8001
+#if _I386 || Z8001
 #define	IFEXCL	0x80			/* Exclusive open */
 #endif /* _I386 */
 
@@ -107,7 +107,7 @@ typedef struct inode {
  */
 #define	IPNDLY	 0x08
 #define	IPAPPEND 0x10
-#if _I386 || _Z8001
+#if _I386 || Z8001
 #define IPSYNC	 0x20
 #define IPEXCL	 0x40
 #define IPNOCTTY 0x80

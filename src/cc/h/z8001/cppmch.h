@@ -14,13 +14,18 @@
 #define	MACHINE	 "_Z8001"
 
 /*
- * OLDMACHINE is the same target under the spelling the June 1985 compiler's
- * standalone cpp predefines: unprefixed `Z8001'.  The COHERENT 3.2 sources
- * select on it -- <l.out.h> takes the n.out object layout under `#ifdef Z8001',
- * sbrk() its segment-crossing arithmetic, exec() its shared-library arms -- so
- * a compiler that defines only the ISO-reserved spellings silently builds the
- * wrong layout.  Both spellings are live: the toolchain's own vendored headers
- * (host/include/l.out.h, canon.h) select on `_Z8001'.
+ * OLDMACHINE is this same target under the spelling the machine's own system
+ * sources select on: unprefixed `Z8001'.  That is what the June 1985 compiler's
+ * standalone cpp predefines, and what the COHERENT sources written for this
+ * machine were written against -- <l.out.h> takes the n.out object layout under
+ * `#ifdef Z8001', sbrk() its segment-crossing arithmetic, exec() its
+ * shared-library arms.  It is the spelling this system's headers and sources
+ * use, so a compiler that defines only the ISO-reserved forms silently builds
+ * the wrong layout.
+ *
+ * MACHINE above keeps the leading underscore because n0/cc0.c derives the
+ * doubly-underscored form from it by concatenation; all three spellings are
+ * predefined, and new code should say `Z8001'.
  */
 #define	OLDMACHINE	"Z8001"
 

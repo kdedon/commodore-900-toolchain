@@ -254,7 +254,7 @@ are the native layout — with these exceptions, all in the driver:
 * a `getpass` → `ccgetpass` rename in a scratch copy: the driver's static
   collides with libc's `getpass(3)`.
 
-Two changes went into `src/cc/coh/cc.c` itself, under `#if _Z8001`, because
+Two changes went into `src/cc/coh/cc.c` itself, under `#if Z8001`, because
 they are not workarounds but the machine's own defaults:
 
 * **the default memory model is `VSEG`.** The donor forces `VSMALL` outside

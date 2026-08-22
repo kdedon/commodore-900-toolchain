@@ -54,7 +54,7 @@ unsigned int	size;
 			len = roundup(size - alength(prev(bp)), 1<<9);
 		else
 			len = roundup(size + sizeof (alloc_t), 1<<9);
-#ifdef	_Z8001
+#ifdef	Z8001
 		/*
 		 * No pointer-arithmetic wraparound test here.  A pointer is
 		 * seg:off with a 16-bit offset, so `ap + len' wraps inside the

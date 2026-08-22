@@ -449,7 +449,7 @@ main(argc, argv) int argc; char *argv[];
 	setvariant(VPEEP);
 	setvariant(VCOMM);
 	setvariant(VPSTR);
-#if	_Z8001
+#if	Z8001
 	/*
 	 * The C900 is a segmented machine and its C model is the segmented
 	 * one: a pointer is a two-word seg:offset (h/z8001/varmch.h VSEG).
@@ -770,7 +770,7 @@ resolve()
 			cquit("pass name \"%s\" is too long", cmdb);
 		strcpy(pass[i].p_pln, cmdb);
 	}
-#if	_Z8001
+#if	Z8001
 	/*
 	 * Model selection, Z8001.  The block below is Intel's: outside OMF
 	 * output it FORCES the small model, which on the 8086 is the sane

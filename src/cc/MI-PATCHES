@@ -148,8 +148,8 @@ why: the reserve is decided entirely by the machine register table's `r_lvalue` 
 
 patch: driver-z8001-model
 file: coh/cc.c d33ecfb9bbbd7cde5cc79bce7338e12e14248c8a6bdb650134d3032306454f39
-fix: `#if _Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` instead of `V80186`, and the model-selection block chooses `VLARGE` unless `-VSMALL` was asked for, in place of the Intel OMF rules
-why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if _Z8001`, so no other target sees them
+fix: `#if Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` instead of `V80186`, and the model-selection block chooses `VLARGE` unless `-VSMALL` was asked for, in place of the Intel OMF rules
+why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if Z8001`, so no other target sees them
 
 patch: char-parameter-address
 file: n0/ddecl.c d9e91c89d3f4b54f59641f8854a18741e12d8fab86e391316c2f471afb91baea
