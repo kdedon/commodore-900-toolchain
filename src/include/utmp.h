@@ -22,12 +22,18 @@
 
 #include <sys/types.h>
 
-#pragma align 1
+/*
+ * No `#pragma align 1' around this structure.  It would not change the layout
+ * -- ut_time follows 22 bytes of char, already even, so member alignment 1 and
+ * alignment 2 both put it at offset 22 and both make the record 26 bytes --
+ * and the June 1985 preprocessor diagnoses `#pragma' as an illegal control
+ * line wherever it appears, including inside a conditional it is skipping,
+ * so there is no spelling of it that all three preprocessors read.
+ */
 struct	utmp {
 	char	ut_line[8];		/* tty name */
 	char	ut_name[DIRSIZ];	/* User name */
 	time_t	ut_time;		/* time signed on */
 };
-#pragma align
 
 #endif

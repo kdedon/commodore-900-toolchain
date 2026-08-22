@@ -13,16 +13,21 @@
 #ifndef	MATH_H
 #define	MATH_H
 
+/* #else + a nested #if, not #elif: the June 1985 preprocessor, which reads
+ * these headers when the 1985 compiler is the flavour building, has no #elif
+ * ("illegal control line", and the compile stops). */
 #if	_DECVAX
 #define HUGE_VAL	1e+37		/* Infinity		*/
 #define L2HUGE_VAL	127.0		/* log2(infinity)	*/
 #define L10P		17		/* log10(precision)	*/
 #define L2L2P		6		/* log2(log2(precision)) */
-#elif	_IEEE
+#else
+#if	_IEEE
 #define HUGE_VAL	1e+308		/* Infinity		*/
 #define L2HUGE_VAL	1023.0		/* log2(infinity)	*/
 #define L10P		16		/* log10(precision)	*/
 #define L2L2P		6		/* log2(log2(precision)) */
+#endif
 #endif
 /*
  * Error return values.

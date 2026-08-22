@@ -15,6 +15,17 @@
 #ifndef COFF_H	/* Rest of file.  */
 #define COFF_H
 
+/*
+ * No `#pragma align 2' in this header.  Two is the alignment this machine
+ * gives every scalar already -- a long sits on an even boundary, not on a
+ * multiple of four -- so the pragma would name the alignment in force and
+ * change no offset and no size.  The June 1985 preprocessor, which reads
+ * these headers when the 1985 compiler is the flavour building, diagnoses
+ * `#pragma' as an illegal control line wherever it stands, including inside
+ * a conditional it is skipping, so there is no spelling of it that all three
+ * preprocessors read.
+ */
+
 /* File header. */
 typedef	struct	filehdr	{
 	unsigned short	f_magic;		/* Magic number		*/
@@ -89,9 +100,7 @@ typedef	struct	reloc	{
 	long		r_vaddr;		/* Address (where)	*/
 	long		r_symndx;		/* Symbol index (what)	*/
 	unsigned short	r_type;			/* Type (how)		*/
-#pragma align 2
 }	RELOC;
-#pragma align
 
 #define RELSZ	10				/* sizeof(RELOC)	*/
 
@@ -114,9 +123,7 @@ typedef struct lineno {
 		long	l_paddr;		/* physical addr	*/
 	} l_addr;
 	unsigned short l_lnno;			/* line number or 0 for fun */
-#pragma align 2
 }	LINENO;
-#pragma align
 
 #define	LINESZ	6				/* sizeof(LINENO)	*/
 
@@ -139,9 +146,7 @@ typedef	struct	syment	{
 	unsigned short	n_type;			/* Type			*/
 	char		n_sclass;		/* Storage class	*/
 	char		n_numaux;		/* Auxilliary entries	*/
-#pragma align 2
 }	SYMENT;
-#pragma align
 
 #define SYMESZ	18	/* sizeof(SYMENT) */
 #define	n_name		_n._n_name
@@ -251,9 +256,7 @@ typedef union auxent {
 		unsigned short	x_nreloc;	/* reloc entrys */
 		unsigned short	x_nlinno;	/* line number entries */
 	} x_scn;
-#pragma align 2
 }	AUXENT;
-#pragma align
 
 #define AUXESZ	18	/* sizeof(auxent) */
 

@@ -14,15 +14,24 @@
 #ifndef	 TIMEB_H
 #define	 TIMEB_H	TIMEB_H
 
+/*
+ * No `#pragma align 2' in this header.  Two is the alignment this machine
+ * gives every scalar already -- a long sits on an even boundary, not on a
+ * multiple of four -- so the pragma would name the alignment in force and
+ * change no offset and no size.  The June 1985 preprocessor, which reads
+ * these headers when the 1985 compiler is the flavour building, diagnoses
+ * `#pragma' as an illegal control line wherever it stands, including inside
+ * a conditional it is skipping, so there is no spelling of it that all three
+ * preprocessors read.
+ */
+
 #include <sys/types.h>
 
-#pragma align 2
 struct timeb {
 	long	time;			/* Time since 1970 */
 	unsigned short millitm;		/* Milliseconds */
 	short	timezone;		/* Time zone */
 	short	dstflag;		/* Daylight saving time applies */
 };
-#pragma align
 
 #endif

@@ -86,7 +86,12 @@ typedef struct inode {
 #define	IFWFR	0x10			/* Sleeping on pipe full */
 #define	IFWFW	0x20			/* Sleeping on pipe empty */
 #define	IFEOF	0x40			/* End of file on pipe */
-#if defined(_I386) || defined(_Z8001)
+/* An identifier, not defined(): the June 1985 preprocessor, which reads these
+ * headers when the 1985 compiler is the flavour building, has no defined()
+ * operator ("in #if", and the compile stops).  An identifier that is not a
+ * macro counts as zero in an #if for all three preprocessors, so the test
+ * means the same to each of them. */
+#if _I386 || _Z8001
 #define	IFEXCL	0x80			/* Exclusive open */
 #endif /* _I386 */
 
@@ -102,7 +107,7 @@ typedef struct inode {
  */
 #define	IPNDLY	 0x08
 #define	IPAPPEND 0x10
-#if defined(_I386) || defined(_Z8001)
+#if _I386 || _Z8001
 #define IPSYNC	 0x20
 #define IPEXCL	 0x40
 #define IPNOCTTY 0x80

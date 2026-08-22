@@ -14,12 +14,22 @@
 #ifndef	 OSTAT_H
 #define	 OSTAT_H	OSTAT_H
 
+/*
+ * No `#pragma align 2' in this header.  Two is the alignment this machine
+ * gives every scalar already -- a long sits on an even boundary, not on a
+ * multiple of four -- so the pragma would name the alignment in force and
+ * change no offset and no size.  The June 1985 preprocessor, which reads
+ * these headers when the 1985 compiler is the flavour building, diagnoses
+ * `#pragma' as an illegal control line wherever it stands, including inside
+ * a conditional it is skipping, so there is no spelling of it that all three
+ * preprocessors read.
+ */
+
 #include <sys/types.h>
 
 /*
  * Structure returned by stat and fstat system calls.
  */
-#pragma align 2
 struct oldstat {
 	dev_t	 st_dev;		/* Device */
 	ino_t	 st_ino;		/* Inode number */
@@ -33,7 +43,6 @@ struct oldstat {
 	long	 st_mtime;		/* Modify time */
 	long	 st_ctime;		/* Change time */
 };
-#pragma align
 
 /*
  * Modes.
