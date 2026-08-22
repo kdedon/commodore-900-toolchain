@@ -1,9 +1,5 @@
-# Makefile - the Commodore 900 (Z8001) cross toolchain.
-#
-# Everything the toolchain itself needs is in this repository: `make' builds the
-# host cross toolchain with gcc out of src/, against the Coherent headers in
-# host/include.  No OS checkout is consulted -- the harnesses that do need one
-# take it through host/coherent-os.sh as $COHERENT_OS.
+# Commodore 900 (Z8001) cross-toolchain.
+# The normal host build is self-contained; optional targets name their inputs.
 #
 #   make            cc0/cc1/cc2/cc3-z8001 + as-z8001 + ld-z8001 + tabgen -> host/build
 #   make check      the regression suite + the table gates (implies all)
@@ -32,7 +28,7 @@ SHELL = /bin/sh
 	mi-baseline mi-table \
 	check-selfhost check-native check-tools \
 	deps os-fallback env-fallback clean env env-ours env-inherited env-mwc1985 \
-	libc libm libmisc selfhost native
+	libc libm libmisc selfhost native help
 
 # Overridable so lanes sharing one checkout keep their artifacts apart; every
 # host/ script resolves it through $C900_BUILD, and artifacts are published by
@@ -41,6 +37,17 @@ B ?= $(if $(C900_BUILD),$(C900_BUILD),host/build)
 export C900_BUILD := $(abspath $(B))
 
 all: cc as ld
+
+help:
+	@printf '%s\n' \
+	  'make                 build the compiler, assembler, and linker' \
+	  'make check           run the regression suite' \
+	  'make check-selfhost  verify the compiler fixed point' \
+	  'make check-native    compare native assembler/linker output' \
+	  'make tools           build conversion tools' \
+	  'make env             stage a guest compiler environment' \
+	  'make deps            fetch inputs listed in DEPS' \
+	  'make clean           remove build products'
 
 # Each script builds, publishes its own artifact, and exits nonzero on failure.
 # Nothing here pipes a build into a filter: a pipeline's status is its last

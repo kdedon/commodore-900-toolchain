@@ -19,6 +19,8 @@ Commodore 900, recovered from the machine's hard-disk image.
 | ld | 19486 | c87a1dc1b26b85d3 |
 | nld | 20922 | 580a26a44215abac |
 | nm | 9764 | c4d31a38467f9cbd |
+| scrts0.o | 310 | d602ba67535b9ca9 |
+| slibc.a | 38736 | fb691c228b9f76d5 |
 | size | 7350 | 051d50306adbe92a |
 
 Dated June 1985.  The five compiler passes, `db` and `l` carry a later
@@ -27,9 +29,7 @@ disk; the bytes are the 1985 artifacts, and the sha256 above is what
 identifies them.
 
 `cc` and `ccx` are the driver, and `cpp cc0 cc1 cc2 cc3` are what the driver
-runs.  They were apart until 2026-08-21 -- the driver here, the passes in the
-operating system's own tree -- which meant that selecting the 1985 compiler
-needed a checkout of the OS to find half of itself.  A compiler is its passes;
+runs.  A compiler is its passes;
 they belong together, and with them here nothing outside this repository is
 needed to run it.
 
@@ -73,3 +73,17 @@ Same as the rest of this repository: BSD 3-Clause, (c) 1977-1995 Robert
 Swartz -- see ../../LICENSE.  Note condition 2 applies to
 these specifically: a binary redistribution must reproduce the copyright
 notice and disclaimer in its documentation.
+
+`scrts0.o` and `slibc.a` are the 1985 SHARED-LIBRARY runtime.
+
+The `s` is `shared', not `small'.  `slibc.a' carries a.out magic 0407 -- a
+linked image, not an `ar' archive (a COHERENT archive begins 0177535), which is
+what a shared library is.  `scrts0.o' is the client-side start-off: its symbols
+are `main_ __end_ end_ exit_ environ_ start _exit_', which is the symbol set of
+src/csu/crt0sl.s and NOT that of src/csu/crts0.s -- crts0.s defines no `__end_'
+or `end_', because a statically linked program gets its break tracker from the
+link rather than from the library.  src/csu/slrt.s is the library-side half.
+
+Nothing builds against them: the shared-library work is designed but
+deliberately unimplemented, so these are the only artifacts of that ABI we
+hold, and they are the reference for it.
