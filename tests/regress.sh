@@ -367,6 +367,18 @@ chkf 'int f(x,y) unsigned x; unsigned y; { return (x /= y); }' 40000 2 20000
 chkf 'struct P{int a;int b;int c;int d;int e;}; int f(){ struct P p,q; q.e=42; p=q; return p.e; }' 0 0 42
 chkf 'struct P{int a;int b;int c;int d;int e;}; int f(){ struct P p,q; q.a=11;q.e=5; p=q; return p.a; }' 0 0 11
 chkf 'struct P{int a;int b;int c;int d;int e;int f;int g;}; int f(){ struct P p,q; q.g=99; p=q; return p.g; }' 0 0 99
+# A small struct copy inlines word by word only between DIRECT objects (statics,
+# and autos, which are FP + displacement); either side a DEREFERENCE goes to the
+# same LDIRB, which addresses the block once instead of reloading a far pointer
+# per word.  Both routes are exercised here, and both directions of the deref.
+chkf 'struct R{int a,b,c,d;}; struct R gr[3]; int f(){ struct R c; gr[1].a=7; gr[1].d=9; c=gr[1]; return c.a+c.d; }' 0 0 16
+chkf 'struct R{int a,b,c,d;}; int g(o,i) struct R *o; int i; { struct R c; c=o[i]; return c.a+c.d; } int f(){ struct R v[2]; v[1].a=20; v[1].d=22; return g(v,1); }' 0 0 42
+chkf 'struct R{int a,b,c,d;}; int g(o,i) struct R *o; int i; { struct R c; c.a=5;c.b=6;c.c=7;c.d=8; o[i]=c; return 0; } int f(){ struct R v[2]; g(v,1); return v[1].a+v[1].d; }' 0 0 13
+chkf 'struct R{int a,b,c,d;}; int g(o,p) struct R *o; struct R *p; { o[1]=p[0]; return 0; } int f(){ struct R v[2],w[1]; w[0].a=3;w[0].d=4; g(v,w); return v[1].a+v[1].d; }' 0 0 7
+chkf 'struct R{int a,b,c,d;}; int f(){ struct R v[2]; struct R *q; q=v; v[0].a=15;v[0].d=27; v[1]= *q; return v[1].a+v[1].d; }' 0 0 42
+chkf 'struct R{int a,b,c,d;}; struct R mk(x) int x; { struct R t; t.a=x; t.d=x+1; return t; } int f(){ struct R q; q=mk(20); return q.a+q.d; }' 0 0 41
+chkf 'struct R{int a,b,c,d;}; int f(){ struct R v[3]; struct R *p; p=v; v[0].a=6;v[0].d=8; *++p = v[0]; return v[1].a+v[1].d; }' 0 0 14
+chkf 'struct T{char a,b,c;}; int f(){ struct T v[2]; struct T c; v[1].a=3;v[1].b=4;v[1].c=5; c=v[1]; return c.a+c.b+c.c; }' 0 0 12
 # long / pointer return: 32-bit return in RR0; far pointer return in RR0
 chkf 'long g(){ return 100000; } int f(){ return (int)g(); }' 0 0 -31072
 chkf 'long g(){ return 7; } int f(){ return (int)g(); }' 0 0 7

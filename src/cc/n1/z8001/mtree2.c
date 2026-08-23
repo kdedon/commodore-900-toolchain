@@ -1068,12 +1068,14 @@ register t;
 }
 
 /*
- * Size (bytes) at/under which an aggregate assignment is copied INLINE (word by
- * word, + trailing byte) instead of via the blkmv runtime call. Inline reuses
- * the scalar word/byte assignment selection and needs no function-call ABI; it
- * is also smaller+faster than a call for small structs.
+ * Size (bytes) at/under which an aggregate assignment is copied INLINE, word by
+ * word, instead of by the Z8000 block move.  A block move costs a fixed
+ * preamble -- both far addresses into register pairs and the count into a word
+ * register -- that the inline copy beats only for one word: at two bytes inline
+ * is a load and a store, at four the preamble is already the cheaper of the two
+ * and every larger size widens the gap.
  */
-#define	INLINEBLK	8
+#define	INLINEBLK	2
 
 /*
  * Build the lvalue for the (ty,sz) scalar at byte offset `off` within aggregate
@@ -1160,55 +1162,36 @@ int		blkval;
 	if (isvariant(VLARGE))
 		nptdt = LPTR;
 #endif
-	if (s > 0 && s <= INLINEBLK) {	/* small block: inline word-copy (both models;
-					 * VLARGE uses far &lv addressing, now working) */
+	if (s <= 0) {
+		/*
+		 * An aggregate of no bytes.  There is nothing to copy, and a
+		 * zero count is the one value the block move cannot express:
+		 * LDIRB decrements its counter and then tests it, so r = 0
+		 * means 65536 bytes.  Evaluate both addresses -- the side
+		 * effects a block move would have run -- and yield &dest.
+		 */
+		tp = leftnode(COMMA,
+			leftnode(ADDR, rp, nptdt, pertype[nptdt].p_size),
+			nptdt, pertype[nptdt].p_size);
+		tp->t_rp = leftnode(ADDR, lp, nptdt, pertype[nptdt].p_size);
+		return (tp);
+	}
+	if (s <= INLINEBLK
+	 && !hascall(rp) && rp->t_op != STAR && !nonrepeat(lp)) {
+		/*
+		 * Small block, and both operand trees are REPEATABLE: blkword()
+		 * copies each operand once per word, so a source that is a call
+		 * (`q = mk(x)') or a pointer dereference (`*q', `p->agg'), or a
+		 * destination with a side effect (`*p++ = s'), must not come
+		 * through here -- the call would run per word, the deref would
+		 * re-deref the register already holding the pointer, and the side
+		 * effect would repeat.  Those shapes take the block move below,
+		 * which evaluates each address exactly once and is the smaller
+		 * form for them anyway.
+		 */
 		register TREE	*chain;
 		register int	off;
 		int		ty, sz;
-
-		/*
-		 * The SOURCE address must be evaluated ONCE.  Two cases need the
-		 * bind: (a) a non-repeatable source (e.g. a struct-returning CALL) --
-		 * blkword() does copynode(rp) per word, so `q = mk(x)' would call
-		 * mk() once per word (and the duplicated call's result REG crashes
-		 * output at out.c:176); (b) a POINTER-DEREFERENCE source (`q[i]',
-		 * `*q', `p->agg') -- its address is a loaded far pointer, and the
-		 * per-word re-evaluation of ADDR(STAR(q)) mis-selects: the second
-		 * word re-derefs the base register that already holds the pointer
-		 * (`LDL RR,@RR' on q's value instead of reloading q), reading *q as
-		 * an address.  A STATIC array element (`arr[i]') is addressed by a
-		 * constant base and never reaches here, so this does not pessimize
-		 * it.  Bind &src into a stack temp and copy the words through it.
-		 */
-		prebind = NULL;
-		if (hascall(rp) || rp->t_op == STAR) {
-			register TREE	*proto, *ptmp;
-
-			proto = makenode(GID, nptdt);
-			proto->t_size = pertype[nptdt].p_size;
-			ptmp = mdtempnode(proto);		/* *(FP-n): holds &src */
-			prebind = leftnode(ASSIGN, copynode(ptmp), nptdt, proto->t_size);
-			prebind->t_rp = leftnode(ADDR, rp, nptdt, proto->t_size);
-			rp = leftnode(STAR, copynode(ptmp), BLK, s);	/* src via temp */
-		}
-
-		/*
-		 * The DESTINATION address must be evaluated ONCE too: `*++vp = s'
-		 * / `*p++ = s' has a side effect blkword() would run per word (and
-		 * leaves a bare register that outtree cannot reload).  Bind
-		 * &dest into a temp and store the words through it.
-		 */
-		predst = NULL;
-		if (nonrepeat(lp)) {
-			register TREE	*proto, *ptmp;
-
-			proto = makenode(GID, nptdt);
-			proto->t_size = pertype[nptdt].p_size;
-			ptmp = mdtempnode(proto);		/* *(FP-m): holds &dest */
-			predst = leftnode(ASSIGN, copynode(ptmp), nptdt, proto->t_size);
-			predst->t_rp = leftnode(ADDR, lp, nptdt, proto->t_size);
-			lp = leftnode(STAR, copynode(ptmp), BLK, s);	/* dest via temp */
-		}
 
 		chain = NULL;
 		for (off = 0; off < s; off += sz) {
@@ -1250,22 +1233,10 @@ int		blkval;
 			cm->t_rp = tp;
 			chain = cm;
 		}
-		if (prebind != NULL) {	/* evaluate the source once, before the copy */
-			register TREE	*cm;
-			cm = leftnode(COMMA, prebind, nptdt, pertype[nptdt].p_size);
-			cm->t_rp = chain;
-			chain = cm;
-		}
-		if (predst != NULL) {	/* evaluate the dest address (its side effect) once */
-			register TREE	*cm;
-			cm = leftnode(COMMA, predst, nptdt, pertype[nptdt].p_size);
-			cm->t_rp = chain;
-			chain = cm;
-		}
 		return (chain);
 	}
 	/*
-	 * Large block: inline Z8000 block move.  The Z8000 LDIRB copies a whole
+	 * Everything else: inline Z8000 block move.  The Z8000 LDIRB copies a whole
 	 * byte block in ONE (interruptible, self-repeating) instruction given the
 	 * far dst/src addresses in register PAIRS and the count in a register --
 	 * no runtime memcpy call (the i8086 backend's `blkmv' GID).  Build a
