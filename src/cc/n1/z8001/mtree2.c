@@ -1068,14 +1068,25 @@ register t;
 }
 
 /*
- * Size (bytes) at/under which an aggregate assignment is copied INLINE, word by
- * word, instead of by the Z8000 block move.  A block move costs a fixed
- * preamble -- both far addresses into register pairs and the count into a word
- * register -- that the inline copy beats only for one word: at two bytes inline
- * is a load and a store, at four the preamble is already the cheaper of the two
- * and every larger size widens the gap.
+ * Size (bytes) at/under which an aggregate assignment is copied INLINE, one
+ * long word / word / byte at a time, instead of by the Z8000 block move.
+ *
+ * A block move costs a fixed preamble -- both far addresses into register
+ * pairs, the count into a word register, and, since those pairs are callee
+ * saved, a PUSHL/POPL of each when the enclosing function does not already
+ * hold them -- against which the inline copy pays 12 bytes and 32 clocks per
+ * long word (`LDL RRn,addr' 15 + `LDL addr,RRn' 17, segmented long offset).
+ * Whole-function figures for a static-to-static copy, inline vs block move
+ * (bytes / clocks of the copy):
+ *
+ *	bytes copied	 2	 4	 6	 8	10	12
+ *	inline		12/26	12/32	24/58	24/64	36/90	36/96
+ *	block move	26/112	26/130	26/148	26/166	26/184	26/202
+ *
+ * so through eight bytes the inline copy is at least as short AND faster, and
+ * from ten it is faster but longer.  Eight is where it stops winning both.
  */
-#define	INLINEBLK	2
+#define	INLINEBLK	8
 
 /*
  * Build the lvalue for the (ty,sz) scalar at byte offset `off` within aggregate
@@ -1195,7 +1206,19 @@ int		blkval;
 
 		chain = NULL;
 		for (off = 0; off < s; off += sz) {
-			if (s - off >= 2) { ty = S16; sz = 2; }
+			/*
+			 * Widest chunk that fits, because one long-word copy is
+			 * cheaper than the two word copies it replaces on every
+			 * addressing mode: 15+17 clocks and 12 bytes against
+			 * 2*(12+14) and 24 direct, 16+18 against 2*(13+15)
+			 * indexed.  A long word needs the same EVEN address a
+			 * word does -- the Z8001 splits it into two word
+			 * transfers -- and every aggregate whose size reaches
+			 * two bytes is word aligned, so the chunk sequence
+			 * 4,4,...,{2},{1} never lands odd.
+			 */
+			if (s - off >= 4) { ty = S32; sz = 4; }
+			else if (s - off >= 2) { ty = S16; sz = 2; }
 			else		  { ty = S8;  sz = 1; }
 			/*
 			 * dupnode, NOT the same node each time: every member store
@@ -1224,11 +1247,16 @@ int		blkval;
 		 * the ASSIGN case STARs it for an rvalue use, and a struct-returning
 		 * function returns it (in RR0) so the caller can read the result.
 		 * Append `&dest' as the comma chain's final (value) operand -- the
-		 * word copies run for effect, the address is the result.
+		 * word copies run for effect, the address is the result.  Only a
+		 * value context gets it, the same contract the block move below
+		 * ends on: in MEFFECT the address is dead, and materializing it
+		 * costs a load of the far pointer nothing reads.
 		 */
-		tp = leftnode(ADDR, dupnode(lp), nptdt, pertype[nptdt].p_size);
-		{
+		if (blkval) {
 			register TREE	*cm;
+
+			tp = leftnode(ADDR, dupnode(lp), nptdt,
+				pertype[nptdt].p_size);
 			cm = leftnode(COMMA, chain, nptdt, pertype[nptdt].p_size);
 			cm->t_rp = tp;
 			chain = cm;
