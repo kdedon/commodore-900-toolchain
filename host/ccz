@@ -109,7 +109,7 @@ for f in $files; do
 		if [ "$compileonly" = 1 ]; then c900_buildmap "${out:-$stem.o}" "$f"; fi
 		"$O/cc0-z8001" $VAR "$f" "$tmp/$stem.z0" $incs -I"$OS/include" -I"$OS/include/sys" $defs
 		"$O/cc1-z8001" $VAR "$tmp/$stem.z0" "$tmp/$stem.z1"
-		"$O/cc2-z8001" 0010 "$tmp/$stem.z1" "$o" "$tmp/$stem.scr" 0
+		"$O/cc2-z8001" "${PEEP:-0010}" "$tmp/$stem.z1" "$o" "$tmp/$stem.scr" 0
 		if [ "$compileonly" = 1 ]; then
 			co=${out:-$stem.o}; cp "$o" "$co"; echo "ccz: $f -> $co"
 		fi
