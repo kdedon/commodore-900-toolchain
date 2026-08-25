@@ -76,7 +76,7 @@ ld: as
 # here: both link through ccz against libc-z8001, so they need an OS tree, and
 # segexec reads the entry segment with loutdis, which is not in this
 # repository.  They belong wherever check-selfhost lives, not in `check'.
-check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff
+check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
@@ -94,6 +94,13 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 # the coverage limit, measured on every run rather than claimed in a comment.
 check-effdiff:
 	sh tests/effdiff.sh --selftest
+
+# The same demonstration for the LINKED sweep, which needs crt0.o, the libc
+# archive and both corpora on top of what effdiff needs.  Its matcher runs at a
+# near-exact threshold of 2, so the perturbation it goes blind at is far smaller
+# than effdiff's; this target prints that number too.
+check-effdiff-linked:
+	sh tests/effdiff-linked.sh --selftest
 
 # What each program is MADE OF, declared once by the build that runs on the
 # C900 and read by every cross-build (host/srcman.sh).  The build scripts assert
