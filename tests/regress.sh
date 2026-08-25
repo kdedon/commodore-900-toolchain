@@ -347,6 +347,16 @@ chkf 'int f(x,y) unsigned x; unsigned y; { return x >> 1; }' 40000 3 20000
 chkf 'int f(x,y) unsigned x; unsigned y; { return x >> 3; }' 40000 3 5000
 chkf 'int f(x,y) unsigned x; unsigned y; { return x >> y; }' 40000 2 10000
 chkf 'int f(x,y) unsigned x; unsigned y; { unsigned z; z = x >> 2; return z; }' 40000 3 10000
+# A signed test taken STRAIGHT OFF a shift's flags: cc1 emits the shift and a JR GE
+# with no compare between, and GE on the Z8000 is S xor V.  The manual gives SLL
+# "V: Undefined" while ADD defines V as signed overflow, which a doubling reports for
+# exactly the values whose top bit the shift discards -- so a peephole that turned
+# these shifts into doublings would answer the sign question wrongly.
+chkf 'int f(x,y) int x; int y; { return (x << 1) < 0; }' 16384 0 1
+chkf 'int f(x,y) int x; int y; { return (x << 2) < 0; }' 16384 0 0
+chkf 'int f(x,y) int x; int y; { return (x << 2) >= 0; }' 4096 0 1
+chkf 'int f(x,y) int x; int y; { return (x << 2) >= 0; }' 8192 0 0
+chkf 'int f(x,y) int x; int y; { return (x << 3) < 0; }' 8192 0 0
 # compound assignment (Phase 7): Z8000 arithmetic is register-dest only, so x op= y
 # is load-modify-store (LD Rt,x; OP Rt,y; LD x,Rt).  mul/div/rem use the fixed RR0/R1
 # pair + sign extend.  Result temp also carries the rvalue (z=(x+=..)) and tests for

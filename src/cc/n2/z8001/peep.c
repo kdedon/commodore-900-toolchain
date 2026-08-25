@@ -1,8 +1,8 @@
 /*
  * Peephole optimizer.  Walk the code list, tracking the state of the machine registers,
  * and delete or simplify instructions that do not change that state.  subdec narrows a
- * small-constant ADD/SUB into a one-word INC/DEC; shldouble turns a shift left by one
- * into a register doubling; callreloc retargets the
+ * small-constant ADD/SUB into a one-word INC/DEC; shldouble turns a short shift left
+ * into a chain of register doublings; callreloc retargets the
  * pointer load feeding an indirect call; and the register-state pass propagates copies,
  * deletes redundant loads/copies, and substitutes a held memory operand by its register.
  */
@@ -144,38 +144,145 @@ incexpand()
 	}
 }
 
+/* a Z8000 condition code (a JR/JP i_rel) that READS the overflow flag: LT=1, LE=2,
+ * OV/PE=4, GE=9, GT=0xA, NOV/PO=0xC -- the signed-compare and overflow branches. */
+static
+overflowcc(cc)
+{
+	return (cc == 1 || cc == 2 || cc == 4 || cc == 9 || cc == 0xA || cc == 0xC);
+}
+
+/* an op that DEFINES the overflow flag (so an earlier V is dead).  The arithmetic
+ * shifts appear (a right shift is one with a negative count, so SRA is ZSLA here);
+ * the logical shifts
+ * are absent on purpose: the manual gives SLL/SRL/SDL "V: Undefined", so they neither
+ * define V nor can be relied on to preserve it.  The list is deliberately short --
+ * omitting a definer only keeps the scan going, which refuses a substitution rather
+ * than making an unsafe one. */
+static
+overflowclobber(op)
+{
+	switch (op) {
+	case ZADD: case ZADDB: case ZADDL: case ZSUB: case ZSUBB: case ZSUBL:
+	case ZADC: case ZADCB: case ZSBC: case ZSBCB:
+	case ZCP: case ZCPB: case ZCPL: case ZINC: case ZINCB: case ZDEC: case ZDECB:
+	case ZNEG: case ZNEGB: case ZMULT: case ZMULTL: case ZDIV: case ZDIVL:
+	case ZSLA: case ZSLAB: case ZSLAL: case ZSDA: case ZSDAB: case ZSDAL:
+		return (1);
+	}
+	return (0);
+}
+
 /*
- * SLL/SLLB/SLLL Rd,#1 -> ADD/ADDB/ADDL Rd,Rd.  A Z8000 shift is a two-word
- * instruction costing 13 + 3n cycles whatever the count, so a shift left by one
- * is 4 bytes and 16 cycles where doubling the register is 2 bytes and 4 (8 for
- * the long).  The flags agree exactly: carry takes the bit shifted off the top,
- * which is the carry out of Rd+Rd; overflow is set when the sign changes, which
- * for Rd+Rd is the signed overflow ADD reports; S and Z follow the result.
+ * Is the overflow result of instruction `ip' dead?  The same forward scan carrydead()
+ * makes, over the V flag: a signed branch keeps it live (unsafe); an op that defines V,
+ * a RESFLG/SETFLG naming V, a CALL, or end-of-function makes it dead (safe).
  */
+static
+overflowdead(ip)
+register INS	*ip;
+{
+	register INS	*p;
+
+	for (p = ip->i_fp; p != &ins; p = p->i_fp) {
+		if (p->i_type == JUMP) {
+			if (overflowcc(p->i_rel & 0xF))
+				return (0);
+			continue;
+		}
+		if (p->i_type != CODE)
+			continue;
+		if (p->i_op == ZCALL)
+			return (1);			/* the callee clobbers flags */
+		if ((p->i_op == ZRESFLG || p->i_op == ZSETFLG) && p->i_naddr == 1
+		 && (p->i_af[0].a_mode&A_AMOD) == A_IMM && (p->i_af[0].a_value & 1))
+			return (1);			/* mask bit 0 is V: written outright */
+		if (overflowclobber(p->i_op))
+			return (1);
+	}
+	return (1);
+}
+
+/*
+ * SLL/SLLB/SLLL Rd,#n -> a chain of n `ADD/ADDB/ADDL Rd,Rd' doublings.  A Z8000 shift
+ * is a two-word instruction costing 13 + 3n cycles whatever the count, while a doubling
+ * is one word and 4 cycles (8 for the long).  So the shift is 4 bytes and 16, 19, 22
+ * cycles for n = 1, 2, 3 against 2, 4, 6 bytes and 4, 8, 12 for the word chain.  SHLMAXW
+ * and SHLMAXL below say how far the chain is allowed to run.
+ *
+ * Three of the four flags a chain leaves are the flags the shift would have left.
+ * Carry: the manual defines SLL's carry as "the last bit shifted from the destination",
+ * which after n shifts is the original bit at msb-(n-1); the chain's INTERMEDIATE
+ * carries are dropped and the surviving one is the carry out of the last doubling, the
+ * msb of 2^(n-1) x, the same original bit.  S and Z follow the final result on both
+ * sides.  D and H are unaffected by SLL and by ADD/ADDL, and ADDB writes them but only
+ * DAB reads them, which cc1 never emits.
+ *
+ * V is where they part.  The manual gives SLL "V: Undefined" -- it is SLA, the
+ * arithmetic shift, that defines V as the sign changing during the shift -- while ADD
+ * defines V as signed overflow, which a doubling reports for exactly the values whose
+ * top bit the shift discards.  cc1 takes a signed test straight off a shift's flags
+ * with no intervening compare (`x << 2 < 0' emits the shift and a JR GE, and GE on the
+ * Z8000 is S xor V), so the difference is reachable.  overflowdead() above is the
+ * guard: a shift whose V a signed branch goes on to read keeps its shift.
+ *
+ * Two is where the chain stops.  At one and two it costs nothing: 2 and 4 bytes against
+ * the shift's 4, for 12 and 11 fewer cycles, so it can never be a regression at any site
+ * and needs no knowledge of which sites are hot.  From three on it is a trade -- two more
+ * bytes for a shrinking cycle return, 10 at three, 9 at four, 1 at twelve, none at
+ * thirteen -- and the bytes are spent at every site while the cycles are only collected
+ * at the ones that run.  Declining it leaves the shift, which is the size and the speed
+ * of the SLA the original backend emits for the same source, so the floor still holds.
+ * The long stops at two for a harder reason than a trade: ADDL is 8 cycles, so three
+ * doublings are 6 bytes and 24 cycles against SLLL's 4 and 22 -- bigger AND slower.
+ */
+#define	SHLMAXW	2	/* SLL/SLLB: ADD is 4 cycles; a chain of 2 is free		*/
+#define	SHLMAXL	2	/* SLLL: ADDL is 8, so 3 doublings cost 24 against SLLL's 22	*/
+
 static
 shldouble()
 {
-	register INS	*ip;
+	register INS	*ip, *np;
 	register AFIELD	*d, *s;
+	int		aop, max, n;
 
 	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
 		if (ip->i_type != CODE || ip->i_naddr != 2)
 			continue;
-		if (ip->i_op != ZSLL && ip->i_op != ZSLLB && ip->i_op != ZSLLL)
-			continue;
+		switch (ip->i_op) {
+		case ZSLL:	aop = ZADD;  max = SHLMAXW; break;
+		case ZSLLB:	aop = ZADDB; max = SHLMAXW; break;
+		case ZSLLL:	aop = ZADDL; max = SHLMAXL; break;
+		default:	continue;
+		}
 		d = &ip->i_af[0];
 		s = &ip->i_af[1];
 		if ((d->a_mode&A_AMOD) != A_WR && (d->a_mode&A_AMOD) != A_BR)
 			continue;
-		if ((s->a_mode&A_AMOD) != A_IMM || s->a_sp != NULL || s->a_value != 1)
+		if ((s->a_mode&A_AMOD) != A_IMM || s->a_sp != NULL)
 			continue;
-		switch (ip->i_op) {
-		case ZSLL:	ip->i_op = ZADD;  break;
-		case ZSLLB:	ip->i_op = ZADDB; break;
-		case ZSLLL:	ip->i_op = ZADDL; break;
-		}
+		if (s->a_value < 1 || s->a_value > max)
+			continue;		/* 0 is a no-op, negative is a right shift */
+		if (!overflowdead(ip))
+			continue;
+		n = s->a_value;
+		ip->i_op = aop;			/* the shift itself becomes the first doubling */
 		s->a_mode = d->a_mode;
 		s->a_value = 0;
+		while (--n > 0) {
+			np = newn(2);
+			np->i_type = CODE;
+			np->i_op = aop;
+			np->i_naddr = 2;
+			np->i_af[0] = *d;
+			np->i_af[1] = *d;
+			np->i_fp = ip->i_fp;
+			np->i_bp = ip;
+			ip->i_fp->i_bp = np;
+			ip->i_fp = np;
+			ip = np;
+			d = &ip->i_af[0];
+		}
 		++changes;
 	}
 }
