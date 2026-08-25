@@ -95,7 +95,11 @@ for f in $files; do
 	*.a)  objs="$objs $f";;	# archive: ld scans it after the objects
 	*.s)  o="$tmp/$stem.o"; c900_buildlog "$f"
 	      if [ "$compileonly" = 1 ]; then c900_buildmap "${out:-$stem.o}" "$f"; fi
-	      "$AS" -o "$o" "$f"; objs="$objs $o";;
+	      "$AS" -o "$o" "$f"
+	      if [ "$compileonly" = 1 ]; then
+		      co=${out:-$stem.o}; cp "$o" "$co"; echo "ccz: $f -> $co"
+	      fi
+	      objs="$objs $o";;
 	*.c)
 		o="$tmp/$stem.o"
 		c900_buildlog "$f"
