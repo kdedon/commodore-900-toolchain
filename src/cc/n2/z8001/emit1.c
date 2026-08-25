@@ -110,39 +110,46 @@ frameseg(fr)
  * left the flat model.  The displacement
  * can be NEGATIVE -- a store through a register far pointer at a negative index
  * (`app[-1] = p', sh's makargl) offsets the odd register DOWN -- so step both
- * ways (INC up / DEC down), each INC/DEC #n covering 1..16 per word.  irunstep
- * reverses irstep exactly. */
+ * ways.  irunstep reverses irstep exactly.
+ *
+ * A displacement of 1..16 either way is one INC/DEC #n: one word, 4 cycles, and
+ * carry untouched.  Wider is one ADD of the whole 16-bit displacement -- two
+ * words and 7 cycles against the two or more INC/DEC words a 4-bit count would
+ * need (2n bytes, 4n cycles), so it wins on size from a count of three and on
+ * time from a count of two.  The step words are the only flag effect that
+ * survives the operation they bracket: they set S/Z/V whichever form is used, so
+ * nothing downstream may read the bracketed operation's flags, and the tables
+ * accordingly route every compare through a pointer with its displacement
+ * already folded into the pair rather than into an @RRn+disp operand. */
 static
 irstep(rn, disp)
 {
-	register int	n;
+	register int	r;
 
-	while (disp > 0) {
-		n = disp > 16 ? 16 : disp;
-		outw(0xA900 | ((rn|1)&0xF)<<4 | (n-1));	/* INC Rodd,#n */
-		disp -= n;
-	}
-	while (disp < 0) {
-		n = -disp > 16 ? 16 : -disp;
-		outw(0xAB00 | ((rn|1)&0xF)<<4 | (n-1));	/* DEC Rodd,#n */
-		disp += n;
+	r = (rn|1) & 0xF;
+	if (disp >= 1 && disp <= 16)
+		outw(0xA900 | r<<4 | (disp-1));		/* INC Rodd,#n */
+	else if (disp >= -16 && disp <= -1)
+		outw(0xAB00 | r<<4 | (-disp-1));	/* DEC Rodd,#n */
+	else if (disp != 0) {
+		outw(0x0100 | r);			/* ADD Rodd,#disp */
+		outw((unsigned short)disp);
 	}
 }
 
 static
 irunstep(rn, disp)
 {
-	register int	n;
+	register int	r;
 
-	while (disp > 0) {
-		n = disp > 16 ? 16 : disp;
-		outw(0xAB00 | ((rn|1)&0xF)<<4 | (n-1));	/* DEC Rodd,#n (undo INC) */
-		disp -= n;
-	}
-	while (disp < 0) {
-		n = -disp > 16 ? 16 : -disp;
-		outw(0xA900 | ((rn|1)&0xF)<<4 | (n-1));	/* INC Rodd,#n (undo DEC) */
-		disp += n;
+	r = (rn|1) & 0xF;
+	if (disp >= 1 && disp <= 16)
+		outw(0xAB00 | r<<4 | (disp-1));		/* DEC Rodd,#n (undo INC) */
+	else if (disp >= -16 && disp <= -1)
+		outw(0xA900 | r<<4 | (-disp-1));	/* INC Rodd,#n (undo DEC) */
+	else if (disp != 0) {
+		outw(0x0100 | r);			/* ADD Rodd,#-disp */
+		outw((unsigned short)(0 - disp));
 	}
 }
 

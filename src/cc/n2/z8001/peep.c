@@ -1,7 +1,8 @@
 /*
  * Peephole optimizer.  Walk the code list, tracking the state of the machine registers,
- * and delete or simplify instructions that do not change that state.  Three passes run:
- * subdec narrows a small-constant ADD/SUB into a one-word INC/DEC; callreloc retargets the
+ * and delete or simplify instructions that do not change that state.  subdec narrows a
+ * small-constant ADD/SUB into a one-word INC/DEC; shldouble turns a shift left by one
+ * into a register doubling; callreloc retargets the
  * pointer load feeding an indirect call; and the register-state pass propagates copies,
  * deletes redundant loads/copies, and substitutes a held memory operand by its register.
  */
@@ -139,6 +140,42 @@ incexpand()
 		case ZDEC:	ip->i_op = ZSUB;  break;
 		case ZDECB:	ip->i_op = ZSUBB; break;
 		}
+		++changes;
+	}
+}
+
+/*
+ * SLL/SLLB/SLLL Rd,#1 -> ADD/ADDB/ADDL Rd,Rd.  A Z8000 shift is a two-word
+ * instruction costing 13 + 3n cycles whatever the count, so a shift left by one
+ * is 4 bytes and 16 cycles where doubling the register is 2 bytes and 4 (8 for
+ * the long).  The flags agree exactly: carry takes the bit shifted off the top,
+ * which is the carry out of Rd+Rd; overflow is set when the sign changes, which
+ * for Rd+Rd is the signed overflow ADD reports; S and Z follow the result.
+ */
+static
+shldouble()
+{
+	register INS	*ip;
+	register AFIELD	*d, *s;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_naddr != 2)
+			continue;
+		if (ip->i_op != ZSLL && ip->i_op != ZSLLB && ip->i_op != ZSLLL)
+			continue;
+		d = &ip->i_af[0];
+		s = &ip->i_af[1];
+		if ((d->a_mode&A_AMOD) != A_WR && (d->a_mode&A_AMOD) != A_BR)
+			continue;
+		if ((s->a_mode&A_AMOD) != A_IMM || s->a_sp != NULL || s->a_value != 1)
+			continue;
+		switch (ip->i_op) {
+		case ZSLL:	ip->i_op = ZADD;  break;
+		case ZSLLB:	ip->i_op = ZADDB; break;
+		case ZSLLL:	ip->i_op = ZADDL; break;
+		}
+		s->a_mode = d->a_mode;
+		s->a_value = 0;
 		++changes;
 	}
 }
@@ -1152,6 +1189,7 @@ peephole()
 	framefarptr();
 	incexpand();
 	subdec();
+	shldouble();
 	callreloc();
 	cpstate();
 	copyfwd();
