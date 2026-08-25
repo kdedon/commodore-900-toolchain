@@ -414,11 +414,11 @@ chkf 'int f(){ long l; l=0; if (l != 0) return 7; return 9; }' 0 0 9
 # ADD the scaled index to its OFFSET half -- the original backend's form.  Without the guard the
 # generic flag-swap flips it to int-LEFT, forcing the segment-copy split (no LDL, one insn more).
 chkdis 'int g(p,i) int *p; int i; { return p[i]; }' 'ldl ' yes
-# A leaf with no locals reserves no frame -- the prologue's `SUB R15,#framesize' is emitted
-# only when the reservation (locals + STM save area) is nonzero (n2 synthesizes it at EPILOG),
-# so a zero-size frame emits no SUB at all (the original's leaf form; `SUB R15,#0' was a no-op).
-chklist 'int f(){ return 3; }' 'sub r15,' no
-# ...but a function WITH locals still reserves them (correctness: a CALL's arg-pushes must not
+# The frame holds the saved caller frame pointer and the saved register variables at its
+# BOTTOM, below the locals, so even a leaf with no locals reserves the one word the caller's
+# frame pointer occupies (n2 synthesizes the reservation at EPILOG).
+chklist 'int f(){ return 3; }' 'sub r15, \$2$' yes
+# A function WITH locals reserves them too (correctness: a CALL's arg-pushes must not
 # clobber the local array the callee indexes).
 chklist 'g(){} int f(){ int a[3]; a[0]=7; g(); return a[0]; }' 'sub r15,' yes
 # far-ptr + variable offset MATERIALIZED as a value : `q=p+i', `return p+i',

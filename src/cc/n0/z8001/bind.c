@@ -315,19 +315,22 @@ bindargs()
 	register sizeof_t offset;
 
 	/*
-	 * First-arg offset off FP. Segmented frame: saved FP = R13 only (one word,
-	 * pushed `PUSH @RR14,R13` per the BIOS prolog at 00:01fa) = 2 bytes, plus the
-	 * 4-byte segmented return PC the CALL pushes = 6; the Coherent BIOS reads
-	 * args at FP+6/FP+8 (cf. bios_disassembly 339-340).
-	 * Near (VSMALL) frame: saved FP (2) + near return PC (2) = 4.
+	 * Offset of the first parameter.  Like every other frame displacement the
+	 * compiler emits, it is measured from the TOP of the frame -- autos run down
+	 * from there and parameters up -- and cc2, which is the only pass that knows
+	 * the finished frame size, adds that size when it encodes the address.
+	 * The saved registers and the saved caller frame pointer lie INSIDE the
+	 * frame, at its bottom, so all that separates the top of the frame from the
+	 * first parameter is the return address the CALL pushed: four bytes in the
+	 * segmented model, two in the near (VSMALL) one.
 	 */
 #if !ONLYSMALL
 	if (isvariant(VSMALL))
-		offset = 4;
+		offset = 2;
 	else
-		offset = 6;
+		offset = 4;
 #else
-	offset = 4;
+	offset = 2;
 #endif
 	for (i=0; i<nargs; ++i) {
 		sp = args[i];
@@ -339,8 +342,8 @@ bindargs()
 		 * anyway.  The Z8000 is BIG-ENDIAN, so the caller's byte is the
 		 * SECOND byte of that word, and the parameter object -- the thing
 		 * `&c' hands out and a `char *' dereferences -- has to be placed
-		 * there.  Given +6 for the word, the object is at +7 and the next
-		 * parameter still starts at +8.  The word slot is not conditional on
+		 * there: at the odd byte of the word slot, with the next parameter
+		 * still starting a whole word on.  The word slot is not conditional on
 		 * VALIGN: the caller pushes a word whatever the stack variant says,
 		 * so a byte parameter that consumed one byte would put every later
 		 * parameter at the wrong address.

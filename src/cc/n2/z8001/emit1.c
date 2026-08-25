@@ -17,9 +17,13 @@ extern long	outhere();
 
 /* the callee-save plan for the current function, computed at genprolog, reused at
  * genepilog (the INS list is unchanged between them). */
-static int	sv_mask;	/* registers R6..R12 to save			*/
-static int	sv_stm;		/* nonzero: save the whole used range with STM/LDM */
-static int	sv_rlo, sv_cnt;	/* STM range: low register, count		*/
+static int	sv_rlo, sv_cnt;	/* save range: low register, count (ends at R13)	*/
+
+/* Distance in bytes from the frame pointer to the top of the frame, i.e. the size the
+ * prologue reserves.  The frame pointer addresses the BOTTOM of the frame, so cc1's
+ * frame displacements -- which are measured from the top, autos negative and parameters
+ * positive -- are emitted with this added.  Set by genprolog before genfunc runs. */
+static int	framebase;
 
 static int	frameseg();
 static int	isframe();
@@ -44,6 +48,8 @@ register AFIELD	*afp;
 	}
 	off = afp->a_value;
 	fr = isframe(afp);
+	if (fr && (afp->a_mode&A_REGM) == FPREG)
+		off += framebase;	/* cc1 measures from the top of the frame */
 	if (off >= 0 && off <= 0xFF)
 		outw((unsigned short)(frameseg(fr)<<8 | off));	/* SS: short */
 	else {
@@ -695,15 +701,17 @@ int		*maskp;
 /*
  * Compute the callee-save plan for the current function: the registers cc0 reserved as
  * register variables (framemask) UNION every callee-saved register the body actually
- * writes (scanned from the buffered INS list).  Three or
- * more save instructions become one STM/LDM over the used range; otherwise PUSHL pairs
- * + PUSH singles.
+ * writes (scanned from the buffered INS list).  The save area sits at the bottom of the
+ * frame and holds one contiguous run of registers ending at R13, so the caller's frame
+ * pointer is saved by the same instruction; the run starts at the lowest register that
+ * has to be saved, and covers any unused register between that one and R13.
  */
 static
 plansaves()
 {
 	register INS	*ip;
-	register int	rg, i, npush, rhi;
+	register int	rg, i;
+	int		sv_mask;	/* registers R6..R12 the body needs saved */
 
 	sv_mask = framemask;
 	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
@@ -724,99 +732,156 @@ plansaves()
 			markop(&ip->i_af[i], byteop,
 			       (opp->op_flag & OP_DWORD) != 0, &sv_mask);
 	}
-	npush = 0;
-	for (rg = 6; rg <= 12; ) {
-		if (rg <= 10 && (rg&1) == 0 && (sv_mask&(1<<rg)) && (sv_mask&(1<<(rg+1)))) {
-			++npush; rg += 2;
-		} else if (sv_mask&(1<<rg)) {
-			++npush; ++rg;
-		} else
-			++rg;
-	}
-	sv_rlo = -1; rhi = -1;
+	sv_rlo = 13;
 	for (rg = 6; rg <= 12; ++rg)
 		if (sv_mask&(1<<rg)) {
-			if (sv_rlo < 0) sv_rlo = rg;
-			rhi = rg;
+			sv_rlo = rg;
+			break;
 		}
-	sv_stm = (npush >= 3);
-	sv_cnt = sv_stm ? (rhi - sv_rlo + 1) : 0;
+	sv_cnt = 14 - sv_rlo;
 }
 
 /*
- * Bytes the prologue reserves with SUB R15: the locals, rounded up to an even size
- * because the Z8000 stack must stay word-aligned (an odd SP misaligns every pushed word
- * arg -- and every syscall arg the kernel reads), plus any STM save area.  Zero means no
- * SUB at all.  plansaves() reads only the finished INS list, so this may be asked before
- * genprolog runs.
+ * Whole size of the frame in bytes: the locals, rounded up to an even size because the
+ * Z8000 stack must stay word-aligned (an odd SP misaligns every pushed word arg -- and
+ * every syscall arg the kernel reads), plus the register save area at the bottom.  The
+ * save area always holds at least R13, so this is never zero.  plansaves() reads only
+ * the finished INS list, so this may be asked before genprolog runs.
  */
 framereserve()
 {
 	plansaves();
-	return (((framesize + 1) & ~1) + (sv_stm ? sv_cnt*2 : 0));
+	return (((framesize + 1) & ~1) + sv_cnt*2);
 }
 
 /*
- * Function prologue: save the caller frame pointer, set ours, reserve the frame, and
- * save the callee-saved registers.
+ * Rewrite the frame register's remaining uses for a bottom-based frame pointer.
+ *
+ * emitaddr() rebases a displacement indexed by R13, which covers every frame
+ * address operand.  What it cannot reach is R13 used as a VALUE: cc1 materializes
+ * the frame pointer into a register (`&x' as a far pointer, a local array's base)
+ * and then does arithmetic on it with the displacement as an IMMEDIATE.  Such a
+ * register has to hold the TOP of the frame, which is R13 plus the frame size.
+ *
+ *	LD Rd,R13	-> LDA Rd,frame-top(R13), folding a following constant
+ *			   add/subtract on Rd into the same displacement
+ *	ADD Rd,R13	-> the same add, plus the frame size
+ *
+ * Any other use of R13 as a register operand has no rebasing rule and is a botch
+ * rather than a silently wrong address.
+ */
+static
+framerebase()
+{
+	register INS	*ip, *np;
+	register int	i, d, k;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE)
+			continue;
+		for (i = 0; i < ip->i_naddr; ++i)
+			if ((ip->i_af[i].a_mode&A_AMOD) == A_WR
+			 && (ip->i_af[i].a_mode&A_REGM) == FPREG)
+				break;
+		if (i >= ip->i_naddr)
+			continue;
+		if (i != 1 || ip->i_naddr != 2
+		 || (ip->i_af[0].a_mode&A_AMOD) != A_WR
+		 || (ip->i_af[0].a_mode&A_REGM) == FPREG)
+			cbotch("frame register operand, op=%d", ip->i_op);
+		d = ip->i_af[0].a_mode & A_REGM;
+		if (ip->i_op == ZADD) {			/* index + frame base */
+			np = newn(2);
+			np->i_type = CODE;
+			np->i_naddr = 2;
+			np->i_af[0].a_mode = A_WR | d;
+			np->i_af[0].a_sp = NULL;
+			np->i_af[0].a_value = 0;
+			np->i_af[1].a_mode = A_IMM;
+			np->i_af[1].a_sp = NULL;
+			np->i_af[1].a_value = framebase;
+			np->i_op = (framebase <= 16) ? ZINC : ZADD;
+			np->i_fp = ip->i_fp;
+			np->i_bp = ip;
+			ip->i_fp->i_bp = np;
+			ip->i_fp = np;
+			ip = np;
+			continue;
+		}
+		if (ip->i_op != ZLD)
+			cbotch("frame register operand, op=%d", ip->i_op);
+		k = 0;
+		np = ip->i_fp;				/* fold a constant step on Rd */
+		if (np != &ins && np->i_type == CODE && np->i_naddr == 2
+		 && np->i_af[0].a_mode == (unsigned)(A_WR|d)
+		 && (np->i_af[1].a_mode&A_AMOD) == A_IMM
+		 && np->i_af[1].a_sp == NULL) {
+			if (np->i_op == ZADD || np->i_op == ZINC)
+				k = (int)np->i_af[1].a_value;
+			else if (np->i_op == ZSUB || np->i_op == ZDEC)
+				k = -(int)np->i_af[1].a_value;
+			if (k != 0) {
+				np->i_bp->i_fp = np->i_fp;
+				np->i_fp->i_bp = np->i_bp;
+			}
+		}
+		ip->i_op = ZLDA;
+		ip->i_af[1].a_mode = A_X | FPREG;
+		ip->i_af[1].a_sp = NULL;
+		ip->i_af[1].a_value = k;
+	}
+}
+
+/*
+ * Function prologue: reserve the whole frame, save the callee-saved registers and the
+ * caller's frame pointer at its bottom, and point the frame pointer there.  Locals then
+ * lie at small POSITIVE displacements off R13, which the Z8000 addresses with a
+ * one-word operand.  The saved registers and the saved frame pointer are inside the
+ * frame, so only the four-byte segmented return address separates the top of the frame
+ * from the first parameter.
  */
 genprolog()
 {
-	register int	rg, res;
+	register int	res;
 
+	res = framereserve();
+	framebase = res;
+	framerebase();
 	if (listwanted())		/* the INS list as the encoder is about to see it */
 		listing();
-	res = framereserve();
-	outw(0x93FD);				/* PUSH @R15,R13   save caller FP	*/
-	outw(0xA1FD);				/* LD   R13,R15    FP = SP		*/
-	if (res != 0) {
+	if (res <= 16)
+		outw(0xABF0 | (res-1));		/* DEC R15,#res				*/
+	else {
 		outw(0x030F);			/* SUB R15,#res				*/
 		outw((unsigned short)res);
 	}
-	if (sv_stm) {
-		outw(0x1CF9);			/* STM @R15,Rrlo,#count			*/
+	if (sv_cnt > 1) {
+		outw(0x1CE9);			/* STM @RR14,Rrlo,#count		*/
 		outw((sv_rlo<<8) | (sv_cnt-1));
-		return;
-	}
-	for (rg = 6; rg <= 12; ) {
-		if (rg <= 10 && (rg&1) == 0 && (sv_mask&(1<<rg)) && (sv_mask&(1<<(rg+1)))) {
-			outw(0x91F0 | rg);	/* PUSHL @R15,RRrg			*/
-			rg += 2;
-		} else if (sv_mask&(1<<rg)) {
-			outw(0x93F0 | rg);	/* PUSH @R15,Rrg			*/
-			++rg;
-		} else
-			++rg;
-	}
+	} else
+		outw(0x2FED);			/* LD  @RR14,R13   save caller FP	*/
+	outw(0xA1FD);				/* LD  R13,R15     FP = SP		*/
 }
 
 /*
- * Function epilogue: restore the callee-saved registers (reverse of the prologue's save
- * order), tear the frame down, and return.
+ * Function epilogue: reload the callee-saved registers and the caller's frame pointer
+ * from the bottom of the frame, release the frame, and return.  The stack pointer is
+ * already at the bottom of the frame: every call pops its own arguments.
  */
 genepilog()
 {
-	register int	rg;
-
-	if (sv_stm) {
-		outw(0x1CF1);			/* LDM Rrlo,@R15,#count			*/
+	if (sv_cnt > 1) {
+		outw(0x1CE1);			/* LDM Rrlo,@RR14,#count		*/
 		outw((sv_rlo<<8) | (sv_cnt-1));
-	} else {
-		/* descending: the prologue pushed ascending, so pop highest-first. */
-		for (rg = 12; rg >= 6; ) {
-			if (rg >= 7 && (rg&1) == 1 && (sv_mask&(1<<rg)) && (sv_mask&(1<<(rg-1)))) {
-				outw(0x95F0 | (rg-1));	/* POPL RRrg-1,@R15		*/
-				rg -= 2;
-			} else if (sv_mask&(1<<rg)) {
-				outw(0x97F0 | rg);	/* POP Rrg,@R15			*/
-				--rg;
-			} else
-				--rg;
-		}
+	} else
+		outw(0x21ED);			/* LD  R13,@RR14   restore caller FP	*/
+	if (framebase <= 16)
+		outw(0xA9F0 | (framebase-1));	/* INC R15,#framebase			*/
+	else {
+		outw(0x010F);			/* ADD R15,#framebase			*/
+		outw((unsigned short)framebase);
 	}
-	outw(0xA1DF);				/* LD   R15,R13    SP = FP		*/
-	outw(0x97FD);				/* POP  R13,@R15   restore caller FP	*/
-	outw(0x9E08);				/* RET  T					*/
+	outw(0x9E08);				/* RET T				*/
 }
 
 /*
