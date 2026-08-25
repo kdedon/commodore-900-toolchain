@@ -233,7 +233,7 @@ nextreg()
 {
 	register int r;
 
-	for (r = R6; r <= R12; ++r) {
+	for (r = R12; r >= R6; --r) {
 		if ((cmask & BREG(r)) == 0) {
 			cmask |= BREG(r);
 			return (r);
@@ -252,7 +252,7 @@ nextpair()
 {
 	register int r;
 
-	for (r = R6; r <= R10; r += 2) {
+	for (r = R10; r >= R6; r -= 2) {
 		if ((cmask & (BREG(r) | BREG(r+1))) == 0) {
 			cmask |= BREG(r) | BREG(r+1);
 			return (RR0 + (r >> 1));
