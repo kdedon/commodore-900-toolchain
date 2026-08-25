@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Character types table
  * for the ASCII character set.
  * _ctype[0] is for EOF, the rest if indexed

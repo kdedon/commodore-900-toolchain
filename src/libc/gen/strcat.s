@@ -1,3 +1,5 @@
+/ Copyright (c) 1977-1995 Robert Swartz.
+/ SPDX-License-Identifier: BSD-3-Clause
 / Segmented Z8001 Coherent string library
 / Concatenate one string to another (s2 to s1)
 / strcat(s1, s2)

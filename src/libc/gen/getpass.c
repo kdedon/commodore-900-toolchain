@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Coherent I/O Library.
  * getpass -- get a password from the controlling
  * terminal with echo suppressed.

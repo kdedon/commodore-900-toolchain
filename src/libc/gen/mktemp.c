@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Produce a unique filename by replacing
  * the trailing 6 X's on the user's input string
  * with process id and a unique letter.

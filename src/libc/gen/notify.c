@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Routine to notify a user about
  * the completion of a transaction
  * Usually called by some daemon (e.g.

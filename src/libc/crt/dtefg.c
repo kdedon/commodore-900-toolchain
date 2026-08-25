@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Floating point output conversion routines for `printf'.
  * These use floating point,
  * but don't grind nearly as much as the old ones did!

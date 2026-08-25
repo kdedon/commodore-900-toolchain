@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Coherent I/O Library.
  * Routines to get the group file entry.
  * (searches by next entry, name or numerical id).

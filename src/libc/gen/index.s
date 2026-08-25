@@ -1,3 +1,5 @@
+/ Copyright (c) 1977-1995 Robert Swartz.
+/ SPDX-License-Identifier: BSD-3-Clause
 / Segmented Z8001 Coherent string library
 / Return addr of first occurence of char in string (or NULL if not found)
 / index(s1, c)

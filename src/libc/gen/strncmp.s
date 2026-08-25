@@ -1,3 +1,5 @@
+/ Copyright (c) 1977-1995 Robert Swartz.
+/ SPDX-License-Identifier: BSD-3-Clause
 / Segmented Z8001 Coherent string library
 / compare two strings (n chars significant in comparison)
 / strncmp(s1, s2, n)

@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Quicker sort algorithm (from C. A. R. Hoare)
  * This uses linear insertion sort for number of elements
  * smaller than M in some partitioning.

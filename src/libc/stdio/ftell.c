@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Standard I/O Library
  * Tell logical (vs physical) file position
  * in units compatible with fseek

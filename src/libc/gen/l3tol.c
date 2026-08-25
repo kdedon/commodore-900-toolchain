@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Convert an array of filesystem 3 byte
  * numbers to longs. This routine, unlike the old one,
  * is independent of the order of bytes in a long.

@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Standard I/O Library
  * Rewind (position at beginning) file
  * The error and end-of-file indicators are cleared whatever the seek did, so a

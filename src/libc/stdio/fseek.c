@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Standard I/O Library
  * Seek; first ensure buffer is clean; afterwards put ptrs at right place
  */

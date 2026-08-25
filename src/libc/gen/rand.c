@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Random number generator, of period 2 ^ 32. Returns random numbers (ints) in
  *	the interval [0, 2^15-1].
  * The algorithm used is a linear congruential method, where the internal

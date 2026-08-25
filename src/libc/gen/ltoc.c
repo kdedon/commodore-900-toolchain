@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Convert long to comp_t style number.
  * A comp_t contains 3 bits of base-8 exponent
  * and a 13-bit mantissa.  Only unsigned

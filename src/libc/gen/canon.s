@@ -1,3 +1,5 @@
+/ Copyright (c) 1977-1995 Robert Swartz.
+/ SPDX-License-Identifier: BSD-3-Clause
 / Segmented Z8001 library
 / int _canw(i) int i;
 / long _canl(l) long l;

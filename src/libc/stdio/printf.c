@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Standard I/O library printf/fprintf/sprintf.
  *
  * The conversion loop is _doprnt(), which takes the format and a pointer to

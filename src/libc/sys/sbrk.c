@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Sbrk - grow memory in data segment by
  * a specified increment.
  * Special version that does Commodore Large model Z8001

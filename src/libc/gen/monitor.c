@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Monitor is an interface to the profil system call and to the
  * program prof.  It starts the profil if `low' is non-NULL and
  * otherwise dumps out the sttistics information and turns off

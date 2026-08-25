@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Execle(name, arg0, arg1, ..., argn, NULL, envp);
  *
  * Sys exec with list of arguments and environment.

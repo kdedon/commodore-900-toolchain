@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
 /* floating point package for segmented z-8001
  timothy s. murphy  10/84
  IEEE format

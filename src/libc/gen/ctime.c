@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * Convert time to ascii representation
  *
  * Pseudo system-5, employs TIMEZONE environment for gmt offset,
