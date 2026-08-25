@@ -415,9 +415,17 @@ chkf 'int f(){ long l; l=0; if (l != 0) return 7; return 9; }' 0 0 9
 # generic flag-swap flips it to int-LEFT, forcing the segment-copy split (no LDL, one insn more).
 chkdis 'int g(p,i) int *p; int i; { return p[i]; }' 'ldl ' yes
 # The frame holds the saved caller frame pointer and the saved register variables at its
-# BOTTOM, below the locals, so even a leaf with no locals reserves the one word the caller's
-# frame pointer occupies (n2 synthesizes the reservation at EPILOG).
-chklist 'int f(){ return 3; }' 'sub r15, \$2$' yes
+# BOTTOM, below the locals (n2 synthesizes the reservation at EPILOG).  A function that
+# needs no part of one -- no locals, no temporaries, no saved register, no use of the frame
+# register -- reserves nothing and addresses its parameters off the stack pointer.
+chklist 'int f(){ return 3; }' 'sub r15,' no
+chklist 'int f(a,b) int a,b; { return a+b; }' 'sub r15,' no
+chkdis 'int f(a,b) int a,b; { return a+b; }' 'r13' no
+# A function that calls another keeps its frame: cc1 pushes arguments one at a time, so the
+# stack pointer has already moved when a later argument is fetched from a parameter.
+chklist 'g(){} int f(a) int a; { g(); return a; }' 'sub r15,' yes
+# So does one that takes a parameter's address, which materializes the frame register.
+chklist 'int f(a) int a; { int *p; p = &a; return *p; }' 'sub r15,' yes
 # A function WITH locals reserves them too (correctness: a CALL's arg-pushes must not
 # clobber the local array the callee indexes).
 chklist 'g(){} int f(){ int a[3]; a[0]=7; g(); return a[0]; }' 'sub r15,' yes

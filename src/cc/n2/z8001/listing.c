@@ -157,7 +157,7 @@ listing()
 	register INS	*ip;
 	register int	cc, res;
 
-	if ((res = framereserve()) != 0)
+	if ((res = framebytes()) != 0)
 		printf("\tsub\tr15, $%d\n", res);
 	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
 		switch (ip->i_type) {

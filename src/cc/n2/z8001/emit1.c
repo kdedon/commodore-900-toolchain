@@ -25,8 +25,14 @@ static int	sv_rlo, sv_cnt;	/* save range: low register, count (ends at R13)	*/
  * positive -- are emitted with this added.  Set by genprolog before genfunc runs. */
 static int	framebase;
 
+/* Set by genprolog when the function needs no frame at all, so genepilog knows to
+ * emit nothing but the RET.  Every function goes through genprolog before its
+ * genepilog, so this always describes the function being emitted. */
+static int	noframe;
+
 static int	frameseg();
 static int	isframe();
+static int	fpvalop();
 
 /*
  * Emit the segmented address word(s) for a memory operand (DA / X / IR-with-offset).
@@ -755,6 +761,27 @@ framereserve()
 }
 
 /*
+ * The census framerebase() works from: the index of the operand that names R13 as a
+ * register VALUE, or -1 if the instruction has none.  cc1 materializes the frame
+ * pointer this way -- with the displacement as a separate immediate -- so such an
+ * operand never reaches emitaddr(), and it is the one form of frame reference that a
+ * scan of address operands cannot see.  frameless() asks the same question, so the
+ * two agree on what counts as a use of the frame register by construction.
+ */
+static int
+fpvalop(ip)
+register INS	*ip;
+{
+	register int	i;
+
+	for (i = 0; i < ip->i_naddr; ++i)
+		if ((ip->i_af[i].a_mode&A_AMOD) == A_WR
+		 && (ip->i_af[i].a_mode&A_REGM) == FPREG)
+			return (i);
+	return (-1);
+}
+
+/*
  * Rewrite the frame register's remaining uses for a bottom-based frame pointer.
  *
  * emitaddr() rebases a displacement indexed by R13, which covers every frame
@@ -779,11 +806,7 @@ framerebase()
 	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
 		if (ip->i_type != CODE)
 			continue;
-		for (i = 0; i < ip->i_naddr; ++i)
-			if ((ip->i_af[i].a_mode&A_AMOD) == A_WR
-			 && (ip->i_af[i].a_mode&A_REGM) == FPREG)
-				break;
-		if (i >= ip->i_naddr)
+		if ((i = fpvalop(ip)) < 0)
 			continue;
 		if (i != 1 || ip->i_naddr != 2
 		 || (ip->i_af[0].a_mode&A_AMOD) != A_WR
@@ -833,18 +856,142 @@ framerebase()
 }
 
 /*
+ * Does this operand name R13?  Mirrors markop()'s register accounting: a BYTE operand
+ * names one of RH0..RL7 whatever its register code, a PAIR operand names both halves,
+ * and an indexed address names its index register.  A_X indexed by R13 is reported
+ * separately (through *xfp) because it is the one form that survives frame elision:
+ * it addresses the parameter region, which sits at the same place off R15.
+ */
+static int
+fpuse(afp, byteop, dword, xfp)
+register AFIELD	*afp;
+int		*xfp;
+{
+	register int	reg;
+
+	reg = afp->a_mode & A_REGM;
+	switch (afp->a_mode & A_AMOD) {
+	case A_IMM:
+	case A_IMML:
+	case A_DIR:
+		return (0);
+	case A_WR:
+	case A_BR:
+		if (byteop)
+			return (0);		/* a byte register code, not R13 */
+		return (reg == FPREG || (dword && reg == FPREG-1));
+	case A_IR:				/* @RRn: both halves of the pair */
+		return (reg == FPREG || reg == FPREG-1);
+	case A_X:				/* addr(Rn): the index is a WORD */
+		if (reg != FPREG)
+			return (0);
+		*xfp = 1;
+		return (0);
+	}
+	return (1);				/* an unknown mode: assume the worst */
+}
+
+/*
+ * Can this function do without a frame?  Only when it needs no part of one.  The
+ * frame region holds the locals AND the compiler temporaries (framesize is cc1's
+ * maxtemp, which covers maxauto), the save area holds the callee-saved registers, and
+ * R13 addresses all of it -- so `needs no part of one' means framesize is zero, no
+ * register has to be saved, and R13 is named nowhere except as the index of a frame
+ * ADDRESS.  Such an address is a parameter: with no frame the stack pointer still
+ * stands where the CALL left it, so the four-byte segmented return address is all that
+ * lies below the parameters, and cc1's displacement -- measured from the top of the
+ * frame, so +4 for the first parameter -- reaches it unchanged off R15.
+ *
+ * That last equality holds only while the stack pointer does not move, which rules out
+ * any function that calls another: cc1 pushes arguments one at a time and loads the
+ * later ones after the earlier pushes have already dropped R15.  A PUSH or POP outside
+ * a call sequence would move it the same way, so those are refused too.
+ *
+ * Anything not recognised is refused.  Eliding a frame a function actually uses does
+ * not cost cycles, it reads the wrong memory.
+ */
+static int
+frameless()
+{
+	register INS	*ip;
+	register int	i;
+	int		xfp;
+
+	if (framesize != 0 || sv_cnt != 1)
+		return (0);
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		register OPINFO	*opp;
+		if (ip->i_type != CODE)
+			continue;
+		if (ip->i_op == ZCALL)
+			return (0);
+		opp = &opinfo[ip->i_op];
+		if (opp->op_style == OF_BYTE_ || opp->op_style == OF_WORD
+		 || opp->op_style == OF_LPTR || opp->op_style == OF_GPTR)
+			continue;		/* a data pseudo-op, no registers */
+		if (opp->op_style == OF_PUSH || opp->op_style == OF_POP)
+			return (0);
+		if (fpvalop(ip) >= 0)		/* R13 as a value: framerebase()'s census */
+			return (0);
+		for (i = 0; i < ip->i_naddr; ++i) {
+			xfp = 0;
+			if (fpuse(&ip->i_af[i], (opp->op_flag & OP_BYTE) != 0,
+				  (opp->op_flag & OP_DWORD) != 0, &xfp))
+				return (0);
+			if (xfp && (ip->i_af[i].a_sp != NULL
+				 || ip->i_af[i].a_value < 0))
+				return (0);	/* not a plain parameter displacement */
+		}
+	}
+	return (1);
+}
+
+/*
+ * Re-index every frame address on the stack pointer, for a function whose frame has
+ * been elided.  frameless() has already established that these are all parameters and
+ * that R15 does not move, so each one reaches the same byte it would have off R13.
+ */
+static
+frametosp()
+{
+	register INS	*ip;
+	register int	i;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE)
+			continue;
+		for (i = 0; i < ip->i_naddr; ++i)
+			if ((ip->i_af[i].a_mode&A_AMOD) == A_X
+			 && (ip->i_af[i].a_mode&A_REGM) == FPREG)
+				ip->i_af[i].a_mode = A_X | SPREG;
+	}
+}
+
+/*
  * Function prologue: reserve the whole frame, save the callee-saved registers and the
  * caller's frame pointer at its bottom, and point the frame pointer there.  Locals then
  * lie at small POSITIVE displacements off R13, which the Z8000 addresses with a
  * one-word operand.  The saved registers and the saved frame pointer are inside the
  * frame, so only the four-byte segmented return address separates the top of the frame
  * from the first parameter.
+ *
+ * A function with nothing to put in a frame gets none: frameless() decides, and the
+ * body then addresses its parameters off the stack pointer instead.  R13 is left
+ * holding the CALLER's frame pointer, so the frame chain through such a function is
+ * the caller's own.
  */
 genprolog()
 {
 	register int	res;
 
 	res = framereserve();
+	if ((noframe = frameless()) != 0) {
+		framebase = 0;
+		frametosp();
+		if (listwanted())
+			listing();
+		return;
+	}
 	framebase = res;
 	framerebase();
 	if (listwanted())		/* the INS list as the encoder is about to see it */
@@ -867,9 +1014,16 @@ genprolog()
  * Function epilogue: reload the callee-saved registers and the caller's frame pointer
  * from the bottom of the frame, release the frame, and return.  The stack pointer is
  * already at the bottom of the frame: every call pops its own arguments.
+ *
+ * A function whose frame was elided has nothing to undo: the stack pointer still
+ * stands where the CALL left it and no register was saved.
  */
 genepilog()
 {
+	if (noframe) {
+		outw(0x9E08);			/* RET T				*/
+		return;
+	}
 	if (sv_cnt > 1) {
 		outw(0x1CE1);			/* LDM Rrlo,@RR14,#count		*/
 		outw((sv_rlo<<8) | (sv_cnt-1));
@@ -882,6 +1036,15 @@ genepilog()
 		outw((unsigned short)framebase);
 	}
 	outw(0x9E08);				/* RET T				*/
+}
+
+/*
+ * The number of bytes the prologue reserves, for the listing.  genprolog settles it --
+ * zero for a function whose frame is elided -- before listing() runs.
+ */
+framebytes()
+{
+	return (framebase);
 }
 
 /*
