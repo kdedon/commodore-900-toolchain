@@ -161,6 +161,11 @@ KOBJL=$(cd "$A/native/kobj" && printf '%s ' *.o); KOBJL=${KOBJL% }
 cp "$BUILD/libm-z8001/libm-z8001.a" "$BUILD/libmisc-z8001/libmisc-z8001.a" "$A/native/"
 echo "$V" > "$A/VERSION"			# written, not copied: the tag said it
 cp "$ROOT/LICENSE" "$ROOT/README.md" "$A/"
+# man/: the Lexicon articles for what this repository owns -- the C library, the
+# C language, and the compiler passes.  Tracked files copied whole, at the path
+# the checkout spells them, so a consumer staging a manual reads man/man.index
+# and man/COHERENT.[12] from an unpacked release exactly as from a checkout.
+cp -r "$ROOT/man" "$A/man"
 # Sealed below, after host/: the content id is over every file in the package,
 # and host/ adds two shims that are regular files.
 
@@ -236,6 +241,10 @@ if [ "$HOSTONLY" = no ]; then
 	cp -r "$A/usr/include" "$Z/usr/include"
 	echo "$V" > "$Z/VERSION"
 	cp "$ROOT/LICENSE" "$Z/"
+	# The manual rides here too: this is the package an image builder takes
+	# when it wants what runs on the machine and no host compiler, and the
+	# manual is part of what runs on the machine.
+	cp -r "$ROOT/man" "$Z/man"
 	stamp_at "$Z" z8001 kobj="$KOBJL"
 
 	# ---- the libraries alone ----
