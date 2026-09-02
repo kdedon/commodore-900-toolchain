@@ -14,7 +14,7 @@
  * Return 1 if cp is not in the malloc arena,
  * 0 if cp is in the malloc arena, or
  * -1 if trouble is detected in the arena.
- * Note that this returns 0 for freed blocks in the arena.
+ * A block that has been freed is not in use, so this returns 1 for it.
  */
 notmem(cp) char *cp;
 {
@@ -23,8 +23,9 @@ notmem(cp) char *cp;
 
 	if (cp == NULL
 	   || (mp = __a_scanp) == NULL
-	   || ((ap = mblockp(cp))->blksize) == 0)
-		return 1;			/* obviously bad */
+	   || (len = ((ap = mblockp(cp))->blksize)) == 0
+	   || isfree(len))
+		return 1;			/* not a block in use */
 
 	for (counter = __a_count; counter--; ) {
 		if (mp == ap)

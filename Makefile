@@ -9,6 +9,7 @@
 #   make check-paths  every tracked name survives a Windows checkout
 #   make check-sources  every .c under src/ is declared by the native build
 #   make check-cc3tab  every table indexed by generated/opcode.h, vs opcode.h
+#   make check-libc   the C library's own answers, run on the target libc
 #   make check-selfhost  the byte-identity fixed point: the TARGET-built passes
 #                   reproduce this compiler's objects exactly, all 86 of them
 #   make env        stage a compiler environment for a guest (docs/ENVIRONMENTS.md)
@@ -26,7 +27,7 @@ SHELL = /bin/sh
 .PHONY: all cc as ld check check-isa check-cc3tab check-mi check-shims check-sources \
 	check-paths \
 	mi-baseline mi-table \
-	check-selfhost check-native check-tools \
+	check-selfhost check-native check-tools check-libc \
 	deps os-fallback env-fallback clean env env-ours env-inherited env-mwc1985 \
 	libc libm libmisc selfhost native help
 
@@ -79,7 +80,7 @@ ld: as
 #
 # tests/ld-commons.sh is here because it needs neither: .comm states the sizes,
 # so as and ld alone build the case.
-check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked
+check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
@@ -105,6 +106,14 @@ check-effdiff:
 # than effdiff's; this target prints that number too.
 check-effdiff-linked:
 	sh tests/effdiff-linked.sh --selftest
+
+# The C library's own answers, as a PROGRAM on the machine gets them.  notmem()
+# decides whether a pointer may be freed, so it is asked of the libc-z8001.a a
+# target program links against rather than of a host build of the same source;
+# libc is built from src/ (host/coherent-os.sh), so this needs no OS tree and
+# nothing beyond the emulator `check' already requires.
+check-libc: libc
+	sh tests/notmem.sh
 
 # What each program is MADE OF, declared once by the build that runs on the
 # C900 and read by every cross-build (host/srcman.sh).  The build scripts assert
