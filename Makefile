@@ -76,10 +76,14 @@ ld: as
 # here: both link through ccz against libc-z8001, so they need an OS tree, and
 # segexec reads the entry segment with loutdis, which is not in this
 # repository.  They belong wherever check-selfhost lives, not in `check'.
+#
+# tests/ld-commons.sh is here because it needs neither: .comm states the sizes,
+# so as and ld alone build the case.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
+	sh tests/ld-commons.sh
 	sh tests/regclob.sh
 	sh tests/asbytes.sh
 	sh tests/float-e2e.sh

@@ -30,7 +30,6 @@ char	*argv[];
 	int	i, segn;
 	unsigned int	symno;
 	fsize_t	daddr;
-	uaddr_t	addr;
 
 	scanargs(argc, argv);
 	if (machine == 0)
@@ -67,6 +66,48 @@ char	*argv[];
 	else
 		base = userbase[machine];
 	baseall(oseg, &oldh);
+
+	/*
+	 * Give each common its final BSSD-relative offset, padding one that
+	 * would straddle a hardware segment boundary up to the start of the
+	 * next segment.  A Z8001 seg:offset address cannot reach across a
+	 * 64Kb segment -- the 16-bit offset wraps inside it -- so the tail of
+	 * a straddling object aliases the bottom of its own segment.  Module
+	 * segments are padded the same way in lfixup1().  The iteration order
+	 * matches the fixup loop below, so a layout with no straddling common
+	 * is laid out exactly as it is without the padding.  The addresses
+	 * stored here are segment-relative; the loop's defined-symbol branch
+	 * adds the BSSD base.  This runs before endbind() so that `end_' and
+	 * the header's BSSD size account for the padding.
+	 */
+	if (dcomm && commons!=0) {
+		uaddr_t cur, csize, cmax, cmax1;
+
+		cmax = segmax[machine];
+		cmax1 = cmax-1;
+		cur = oseg[L_BSSD].vbase + oseg[L_BSSD].size - commons;
+		for (i=0; i<NHASH; i++) {
+			for (sp=symtable[i]; sp!=NULL; sp=sp->next) {
+				if (sp->s.ls_type!=(L_GLOBAL|L_REF)
+				 || sp->s.ls_addr==0)
+					continue;
+				csize = (uaddr_t)sp->s.ls_addr;
+				if (cmax!=0) {
+					if (csize > cmax)
+						sperr(sp,
+						 "common larger than a segment");
+					else if (((cur&cmax1)+csize) > cmax) {
+						oseg[L_BSSD].size +=
+							cmax - (cur&cmax1);
+						cur = (cur+cmax1) & ~cmax1;
+					}
+				}
+				sp->s.ls_addr = cur - oseg[L_BSSD].vbase;
+				sp->s.ls_type = L_GLOBAL|L_BSSD;
+				cur += csize;
+			}
+		}
+	}
 
 	ofp = setoutput();
 	/*
@@ -141,14 +182,6 @@ char	*argv[];
 				 */
 				if (!reloc && !isbuiltin(sp))
 					sperr(sp, "undefined");
-			} else if (dcomm) {
-				/* define commons */
-				addr = sp->s.ls_addr;
-				sp->s.ls_addr = oseg[L_BSSD].vbase
-						+oseg[L_BSSD].size
-						-commons;
-				commons -= addr;
-				sp->s.ls_type = L_GLOBAL|L_BSSD;
 			}
 			/* assign symbol number */
 			sp->symno = symno++;
