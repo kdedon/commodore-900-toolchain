@@ -1168,11 +1168,26 @@ int		blkval;
 	TREE		*prebind, *predst;
 	int		nptdt;
 
-	nptdt = SPTR;
-#if !ONLYSMALL
-	if (isvariant(VLARGE))
-		nptdt = LPTR;
-#endif
+	/*
+	 * The block-move address type is NOT the general VLARGE/VSMALL pointer
+	 * model: blkmv.t's BLKMOVE rule (the Z8001 LDIRB) is the compiler's
+	 * only aggregate-copy instruction and it is LPTX/PAIR only -- there is
+	 * no near/SPTR selection rule for it anywhere, because LDIRB always
+	 * takes its dst/src addresses as full segment:offset register PAIRs.
+	 * Under a variant that leaves VLARGE unset (e.g. VTPA, whose ordinary
+	 * pointers are the 16-bit TPA-segment offset), nptdt used to fall back
+	 * to SPTR here and selection had no match for it ("no match": EDFA75).
+	 * Always materialize the far PAIR: bind.c's mytypes[T_PTR] already
+	 * defaults to LPTR whenever VSMALL is unset (the general C pointer
+	 * model this local nptdt was inconsistent with).
+	 * NOTE: an aggregate whose ADDRESS side is itself a local/auto
+	 * variable can still fail selection under VTPA -- `pp = &local;'
+	 * alone (no BLKMOVE, no struct assignment) hits the same "no match"
+	 * via the LSS/LPTX rule in leaves.t.  That is a separate, deeper
+	 * defect in materializing a far address for a stack-frame-relative
+	 * local under this variant; this change does not touch it.
+	 */
+	nptdt = LPTR;
 	if (s <= 0) {
 		/*
 		 * An aggregate of no bytes.  There is nothing to copy, and a
