@@ -1,0 +1,359 @@
+COHERENT.1/_23	#	String-ize operator
+COHERENT.1/_2323	##	Token-pasting operator
+COHERENT.1/_23define	#define	Define an identifier as a macro
+COHERENT.1/_23elif	#elif	Include code conditionally
+COHERENT.1/_23else	#else	Include code conditionally
+COHERENT.1/_23endif	#endif	End conditional inclusion of code
+COHERENT.1/_23if	#if	Include code conditionally
+COHERENT.1/_23ifdef	#ifdef	Include code conditionally
+COHERENT.1/_23ifndef	#ifndef	Include code conditionally
+COHERENT.1/_23include	#include	Read another file and include it
+COHERENT.1/_23line	#line	Reset line number
+COHERENT.1/_23pragma	#pragma	Perform implementation-specific preprocessing
+COHERENT.1/_23undef	#undef	Undefine a macro
+COHERENT.1/_5Fexit	_exit()	Terminate a program
+COHERENT.1/_5Fgetwd	_getwd()	Get current working directory name
+COHERENT.1/_5Ftolower	_tolower()	Convert characters to lower case
+COHERENT.1/_5Ftoupper	_toupper()	Convert characters to upper case
+COHERENT.1/abort	abort()	End program immediately
+COHERENT.1/abs	abs()	Return the absolute value of an integer
+COHERENT.1/access	access()	Check if a file can be accessed in a given mode
+COHERENT.1/acct	acct()	Enable/disable process accounting
+COHERENT.1/alarm	alarm()	Set a timer
+COHERENT.1/alloca	alloca()	Dynamically allocate space on the stack
+COHERENT.1/argc	argc	Argument passed to main()
+COHERENT.1/argv	argv	Argument passed to main()
+COHERENT.1/asctime	asctime()	Convert time structure to ASCII string
+COHERENT.1/assert	assert()	Check assertion at run time
+COHERENT.1/atexit	atexit()	Register a function to be called when the program exits
+COHERENT.1/atof	atof()	Convert ASCII strings to floating point
+COHERENT.1/atoi	atoi()	Convert ASCII strings to integers
+COHERENT.1/atol	atol()	Convert ASCII strings to long integers
+COHERENT.1/auto	auto	Note an automatic variable
+COHERENT.1/break.k	break	Exit from loop or switch statement
+COHERENT.1/brk	brk()	Change size of data area
+COHERENT.1/bsearch	bsearch()	Search an array
+COHERENT.1/calloc	calloc()	Allocate dynamic memory
+COHERENT.1/case.k	case	Introduce entry in switch statement
+COHERENT.1/cc0	cc0	Definition
+COHERENT.1/cc1	cc1	Definition
+COHERENT.1/cc2	cc2	Definition
+COHERENT.1/char	char	Data type
+COHERENT.1/chdir	chdir()	Change working directory
+COHERENT.1/chmod.s	chmod()	Change file-protection modes
+COHERENT.1/chown.s	chown()	Change ownership of a file
+COHERENT.1/chroot.s	chroot()	Change the root directory
+COHERENT.1/chsize	chsize()	Change the size of a file
+COHERENT.1/clearerr	clearerr()	Present stream status
+COHERENT.1/clock.l	clock()	Get processor time
+COHERENT.1/close	close()	Close a file
+COHERENT.1/closedir	closedir()	Close a directory stream
+COHERENT.1/coffnlist	coffnlist()	Symbol table lookup, COFF format
+COHERENT.1/const	const	Qualify an identifier as not modifiable
+COHERENT.1/continue.k	continue	Force next iteration of a loop
+COHERENT.1/creat	creat()	Create/truncate a file
+COHERENT.1/crypt.g	crypt()	Encryption using rotor algorithm
+COHERENT.1/ctime	ctime()	Convert system time to an ASCII string
+COHERENT.1/decvax_d	decvax_d()	Convert a double from IEEE to DECVAX format
+COHERENT.1/decvax_f	decvax_f()	Convert a float from IEEE to DECVAX format
+COHERENT.1/default	default	Default label in switch statement
+COHERENT.1/defined	defined	Perform an action if a macro is defined
+COHERENT.1/difftime	difftime()	Calculate difference between two times
+COHERENT.1/div	div()	Perform integer division
+COHERENT.1/do	do	Introduce a loop
+COHERENT.1/double	double	Data type
+COHERENT.1/dup	dup()	Duplicate a file descriptor
+COHERENT.1/dup2	dup2()	Duplicate a file descriptor
+COHERENT.1/ecvt	ecvt()	Convert floating-point numbers to strings
+COHERENT.1/else	else	Introduce a conditional statement
+COHERENT.1/endgrent	endgrent()	Close group file
+COHERENT.1/endpwent	endpwent()	Close password file
+COHERENT.1/enum	enum	Declare a type and identifiers
+COHERENT.1/environ	environ	Process environment
+COHERENT.1/envp	envp	Argument passed to main()
+COHERENT.1/execl	execl()	Execute a load module
+COHERENT.1/execle	execle()	Execute a load module
+COHERENT.1/execlp	execlp()	Execute a load module
+COHERENT.1/execlpe	execlpe()	Execute a load module
+COHERENT.1/execv	execv()	Execute a load module
+COHERENT.1/execve	execve()	Execute a load module
+COHERENT.1/execvp	execvp()	Execute a load module
+COHERENT.1/execvpe	execvpe()	Execute a load module
+COHERENT.1/exit.s	exit()	Terminate a program gracefully
+COHERENT.1/extern	extern	Declare storage class
+COHERENT.1/fclose	fclose()	Close a stream
+COHERENT.1/fcntl	fcntl()	Control open files
+COHERENT.1/fcvt	fcvt()	Convert floating-point numbers to strings
+COHERENT.1/fdopen	fdopen()	Open a stream for standard I/O
+COHERENT.1/feof	feof()	Discover stream status
+COHERENT.1/ferror	ferror()	Discover stream status
+COHERENT.1/fflush	fflush()	Flush output stream's buffer
+COHERENT.1/fgetc	fgetc()	Read character from stream
+COHERENT.1/fgetpos	fgetpos()	Get value of file-position indicator
+COHERENT.1/fgets	fgets()	Read line from stream
+COHERENT.1/fgetw	fgetw()	Read integer from stream
+COHERENT.1/fileno	fileno()	Get file descriptor
+COHERENT.1/float	float	Data type
+COHERENT.1/fnmatch	fnmatch()	Match a string with a normal expression
+COHERENT.1/fopen	fopen()	Open a stream for standard I/O
+COHERENT.1/for.k	for	Control a loop
+COHERENT.1/fork	fork()	Create a new process
+COHERENT.1/fpathconf	fpathconf()	Get a file variable by file descriptor
+COHERENT.1/fprintf	fprintf()	Print formatted output into file stream
+COHERENT.1/fputc	fputc()	Write character into file stream
+COHERENT.1/fputs	fputs()	Write string into file stream
+COHERENT.1/fputw	fputw()	Write an integer into a stream
+COHERENT.1/fread	fread()	Read data from file stream
+COHERENT.1/free	free()	Return dynamic memory to free memory pool
+COHERENT.1/freopen	freopen()	Open file stream for standard I/O
+COHERENT.1/frexp	frexp()	Separate fraction and exponent
+COHERENT.1/fscanf	fscanf()	Format input from a file stream
+COHERENT.1/fseek	fseek()	Seek on file stream
+COHERENT.1/fsetpos	fsetpos()	Set file-position indicator
+COHERENT.1/fstat	fstat()	Find file attributes
+COHERENT.1/fstatfs	fstatfs()	Get information about a file system
+COHERENT.1/ftell	ftell()	Return current position of file pointer
+COHERENT.1/ftime	ftime()	Get the current time from the operating system
+COHERENT.1/ftok	ftok()	Generate keys for interprocess communication
+COHERENT.1/fwrite	fwrite()	Write into file stream
+COHERENT.1/gcvt	gcvt()	Convert floating-point numbers to strings
+COHERENT.1/getc	getc()	Read character from file stream
+COHERENT.1/getchar	getchar()	Read character from standard input
+COHERENT.1/getcwd	getcwd()	Get current working directory name
+COHERENT.1/getdents	getdents()	Read directory entries
+COHERENT.1/getegid	getegid()	Get effective group identifier
+COHERENT.1/getenv	getenv()	Read environmental variable
+COHERENT.1/geteuid	geteuid()	Get effective user identifier
+COHERENT.1/getgid	getgid()	Get real group identifier
+COHERENT.1/getgrent	getgrent()	Get group file information
+COHERENT.1/getgrgid	getgrgid()	Get group file information, by group id
+COHERENT.1/getgrnam	getgrnam()	Get group file information, by group name
+COHERENT.1/getgroups	getgroups()	Read the supplemental group-access list
+COHERENT.1/getlogin	getlogin()	Get login name
+COHERENT.1/getmsg	getmsg()	Get the next message from a stream
+COHERENT.1/getopt	getopt()	Get option letter from argv
+COHERENT.1/getpass	getpass()	Get password with prompting
+COHERENT.1/getpgrp	getpgrp()	Get process-group identifier
+COHERENT.1/getpid	getpid()	Get process identifier
+COHERENT.1/getppid	getppid()	Get process identifier of parent process
+COHERENT.1/getpw	getpw()	Search password file
+COHERENT.1/getpwent	getpwent()	Get password file information
+COHERENT.1/getpwnam	getpwnam()	Get password file information, by name
+COHERENT.1/getpwuid	getpwuid()	Get password file information, by id
+COHERENT.1/gets	gets()	Read string from standard input
+COHERENT.1/getuid	getuid()	Get real user identifier
+COHERENT.1/getw	getw()	Read word from file stream
+COHERENT.1/gmtime	gmtime()	Convert system time to calendar structure
+COHERENT.1/goto	goto	Unconditionally jump within a function
+COHERENT.1/gtty	gtty()	Device-dependent control
+COHERENT.1/ieee_d	ieee_d()	Convert a double from DECVAX to IEEE format
+COHERENT.1/ieee_f	ieee_f()	Convert a float from DECVAX to IEEE format
+COHERENT.1/if.k	if	Introduce a conditional statement
+COHERENT.1/index	index()	Find a character in a string
+COHERENT.1/initgroups	initgroups()	Initialize the supplementary group-access list
+COHERENT.1/int	int	Data type
+COHERENT.1/ioctl	ioctl()	Device-dependent control
+COHERENT.1/isalnum	isalnum()	Check if a character is a number or letter
+COHERENT.1/isalpha	isalpha()	Check if a character is a letter
+COHERENT.1/isascii	isascii()	Check if a character is an ASCII character
+COHERENT.1/isatty	isatty()	Check if a device is a terminal
+COHERENT.1/iscntrl	iscntrl()	Check if a character is a control character
+COHERENT.1/isdigit	isdigit()	Check if a character is a numeral
+COHERENT.1/isgraph	isgraph()	Check if a character is printable
+COHERENT.1/islower	islower()	Check if a character is a lower-case letter
+COHERENT.1/isprint	isprint()	Check if a character is printable
+COHERENT.1/ispunct	ispunct()	Check if a character is a punctuation mark
+COHERENT.1/isspace	isspace()	Check if a character prints white space
+COHERENT.1/isupper	isupper()	Check if a character is an upper-case letter
+COHERENT.1/isxdigit	isxdigit()	Check if a character is a hexadecimal numeral
+COHERENT.1/kill.s	kill()	Kill a system process
+COHERENT.1/l3tol	l3tol()	Convert file system block number to long integer
+COHERENT.1/ldexp	ldexp()	Combine fraction and exponent
+COHERENT.1/ldiv	ldiv()	Perform long integer division
+COHERENT.1/link	link()	Create a link
+COHERENT.1/localtime	localtime()	Convert system time to calendar structure
+COHERENT.1/lockf	lockf()	Lock a file or a section of a file
+COHERENT.1/long	long	Data type
+COHERENT.1/longjmp	longjmp()	Perform a non-local goto
+COHERENT.1/lseek	lseek()	Set read/write position
+COHERENT.1/ltol3	ltol3()	Convert long integer to file system block number
+COHERENT.2/main	main()	Introduce program's main function
+COHERENT.2/malloc	malloc()	Allocate dynamic memory
+COHERENT.2/memccpy	memccpy()	Copy a region of memory up to a set character
+COHERENT.2/memchr	memchr()	Search a region of memory for a character
+COHERENT.2/memcmp	memcmp()	Compare two regions
+COHERENT.2/memcpy	memcpy()	Copy one region of memory into another
+COHERENT.2/memmove	memmove()	Copy region of memory into area it overlaps
+COHERENT.2/memok	memok()	Test if the arena is corrupted
+COHERENT.2/memset	memset()	Fill an area with a character
+COHERENT.2/mkdir.s	mkdir()	Create a directory
+COHERENT.2/mkfifo	mkfifo()	Create a FIFO
+COHERENT.2/mknod.s	mknod()	Create a special file
+COHERENT.2/mktemp	mktemp()	Generate a temporary file name
+COHERENT.2/mktime	mktime()	Turn broken-down time into calendar time
+COHERENT.2/modf	modf()	Separate integral part and fraction
+COHERENT.2/mount	mount()	Mount a file system
+COHERENT.2/msgctl	msgctl()	Message control operations
+COHERENT.2/msgget	msgget()	Create or get a message queue
+COHERENT.2/msgrcv	msgrcv()	Receive a message
+COHERENT.2/msgsnd	msgsnd()	Send a message
+COHERENT.2/mtype	mtype()	Return symbolic machine type
+COHERENT.2/namespace	name space	C name-space rules
+COHERENT.2/nap	nap()	Sleep briefly
+COHERENT.2/notmem	notmem()	Check whether memory is allocated
+COHERENT.2/open	open()	Open a file
+COHERENT.2/opendir	opendir()	Open a directory stream
+COHERENT.2/path	path()	Path name for a file
+COHERENT.2/pathconf	pathconf()	Get a file variable by path name
+COHERENT.2/pause	pause()	Wait for signal
+COHERENT.2/pclose	pclose()	Close a pipe
+COHERENT.2/perror	perror()	System call error messages
+COHERENT.2/pipe.s	pipe()	Open a pipe
+COHERENT.2/pnmatch	pnmatch()	Match string pattern
+COHERENT.2/pointer	pointer	C Language
+COHERENT.2/poll	poll()	Query several I/O devices
+COHERENT.2/popen	popen()	Open a pipe
+COHERENT.2/printf	printf()	Print formatted text
+COHERENT.2/ptrace	ptrace()	Trace process execution
+COHERENT.2/putc	putc()	Write character into stream
+COHERENT.2/putchar	putchar()	Write a character onto the standard output
+COHERENT.2/putenv	putenv()	Add a string to the environment
+COHERENT.2/putmsg	putmsg()	Place a message onto a stream
+COHERENT.2/puts	puts()	Write string onto standard output
+COHERENT.2/putw	putw()	Write word into stream
+COHERENT.2/qsort	qsort()	Sort arrays in memory
+COHERENT.2/raise	raise()	Let a process send a signal to itself
+COHERENT.2/rand	rand()	Generate pseudo-random numbers
+COHERENT.2/read.s	read()	Read from a file
+COHERENT.2/readdir	readdir()	Read a directory stream
+COHERENT.2/readonly.k	readonly	Storage class
+COHERENT.2/realloc	realloc()	Reallocate dynamic memory
+COHERENT.2/register	register	Storage class
+COHERENT.2/remove	remove()	Remove a file
+COHERENT.2/rename	rename()	Rename a file
+COHERENT.2/return	return	Return a value and control to calling function
+COHERENT.2/rewind	rewind()	Reset file pointer
+COHERENT.2/rewinddir	rewinddir()	Rewind a directory stream
+COHERENT.2/rindex	rindex()	Find rightmost occurrence of a character in a string
+COHERENT.2/rmdir.s	rmdir()	Remove a directory
+COHERENT.2/sbrk	sbrk()	Increase a program's data space
+COHERENT.2/scanf	scanf()	Accept and format input
+COHERENT.2/seekdir	seekdir()	Reset the position within a directory stream
+COHERENT.2/semctl	semctl()	Control semaphore operations
+COHERENT.2/semget	semget()	Create or get a set of semaphores
+COHERENT.2/semop	semop()	Perform semaphore operations
+COHERENT.2/setbuf	setbuf()	Set alternative stream buffer
+COHERENT.2/setgid	setgid()	Set group id and user id
+COHERENT.2/setgrent	setgrent()	Rewind group file
+COHERENT.2/setgroups	setgroups()	Set the supplemental group-access list
+COHERENT.2/setjmp	setjmp()	Save machine state for non-local goto
+COHERENT.2/setpgid	setpgid()	Set the process-group identifier
+COHERENT.2/setpgrp	setpgrp()	Make a process a process-group leader
+COHERENT.2/setpwent	setpwent()	Rewind password file
+COHERENT.2/setsid	setsid()	Set session identifier
+COHERENT.2/setuid	setuid()	Set user identifier
+COHERENT.2/setvbuf	setvbuf()	Set alternative file-stream buffer
+COHERENT.2/shellsort	shellsort()	Sort arrays in memory
+COHERENT.2/shmat	shmat()	Attach a shared-memory segment to a process
+COHERENT.2/shmctl	shmctl()	Manipulate shared memory
+COHERENT.2/shmdt	shmdt()	Detach a shared-memory segment from a process
+COHERENT.2/shmget	shmget()	Create or get shared-memory segment
+COHERENT.2/short	short	Data type
+COHERENT.2/sigaction	sigaction()	Perform detailed signal management
+COHERENT.2/sighold	sighold()	Place a signal on hold
+COHERENT.2/sigignore	sigignore()	Tell the system to ignore a signal
+COHERENT.2/siglongjmp	siglongjmp()	Perform a non-local goto and restore signal mask
+COHERENT.2/signal	signal()	Specify action to take upon receipt of a given signal
+COHERENT.2/sigpause	sigpause()	Pause until a given signal is received
+COHERENT.2/sigpending	sigpending()	Examine signals that are blocked and pending
+COHERENT.2/sigprocmask	sigprocmask()	Examine or change the signal mask
+COHERENT.2/sigrelse	sigrelse()	Release a signal for processing
+COHERENT.2/sigset	sigset()	Specify action to take upon receipt of a given signal
+COHERENT.2/sigsetjmp	sigsetjmp()	Save machine state and signal mask for non-local jump
+COHERENT.2/sigsuspend	sigsuspend()	Install a signal mask and suspend process
+COHERENT.2/sizeof	sizeof	Return size of a data element
+COHERENT.2/sleep.s	sleep()	Suspend execution for interval
+COHERENT.2/sprintf	sprintf()	Format output
+COHERENT.2/srand	srand()	Seed random number generator
+COHERENT.2/sscanf	sscanf()	Format a string
+COHERENT.2/statfs	statfs()	Get information about a file system
+COHERENT.2/static	static	Declare storage class
+COHERENT.2/stime	stime()	Set the time
+COHERENT.2/strcat	strcat()	Concatenate two strings
+COHERENT.2/strchr	strchr()	Find a character in a string
+COHERENT.2/strcmp	strcmp()	Compare two strings
+COHERENT.2/strcoll	strcoll()	Compare two strings, using locale-specific information
+COHERENT.2/strcpy	strcpy()	Copy one string into another
+COHERENT.2/strcspn	strcspn()	Return length a string excludes characters in another
+COHERENT.2/strdup	strdup()	Duplicate a string
+COHERENT.2/strerror	strerror()	Translate an error number into a string
+COHERENT.2/strftime	strftime()	Format locale-specific time
+COHERENT.2/strlen	strlen()	Measure a string
+COHERENT.2/strncat	strncat()	Append one string onto another
+COHERENT.2/strncmp	strncmp()	Compare two strings
+COHERENT.2/strncpy	strncpy()	Copy one string into another
+COHERENT.2/strpbrk	strpbrk()	Find first occurrence of a character from another string
+COHERENT.2/strrchr	strrchr()	Search for rightmost occurrence of a character in a string
+COHERENT.2/strspn	strspn()	Return length a string includes characters in another
+COHERENT.2/strstr	strstr()	Find one string within another
+COHERENT.2/strtod	strtod()	Convert string to floating-point number
+COHERENT.2/strtok	strtok()	Break a string into tokens
+COHERENT.2/strtol	strtol()	Convert string to long integer
+COHERENT.2/strtoul	strtoul()	Convert string to unsigned long integer
+COHERENT.2/struct	struct	Data type
+COHERENT.2/strxfrm	strxfrm()	Transform a string
+COHERENT.2/stty.s	stty()	Set terminal modes
+COHERENT.2/swab	swab()	Swap a pair of bytes
+COHERENT.2/switch	switch	Test a variable against a table
+COHERENT.2/sync.s	sync()	Flush system buffers
+COHERENT.2/sysconf	sysconf()	Get configurable system variables
+COHERENT.2/sysi86	sysi86()	Identify parts within Intel-based machines
+COHERENT.2/system	system()	Pass a command to the shell for execution
+COHERENT.2/telldir	telldir()	Return the current position within a directory stream
+COHERENT.2/tempnam	tempnam()	Generate a unique name for a temporary file
+COHERENT.2/time.s	time()	Get current system time
+COHERENT.2/times.s	times()	Obtain process execution times
+COHERENT.2/tmpfile	tmpfile()	Create a temporary file
+COHERENT.2/tmpnam	tmpnam()	Generate a unique name for a temporary file
+COHERENT.2/toascii	toascii()	Convert characters to ASCII
+COHERENT.2/tolower	tolower()	Convert characters to lower case
+COHERENT.2/toupper	toupper()	Convert characters to upper case
+COHERENT.2/trigraph	trigraph	C Language
+COHERENT.2/ttyname	ttyname()	Identify a terminal
+COHERENT.2/ttyslot	ttyslot()	Return a terminal's line number
+COHERENT.2/typedef	typedef	Define a new data type
+COHERENT.2/tzset	tzset()	Set local time zone
+COHERENT.2/ulimit	ulimit()	Get/set limits for a process
+COHERENT.2/umask.s	umask()	Set file-creation mask
+COHERENT.2/umount.s	umount()	Unmount a file system
+COHERENT.2/uname	uname()	Get the name and version of COHERENT
+COHERENT.2/ungetc	ungetc()	Return character to input stream
+COHERENT.2/union	union	Multiply declare a variable
+COHERENT.2/unlink	unlink()	Remove a file
+COHERENT.2/unsigned	unsigned	Data type
+COHERENT.2/ustat	ustat()	Get statistics on a file system
+COHERENT.2/utime	utime()	Change file access and modification times
+COHERENT.2/va_arg	va_arg()	Return pointer to next argument in argument list
+COHERENT.2/va_end	va_end()	Tidy up after traversal of argument list
+COHERENT.2/va_start	va_start()	Point to beginning of argument list
+COHERENT.2/vfprintf	vfprintf()	Print formatted text into stream
+COHERENT.2/void	void	Data type
+COHERENT.2/volatile	volatile	Qualify an identifier as frequently changing
+COHERENT.2/vprintf	vprintf()	Print formatted text into standard output stream
+COHERENT.2/vsprintf	vsprintf()	Print formatted text into string
+COHERENT.2/wait.s	wait()	Await completion of a child process
+COHERENT.2/waitpid	waitpid()	Wait for a process to terminate
+COHERENT.2/while.k	while	Introduce a loop
+COHERENT.2/write.s	write()	Write to a file
+COHERENT.1/canshort	canshort	Convert a short to canonical format
+COHERENT.1/canint	canint	Convert an int to canonical format
+COHERENT.1/canlong	canlong	Convert a long to canonical format
+COHERENT.1/canvaddr	canvaddr	Convert a vaddr_t to canonical format
+COHERENT.1/cansize	cansize	Convert an fsize_t to canonical format
+COHERENT.1/candaddr	candaddr	Convert a daddr_t to canonical format
+COHERENT.1/cantime	cantime	Convert a time_t to canonical format
+COHERENT.1/candev	candev	Convert a dev_t to canonical format
+COHERENT.1/canino	canino	Convert an ino_t to canonical format
+COHERENT.1/end	end	extern int end[];
+COHERENT.1/etext	etext	extern int etext[];
+COHERENT.2/nlist	nlist	Symbol table lookup

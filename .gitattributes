@@ -7,3 +7,9 @@
 # examined for line endings.
 vendor/mwc-1985/* binary
 vendor/mwc-1985/SOURCES.md text eol=lf
+
+# The Lexicon articles under man/ are third-party documents, rendered in 1994
+# and staged verbatim.  They carry backspace overstrike and half-line motions,
+# and they are not this repository's text to normalise.
+man/COHERENT.1/** -text
+man/COHERENT.2/** -text
