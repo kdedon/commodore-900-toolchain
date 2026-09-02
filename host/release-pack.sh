@@ -166,6 +166,16 @@ cp "$ROOT/LICENSE" "$ROOT/README.md" "$A/"
 # the checkout spells them, so a consumer staging a manual reads man/man.index
 # and man/COHERENT.[12] from an unpacked release exactly as from a checkout.
 cp -r "$ROOT/man" "$A/man"
+# tools/lout2cpm/: SOURCE, not a binary.  commodore-900-cpm's makefile compiles
+# lout2cpm.c itself from $(C900_TOOLCHAIN)/tools/lout2cpm/lout2cpm.c -- it wraps
+# a linked l.out as a CP/M x.out, so the format it writes belongs to the
+# consumer's build, not to ours, and shipping our host binary would pin the
+# consumer to our host.  Without this the DEPS contract does not close: `make
+# deps && make all' over a release alone dies at build/lout2cpm with "No rule to
+# make target .../tools/lout2cpm/lout2cpm.c", because the archive had no tools/
+# at all.  Copied at the path a checkout spells, same as man/ above.
+mkdir -p "$A/tools"
+cp -r "$ROOT/tools/lout2cpm" "$A/tools/lout2cpm"
 # Sealed below, after host/: the content id is over every file in the package,
 # and host/ adds two shims that are regular files.
 
