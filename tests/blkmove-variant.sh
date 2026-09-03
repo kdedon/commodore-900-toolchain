@@ -4,11 +4,10 @@
 # BLKMOVE is the Z8001 LDIRB, and blkmv.t states it for LPTX/PAIR operands
 # only: LDIRB always takes its dst and src as a full segment:offset PAIR, so
 # there is no near-address form of the rule to select.  modsasg() nevertheless
-# chose SPTR unless VLARGE was set, which under a variant that leaves VLARGE
-# unset -- VTPA, whose ordinary pointers are the 16-bit TPA-segment offset --
-# left selection with nothing to match and aborted cc1 with EDFA75.  The CP/M
-# tree builds every user command with VTPA (its UVAR), so a single struct
-# assignment anywhere in a command was an internal compiler error.
+# chose SPTR unless VLARGE was set, which under a variant word that sets NEITHER
+# model bit -- the CP/M tree's UVAR (VPEEP|VTPA) is one, and pointers there are
+# still the 4-byte far pair, because bind.c goes far unless VSMALL is set --
+# left selection with nothing to match and aborted cc1 with EDFA75.
 #
 # Both sizes matter: a small aggregate can be copied inline word by word, so
 # only the large one is certain to reach the BLKMOVE rule at all.

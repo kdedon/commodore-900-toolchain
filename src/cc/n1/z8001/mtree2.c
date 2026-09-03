@@ -461,15 +461,20 @@ TREE		*ptp;
 	if (isleaf(op)) {
 		if (op==AID || op==PID) {
 			/* auto/param -> *(FP + offset); FP = R13 for both models. The
-			 * i8086 split BP (near) vs SSBP (stack-seg far); Z8001 has one FP. */
-			ntype = SPTR;
+			 * i8086 split BP (near) vs SSBP (stack-seg far); Z8001 has one FP.
+			 *
+			 * The frame address type is the MODEL's pointer type, and the
+			 * model is "near only when VSMALL is set" -- iptrtype(), which
+			 * is what bind.c's mytypes[T_PTR] and altemp.c's stack
+			 * temporaries already say.  Asking isvariant(VLARGE) instead
+			 * disagreed with both whenever a variant word set NEITHER bit:
+			 * `pp = &local' then had a 4-byte LPTR pp and an SPTR frame
+			 * address, and the ASSIGN matched no rule ("no match": EDFA69).
+			 * The cc driver always sets one of the two bits, so only a
+			 * hand-written variant word reaches this -- the CP/M tree's
+			 * VTPA word (VPEEP|VTPA) is one. */
+			ntype = iptrtype();
 			nbase = FPREG;
-#if !ONLYSMALL
-			if (isvariant(VLARGE)) {
-				ntype = LPTR;
-				nbase = FPREG;
-			}
-#endif
 			o = tp->t_offs;
 			tp->t_op = STAR;
 			tp->t_rp = NULL;
@@ -1174,18 +1179,12 @@ int		blkval;
 	 * only aggregate-copy instruction and it is LPTX/PAIR only -- there is
 	 * no near/SPTR selection rule for it anywhere, because LDIRB always
 	 * takes its dst/src addresses as full segment:offset register PAIRs.
-	 * Under a variant that leaves VLARGE unset (e.g. VTPA, whose ordinary
-	 * pointers are the 16-bit TPA-segment offset), nptdt used to fall back
-	 * to SPTR here and selection had no match for it ("no match": EDFA75).
+	 * Under a variant word that sets NEITHER model bit (the CP/M tree's
+	 * VTPA word is one), nptdt used to fall back to SPTR here and
+	 * selection had no match for it ("no match": EDFA75).
 	 * Always materialize the far PAIR: bind.c's mytypes[T_PTR] already
 	 * defaults to LPTR whenever VSMALL is unset (the general C pointer
 	 * model this local nptdt was inconsistent with).
-	 * NOTE: an aggregate whose ADDRESS side is itself a local/auto
-	 * variable can still fail selection under VTPA -- `pp = &local;'
-	 * alone (no BLKMOVE, no struct assignment) hits the same "no match"
-	 * via the LSS/LPTX rule in leaves.t.  That is a separate, deeper
-	 * defect in materializing a far address for a stack-frame-relative
-	 * local under this variant; this change does not touch it.
 	 */
 	nptdt = LPTR;
 	if (s <= 0) {
