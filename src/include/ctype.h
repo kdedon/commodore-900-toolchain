@@ -40,10 +40,14 @@ extern	int	_toupper(/* int c */);
 
 /*
  * Type table and bit classifications.
- * Table indices: 0==EOF, 1==NUL, ..., 128==DEL, 129==0x80, ..., 256==0xFF.
- * Indices 0 and 129 to 256 are nonASCII characters.
+ * The table is indexed by (c)+129, so every value a char or an int can
+ * carry lands inside it: -128 to -1 map to indices 1 to 128, and 0 to 255
+ * map to indices 129 to 384.  Indices 0 to 128 classify as nothing, which
+ * is how EOF (-1, index 128) and a sign-extended high-bit byte both answer
+ * false to every is*() test.
+ * ASCII indices: 129==NUL, ..., 256==DEL, 257==0x80, ..., 384==0xFF.
  */
-#define	_CTYPEN	257			/* Table size			*/
+#define	_CTYPEN	385			/* Table size			*/
 extern	unsigned char _ctype[_CTYPEN];	/* Type table			*/
 #define	_U	0x01			/* Upper case alphabetic	*/
 #define	_L	0x02			/* Lower case alphabetic	*/
@@ -56,17 +60,17 @@ extern	unsigned char _ctype[_CTYPEN];	/* Type table			*/
 #define	_X	0x80			/* Hexadecimal digit		*/
 
 /* Macros covering ANSI Standard functions. */
-#define	isalnum(c)	(_ctype[(c)+1]&(_A|_N))
-#define	isalpha(c)	(_ctype[(c)+1]&_A)
-#define	iscntrl(c)	(_ctype[(c)+1]&_C)
-#define	isdigit(c)	(_ctype[(c)+1]&_N)
-#define	isgraph(c)	(_ctype[(c)+1]&(_P|_A|_N))
-#define	islower(c)	(_ctype[(c)+1]&_L)
-#define	isprint(c)	(_ctype[(c)+1]&(_P|_B|_A|_N))
-#define	ispunct(c)	(_ctype[(c)+1]&_P)
-#define	isspace(c)	(_ctype[(c)+1]&_S)
-#define	isupper(c)	(_ctype[(c)+1]&_U)
-#define	isxdigit(c)	(_ctype[(c)+1]&_X)
+#define	isalnum(c)	(_ctype[(c)+129]&(_A|_N))
+#define	isalpha(c)	(_ctype[(c)+129]&_A)
+#define	iscntrl(c)	(_ctype[(c)+129]&_C)
+#define	isdigit(c)	(_ctype[(c)+129]&_N)
+#define	isgraph(c)	(_ctype[(c)+129]&(_P|_A|_N))
+#define	islower(c)	(_ctype[(c)+129]&_L)
+#define	isprint(c)	(_ctype[(c)+129]&(_P|_B|_A|_N))
+#define	ispunct(c)	(_ctype[(c)+129]&_P)
+#define	isspace(c)	(_ctype[(c)+129]&_S)
+#define	isupper(c)	(_ctype[(c)+129]&_U)
+#define	isxdigit(c)	(_ctype[(c)+129]&_X)
 
 /* Macros covering non-ANSI Standard functions. */
 #define	isascii(c)	(((c)&0x80)==0)

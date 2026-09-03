@@ -5,13 +5,32 @@
 /*
  * Character types table
  * for the ASCII character set.
- * _ctype[0] is for EOF, the rest if indexed
- * by the ascii values of the characters.
+ * The table is indexed by (c)+129.  The 129 leading entries classify as
+ * nothing and cover every negative value a char or an int can hold, EOF
+ * (-1) among them at index 128; the 256 entries after them are indexed by
+ * the ASCII values of the characters.
  */
 
 #include <ctype.h>
 
-unsigned char	_ctype[] = {
+unsigned char	_ctype[_CTYPEN] = {
+	/* -128 to -2: no classification */
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
 	0,	/* EOF */
 	_C, _C, _C, _C, _C, _C, _C, _C,
 	_C, _S|_C, _S|_C, _S|_C, _S|_C, _S|_C, _C, _C,
@@ -39,4 +58,21 @@ unsigned char	_ctype[] = {
 	_L, _L, _L, _L, _L, _L, _L, _L,
 	_L, _L, _L, _L, _L, _L, _L, _L,
 	_L, _L, _L, _P, _P, _P, _P, _C,
+	/* 0x80 to 0xFF: no classification */
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0,
 };
