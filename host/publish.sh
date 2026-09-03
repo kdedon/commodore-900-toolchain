@@ -29,9 +29,20 @@ mkdir -p "$BUILD"
 stage_at() {	# stage_at <path> -- print an empty private directory for <path>
 	# Leftovers: a run killed before it could clean up, or the loser of two
 	# publishes racing to swing the same name.  Anything from today may
-	# belong to a build running right now, so only yesterday's go.
-	find "$BUILD" "${1%/*}" -maxdepth 1 -mtime +0 -name '*.[0-9][0-9]*' \
-	     -exec rm -rf {} + 2>/dev/null || true
+	# belong to a build running right now, so only yesterday's go -- and
+	# the glob is scoped to THIS artifact's own staging names, never every
+	# name under $BUILD: an unrelated artifact simply hasn't been rebuilt
+	# today, its staging directory is not garbage, and the loser-cleanup for
+	# `as' must never reach into `native'.  The live symlink's target is
+	# skipped outright even when it is old, because old is exactly what a
+	# published artifact nobody has re-run today looks like.
+	_live=''
+	[ -L "$1" ] && _live=$(readlink "$1")
+	for _d in "${1%/*}/${1##*/}".[0-9]*; do
+		[ -e "$_d" ] || continue
+		[ "${_d##*/}" = "$_live" ] && continue
+		find "$_d" -maxdepth 0 -mtime +0 -exec rm -rf {} + 2>/dev/null
+	done
 	rm -rf "$1.$$"
 	mkdir -p "$1.$$"
 	echo "$1.$$"
