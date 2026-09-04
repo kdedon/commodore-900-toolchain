@@ -176,6 +176,21 @@ cp -r "$ROOT/man" "$A/man"
 # at all.  Copied at the path a checkout spells, same as man/ above.
 mkdir -p "$A/tools"
 cp -r "$ROOT/tools/lout2cpm" "$A/tools/lout2cpm"
+# src/libc/gen/qsort.c: SOURCE, for the same reason and by the same rule as
+# tools/lout2cpm above.  commodore-900-cpm compiles it itself, from
+# $(C900_TOOLCHAIN)/src/libc/gen/qsort.c, for its STAT command -- the object
+# has to be built by the CONSUMER's compiler and variant word, not ours, so
+# only the source can ship.  Without it `make deps && make all' over a release
+# dies at build/user/qsort.o with "No rule to make target
+# .../src/libc/gen/qsort.c", exactly as it died at build/lout2cpm before the
+# line above.  Copied at the path a checkout spells it.
+#
+# ONE FILE, not src/: this archive deliberately carries no source tree and no
+# harnesses (see host/ below), so what ships is what a consumer NAMES, the same
+# discipline as native/kobj.  qsort.c is self-contained K&R with no #include at
+# all, so the file alone is the whole of what it needs.
+mkdir -p "$A/src/libc/gen"
+cp "$ROOT/src/libc/gen/qsort.c" "$A/src/libc/gen/qsort.c"
 # Sealed below, after host/: the content id is over every file in the package,
 # and host/ adds two shims that are regular files.
 
