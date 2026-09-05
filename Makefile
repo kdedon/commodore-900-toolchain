@@ -244,6 +244,7 @@ ifeq (ours,$(CCENV))
 	sh host/build-as.sh
 	sh host/build-ld.sh
 	sh host/build-libc-z8001.sh
+	sh host/build-libm-z8001.sh
 	sh host/build-selfhost.sh
 	sh host/build-native.sh
 endif

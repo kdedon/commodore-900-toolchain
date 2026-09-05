@@ -78,6 +78,7 @@ double	cosh();
 double	exp();
 double	fabs();
 double	floor();
+double	fmod();
 double	hypot();
 double	j0();
 double	j1();

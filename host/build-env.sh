@@ -15,7 +15,7 @@
 # adjacency; see src/cc/coh/cc.c):
 #
 #	bin/	cc as ld ar		P_BIN passes
-#	lib/	cc0 cc1 cc2 crts0.o libc.a		P_LIB passes
+#	lib/	cc0 cc1 cc2 crts0.o libc.a libm.a	P_LIB passes and libraries
 #	usr/include/			system headers
 #
 # mwc1985 adds usr/sys/h and usr/sys/z8001/h for kernel builds; others do not.
@@ -95,6 +95,7 @@ env_ours() {
 	SH="$B/selfhost"
 	NAT="$B/native"
 	LIBC="$B/libc-z8001"
+	LIBM="$B/libm-z8001"
 	need "$SH/cc0"		"COHERENT_OS=... sh host/build-selfhost.sh"
 	need "$SH/cc1"		"COHERENT_OS=... sh host/build-selfhost.sh"
 	need "$SH/cc2"		"COHERENT_OS=... sh host/build-selfhost.sh"
@@ -103,6 +104,7 @@ env_ours() {
 	need "$NAT/ld"		"COHERENT_OS=... sh host/build-native.sh"
 	need "$LIBC/crt0.o"	"COHERENT_OS=... sh host/build-libc-z8001.sh"
 	need "$LIBC/libc-z8001.a" "COHERENT_OS=... sh host/build-libc-z8001.sh"
+	need "$LIBM/libm-z8001.a" "COHERENT_OS=... sh host/build-libm-z8001.sh"
 	need "$COHERENT_OS/include" "a COHERENT 3.5 source tree at \$COHERENT_OS"
 	need "$COHERENT_OS/ar/ar.c" "a COHERENT 3.5 source tree at \$COHERENT_OS"
 
@@ -118,6 +120,9 @@ env_ours() {
 	# makelib() composes "lib" + the -l name + ".a", so the default -lc
 	# resolves to libc.a and nothing else.
 	inst 644 "$LIBC/libc-z8001.a" lib/libc.a
+	# -lm resolves the same way, to libm.a: the maths library is not linked
+	# by default, so a guest program that calls sqrt() names it.
+	inst 644 "$LIBM/libm-z8001.a" lib/libm.a
 
 	# ar is an OS command, not a compiler pass, but a build that makes a
 	# library needs it and the guest this environment serves is minimal by

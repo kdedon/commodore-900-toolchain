@@ -30,7 +30,7 @@ fix, and would be a second artifact to keep in step with the first.
 ```
 host/build/env/ours/
     bin/   cc as ld ar
-    lib/   cc0 cc1 cc2 crts0.o libc.a
+    lib/   cc0 cc1 cc2 crts0.o libc.a libm.a
     usr/include/   ...156 headers, sys/ and netinet/ included
     CCENV          one line naming whose compiler this environment holds
 ```
@@ -43,6 +43,7 @@ by adjacency (`src/cc/coh/cc.c`):
 | `cc0` `cc1` `cc2` | P_LIB: searched on `LIBPATH`, default `/lib:/usr/lib` |
 | `crts0.o` | P_LIB, under exactly that name (`pass[CRT].p_pln`) |
 | `libc.a` | P_LIB; `makelib()` composes `"lib" + "c" + ".a"` |
+| `libm.a` | the maths library, reached by `-lm` through the same `makelib()` |
 | `as` `ld` | P_BIN: searched on `PATH`, default `:/bin:/usr/bin` |
 
 `ar` is not a compiler pass, but a build that makes a library needs it and the
