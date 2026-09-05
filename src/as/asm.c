@@ -337,7 +337,7 @@ loop:
 		break;
 
 	case S_LOC:
-		newloc((struct loc *) sp->s_addr);
+		newloc(sp->s_base.s_lp);
 		lmode = SLIST;
 		break;
 

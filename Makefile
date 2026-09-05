@@ -89,6 +89,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/blkmove-variant.sh
 	sh tests/lssaddr-variant.sh
 	sh tests/asbytes.sh
+	sh tests/as-locptr.sh
 	sh tests/float-e2e.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and

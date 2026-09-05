@@ -1136,7 +1136,7 @@ char *cp;
 	sp = lookup(id, 1);
 	sp->s_kind = S_LOC;
 	sp->s_flag = 0;
-	sp->s_addr = (address) lp;	/* Hide pointer in address (ugh) */
+	sp->s_base.s_lp = lp;		/* the location this counter names */
 	return (lp);
 }
 
