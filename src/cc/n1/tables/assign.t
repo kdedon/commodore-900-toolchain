@@ -110,11 +110,17 @@ ASSIGN:
 / VALUE (e.g. a function result, or a far pointer held in a pair) to a frame slot or global
 / went through the general mem<-mem path -> two `LD' halves; the original uses one `LDL mem,RR'.
 / REG source + memory dest, so it overlaps neither the REG-dest load above nor the IMM store
-/ below; REG|MMX forces an exact register match so a memory source falls through.
+/ below; the exact register match (MMX) makes a memory source fall through.
+/ RREG|LREG and not REG: T_REG also covers T_SREG, the frame/stack register, which is a
+/ single NEAR word register and not a pair.  `p = &local[N]' whose displacement folds to
+/ zero leaves the bare frame register as the far-pointer source, and taking it here
+/ emitted `LDL mem,RR13' -- an operand no Z8001 pair encoding has.  Such a source belongs
+/ to the general mem = mem rule below, which materializes the segment half from R14 and
+/ the offset half from the frame register into a TEMP pair.
 %	PEFFECT
 	LONG|LPTX|FLT	NONE	*	*	NONE
 		ADR|LV		LONG|LPTX|FLT
-		REG|MMX		LONG|LPTX|FLT
+		RREG|LREG|MMX	LONG|LPTX|FLT
 			[ZLDL]	[AL],[AR]
 %	PEFFECT
 	LONG|LPTX|FLT	NONE	*	*	NONE
