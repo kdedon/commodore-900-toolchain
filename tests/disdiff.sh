@@ -16,7 +16,7 @@
 set -e
 HERE=$(cd "$(dirname "$0")/.." && pwd)
 . "$(dirname "$0")/donor.sh"
-B="${C900_BUILD:-$HERE/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$HERE/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; VAR=800000000800
 CMD="$Z8001_DONOR/cmd"; INC="$Z8001_DONOR/include"
 BIN="${ORIG_BIN:-$Z8001_DONOR/bin}"

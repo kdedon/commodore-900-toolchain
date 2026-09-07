@@ -75,7 +75,7 @@ esac
 O=; AS=; LDD=; LIBC=; V2=; CMD=; INC=; BIN=; LDIS=
 if [ "$MODE" = run ]; then
 	. "$(dirname "$0")/donor.sh"
-	B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+	B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 	O="$B/z8001"; AS="$B/as-z8001"; LDD="$B/ld-z8001"
 	LIBC="$B/libc-z8001"; V2="${VAR:-800000020800}"
 	# $LOUTDIS wins over the search, the way every other caller resolves it.
@@ -86,7 +86,7 @@ if [ "$MODE" = run ]; then
 	for p in "$O/cc0-z8001" "$O/cc1-z8001" "$O/cc2-z8001" "$AS" "$LDD"; do
 		[ -x "$p" ] && continue
 		echo "effdiff-linked.sh: $p is not built.  Run \`make' first," >&2
-		echo "  or point \$C900_BUILD at the build directory that has it." >&2
+		echo "  or point \$C900_TC_BUILD at the build directory that has it." >&2
 		exit 2
 	done
 	for f in "$LIBC/crt0.o" "$LIBC/libc-z8001.a"; do
@@ -287,7 +287,7 @@ if SSOBJ is None:
     print("  the SS stub object.  ld said, without the stub:")
     for ln in (e_plain or ["(no output)"])[:6]: print(f"    {ln}")
     print("  Rebuild crt0.o and libc-z8001.a (host/build-libc-z8001.sh) against")
-    print("  the compiler in $C900_BUILD; they must be the same generation.")
+    print("  the compiler in $C900_TC_BUILD; they must be the same generation.")
     sys.exit(1)
 
 # The sweep.

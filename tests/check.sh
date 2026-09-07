@@ -12,7 +12,7 @@
 # Env: VAR (variant flags, default VLARGE 800000000800), N2 (guest runner, default: host/runner.sh).
 set -e
 HERE=$(cd "$(dirname "$0")/.." && pwd)            # repo root
-B="${C900_BUILD:-$HERE/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$HERE/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"
 VAR=${VAR:-800000000800}
 N2=${N2:-"$(sh "$(cd "$(dirname "$0")/../host" && pwd)/runner.sh")"}

@@ -6,7 +6,7 @@
 # not the run-mode absolute 0xC000 nor an unrelocated in-segment offset.
 set -e
 H="$(cd "$(dirname "$0")/.." && pwd)"
-B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; VAR="${VAR:-800000000800}"
 CC2="$O/cc2-z8001"; PEEP="${PEEP:-0010}"

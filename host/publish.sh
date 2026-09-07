@@ -11,7 +11,7 @@
 #	stagecopy seeds the staging tree from what is published, for a build
 #	that keeps an object cache or writes only the targets it was named.
 #
-# $BUILD is the build directory: $C900_BUILD when set, host/build otherwise.
+# $BUILD is the build directory: $C900_TC_BUILD when set, host/build otherwise.
 # One directory serves every lane by default, and everything in the tree spawns
 # compilers and reads libraries out of it while builds are running.
 #
@@ -23,7 +23,7 @@
 #
 # Callers trap on their staging directory, so a build that fails publishes
 # nothing and leaves the previous artifact standing.
-BUILD="${C900_BUILD:-$HERE/build}"
+BUILD="${C900_TC_BUILD:-$HERE/build}"
 mkdir -p "$BUILD"
 
 stage_at() {	# stage_at <path> -- print an empty private directory for <path>

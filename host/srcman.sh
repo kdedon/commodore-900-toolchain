@@ -16,7 +16,7 @@
 # anywhere recording it; silently skipped, it reads as source that is built.
 #
 # A scratch or backup copy therefore belongs in a private directory or under
-# $C900_BUILD -- never beside the file it copies.
+# $C900_TC_BUILD -- never beside the file it copies.
 
 srcman_list() {	# srcman_list <component> <srcdir>
 	case "$1" in

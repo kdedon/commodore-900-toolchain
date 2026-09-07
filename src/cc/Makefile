@@ -7,7 +7,7 @@
 # The object lists below are also THE list: host/srcman.sh reads them, so the
 # host build compiles what this one does and refuses a .c under src/cc that no
 # list names.  A scratch or backup copy belongs in a private directory or under
-# $C900_BUILD, never beside the file it copies.
+# $C900_TC_BUILD, never beside the file it copies.
 #
 # Layout mirrors the MWC source shape: MI passes at n0/ n1/ n2/ (+ n3/, the
 # intermediate-language printer cc3 reaches through `cc -3'), the Z8001 machine

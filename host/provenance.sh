@@ -62,7 +62,7 @@ prov_write() {
 	# from this script's own directory ($HERE, the convention every caller
 	# sets before sourcing).  Resolving it from the stamp's location instead
 	# names whatever repository happens to contain the build directory: with
-	# $C900_BUILD outside the checkout -- which is how a lane keeps its build
+	# $C900_TC_BUILD outside the checkout -- which is how a lane keeps its build
 	# to itself -- that is a different repository, so the commit and the dirty
 	# counts describe the wrong tree, and prov_pub_check, which resolves from
 	# the source side, reads every build after the first as a cross-tree
@@ -263,8 +263,8 @@ prov_tc_check() {
 		echo "!! tree -- committed or not -- is NOT in the compiler you would use." >&2
 		echo "!! Rebuild it: (cd $_tk_tree && make cc as ld)." >&2
 		echo "!! If another lane owns that checkout, take your own -- git worktree add, build" >&2
-		echo "!! it, and set C900_TOOLCHAIN to it.  C900_BUILD alone does not reach here: a" >&2
-		echo "!! consumer reads <toolchain>/host/build and cannot see a private build dir." >&2
+		echo "!! it, and set C900_TOOLCHAIN to it.  Set C900_TC_BUILD as well to keep the" >&2
+		echo "!! build itself private; unset, every lane reads <toolchain>/host/build." >&2
 	elif [ -n "$_tk_was" ] && [ "$_tk_was" != "$_tk_id" ]; then
 		_tk_why="TOOLCHAIN CHANGED"
 		echo "!! TOOLCHAIN CHANGED under an existing build tree." >&2
@@ -328,9 +328,9 @@ prov_pub_check() {
 	echo "!!   this build: $_pp_mine" >&2
 	echo "!! Publishing would replace the compiler every consumer of that directory runs," >&2
 	echo "!! including builds in flight, with one built from source they did not choose." >&2
-	echo "!! Publish somewhere of your own instead -- set C900_BUILD here, and" >&2
-	echo "!! C900_TC_BUILD to the same path in the consuming tree (both halves: C900_BUILD" >&2
-	echo "!! alone moves only where this script emits, not where a consumer reads)." >&2
+	echo "!! Publish somewhere of your own instead -- set C900_TC_BUILD, which is the one" >&2
+	echo "!! name for this directory: it moves where this script emits and where every" >&2
+	echo "!! consumer reads, so one setting serves the producer and the consumer alike." >&2
 	if [ -n "${C900_PUBLISH_ACCEPT:-}" ]; then
 		echo "!! C900_PUBLISH_ACCEPT is set -- publishing over it anyway." >&2
 		unset _pp_b _pp_a _pp_mine _pp_was

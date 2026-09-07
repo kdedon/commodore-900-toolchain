@@ -50,7 +50,7 @@ programs must use the segment selected by their startup code.
 | `COHERENT_OS` | libc, native/self-hosted tools, and guest environments |
 | `MWC_DONOR` | comparison with pristine MWC sources |
 | `Z8001_DONOR` | broad compiler corpus tests |
-| `C900_BUILD` | alternate build directory |
+| `C900_TC_BUILD` | alternate build directory, for the build and for a consumer reading it |
 
 ## License
 

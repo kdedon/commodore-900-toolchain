@@ -5,7 +5,7 @@
 # and assert the returned R1.  Nothing here reads a compiler's in-memory state: every
 # assertion is made against a linked l.out, which is what the machine would run.
 # Usage: tests/regress.sh
-O=${O:-"${C900_BUILD:-$(cd "$(dirname "$0")/.." && pwd)/host/build}/z8001"}
+O=${O:-"${C900_TC_BUILD:-$(cd "$(dirname "$0")/.." && pwd)/host/build}/z8001"}
 N2=${N2:-"$(sh "$(cd "$(dirname "$0")/../host" && pwd)/runner.sh")"}
 # runner.sh has already explained itself on stderr.  Stop here rather than run
 # every case against an empty runner: each one then returns nothing and is

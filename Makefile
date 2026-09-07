@@ -32,10 +32,12 @@ SHELL = /bin/sh
 	libc libm libmisc selfhost native help
 
 # Overridable so lanes sharing one checkout keep their artifacts apart; every
-# host/ script resolves it through $C900_BUILD, and artifacts are published by
-# rename (host/publish.sh) so a shared tree cannot be composed half-built.
-B ?= $(if $(C900_BUILD),$(C900_BUILD),host/build)
-export C900_BUILD := $(abspath $(B))
+# host/ script resolves it through $C900_TC_BUILD, which is also the name a
+# consuming tree sets to read out of the same directory, and artifacts are
+# published by rename (host/publish.sh) so a shared tree cannot be composed
+# half-built.
+B ?= $(if $(C900_TC_BUILD),$(C900_TC_BUILD),host/build)
+export C900_TC_BUILD := $(abspath $(B))
 
 all: cc as ld
 

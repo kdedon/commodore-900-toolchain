@@ -7,7 +7,7 @@
 #   codesize.sh '<C source>'        -> "insns=N bytes=B"
 #   codesize.sh -v '<C source>'     -> ... plus the disassembly
 H="$(cd "$(dirname "$0")/.." && pwd)"
-B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; VAR="${VAR:-800000000800}"
 LOUTDIS=$(sh "$H/host/loutdis.sh"); PEEP="${PEEP:-0010}"
 v=0; [ "$1" = "-v" ] && { v=1; shift; }

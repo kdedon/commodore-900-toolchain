@@ -64,7 +64,7 @@ esac
 O=; VAR=; CMD=; INC=; BIN=; LD=
 if [ "$MODE" = run ]; then
 	. "$(dirname "$0")/donor.sh"
-	B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+	B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 	O="$B/z8001"; VAR="${VAR:-800000000800}"
 	# $LOUTDIS wins over the search, the way every other caller resolves it.
 	LD="${LOUTDIS:-$(sh "$H/host/loutdis.sh")}"
@@ -74,7 +74,7 @@ if [ "$MODE" = run ]; then
 	for p in cc0-z8001 cc1-z8001 cc2-z8001; do
 		[ -x "$O/$p" ] && continue
 		echo "effdiff.sh: $O/$p is not built.  Run \`make' first," >&2
-		echo "  or point \$C900_BUILD at the build directory that has it." >&2
+		echo "  or point \$C900_TC_BUILD at the build directory that has it." >&2
 		exit 2
 	done
 	if [ ! -d "$CMD" ]; then

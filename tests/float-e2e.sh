@@ -8,7 +8,7 @@
 # Exercises +, -, *, / and a chained expression (multiple composed soft-float calls).
 set -e
 H="$(cd "$(dirname "$0")/.." && pwd)"
-B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR="${VAR:-800000000800}"; PEEP="${PEEP:-0010}"
 # No runner, no gate: runner.sh has said why on stderr, and running the cases

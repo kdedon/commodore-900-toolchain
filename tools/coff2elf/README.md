@@ -42,7 +42,7 @@ MWC i386 cc2 (donor n2/i386/outcoff.c)      <-- emits Coherent i386 COFF (magic 
 > `coff2elf.c` itself is K&R C that also compiles under an ILP32 Coherent compiler.
 
 ## Build & test
-Built by the repository's own Makefile, into `$C900_BUILD/tools`:
+Built by the repository's own Makefile, into `$C900_TC_BUILD/tools`:
 ```
 make tools            # coff2elf, mkfix (and lout2cpm)
 make libcoh           # crt0.o + libcoh.a; needs a 32-bit gcc

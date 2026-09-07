@@ -8,7 +8,7 @@
 # and every one of them is also what the PRISTINE MWC as-mch/z8001/machine.c assembles.
 # The l.out header is 48 bytes (n.out.h), so the text starts there.
 H="$(cd "$(dirname "$0")/.." && pwd)"
-B="${C900_BUILD:-$H/host/build}"
+B="${C900_TC_BUILD:-$H/host/build}"
 AS="$B/as-z8001"
 [ -x "$AS" ] || { echo "asbytes: as-z8001 not built"; exit 2; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT

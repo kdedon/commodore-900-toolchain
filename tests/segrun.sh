@@ -10,7 +10,7 @@
 # carry the real segment (e.g. 0x03:...) while frame access stays seg-0 short-form X-mode.
 H="$(cd "$(dirname "$0")/.." && pwd)"
 . "$(dirname "$0")/donor.sh"
-B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR=800000020800; PEEP=0010
 # loutdis is RESOLVED, not guessed at: it is not part of this repository (it

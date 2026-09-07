@@ -17,7 +17,7 @@
 # userland compiles clean in object mode.
 H="$(cd "$(dirname "$0")/.." && pwd)"
 . "$(dirname "$0")/donor.sh"
-B="${C900_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
+B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; VAR="${VAR:-800000000800}"
 CC2="$O/cc2-z8001"; PEEP="${PEEP:-0010}"
 [ -x "$CC2" ] || { echo "objsweep: cc2-z8001 not built (run build-cc-z8001.sh)"; exit 2; }

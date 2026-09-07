@@ -3,12 +3,12 @@
 #   COFF fixture -> coff2elf -> ELF32 -> gnu ld + libcoh crt0 -> run on host.
 # Two cases: (1) `_main` returns 42, no relocs; (2) a R_DIR32 reloc to .data.
 #
-# Run it as `make check-coff2elf', which builds what it needs into $C900_BUILD.
+# Run it as `make check-coff2elf', which builds what it needs into $C900_TC_BUILD.
 # Work happens in a scratch directory, so nothing is written into the source
 # tree.
 set -e
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
-T=${C900_BUILD:-$ROOT/host/build}/tools
+T=${C900_TC_BUILD:-$ROOT/host/build}/tools
 for f in coff2elf mkfix crt0.o libcoh.a; do
 	[ -f "$T/$f" ] || {
 		echo "test.sh: no $T/$f -- run \`make check-coff2elf'" >&2

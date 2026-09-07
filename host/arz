@@ -18,12 +18,12 @@
 # in this repository archives anything, so packing a release would otherwise
 # depend on a consumer having run through here first.
 #
-# $C900_BUILD, spelled out rather than sourced from publish.sh: an unpacked
+# $C900_TC_BUILD, spelled out rather than sourced from publish.sh: an unpacked
 # release carries this script and the mkarz beside it but none of host/'s
 # machinery, and arz has to keep working there.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
-BUILD="${C900_BUILD:-$HERE/build}"
+BUILD="${C900_TC_BUILD:-$HERE/build}"
 LDDIR="$BUILD/ld"
 MKARZ="$BUILD/mkarz"
 

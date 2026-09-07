@@ -14,7 +14,7 @@
 # crts0.s with it.  The object must be the one the ordinary assembler writes.
 # Nothing here needs Windows, a cross-compiler or an emulator.
 H="$(cd "$(dirname "$0")/.." && pwd)"
-B="${C900_BUILD:-$H/host/build}"
+B="${C900_TC_BUILD:-$H/host/build}"
 AS="$B/as-z8001"
 SRC="$B/as"
 [ -x "$AS" ] && [ -d "$SRC" ] || { echo "as-locptr: as-z8001 not built (make as)"; exit 2; }
