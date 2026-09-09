@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * Copyright (c) 2026 Kevin Dedon.
+ * Copyright (c) 2026 Michał Pleban.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * n0/get.c
  * C preprocessor.
  * Read next character.

@@ -40,7 +40,7 @@ fix: `file[NFNAME-1] = 0` after `strncpy` in `setfname()`
 why: strncpy leaves the name unterminated at exactly NFNAME; `sput()` then scans past the buffer
 
 patch: get-terminal-eof
-file: n0/get.c b76e9452c7519a9bcb7613507f59ace19764e1844b38f88e7573819787159152
+file: n0/get.c 0077dd755f6b7ff6c3a61c2b6f27880426f68f2fde7f32dfdb2e4faf8dda0dec
 fix: terminal-EOF guard: NULL `ifp` after `fclose`, return EOF on re-entry
 why: use-after-free + double `fclose` when error recovery pulls tokens past EOF
 
@@ -119,7 +119,7 @@ fix: new `OLDMACHINE` ("Z8001"), predefined beside `MACHINE` ("_Z8001")
 why: the June 1985 compiler's standalone cpp predefines the target unprefixed, and the COHERENT 3.2 sources select on that spelling: `<l.out.h>` takes the **n.out object layout** under `#ifdef Z8001`, `sbrk()` its segment-crossing arithmetic, `exec()` its shared-library arms. A compiler that defines only `_Z8001`/`__Z8001__` builds the wrong layout silently, so this is a target-macro requirement, not a convenience. Guarded by `#ifdef`, so a machine layer that does not define it is unchanged
 
 patch: vcpp-copy-text
-file: n0/get.c b76e9452c7519a9bcb7613507f59ace19764e1844b38f88e7573819787159152
+file: n0/get.c 0077dd755f6b7ff6c3a61c2b6f27880426f68f2fde7f32dfdb2e4faf8dda0dec
 file: n0/cpp.c e9d3190445d57ff493744babb3e6f343359b09628152e90e5b9d88845abdada7
 fix: in `isvariant(VCPP)` (standalone-preprocessor) runs only: a quote literal ends at the newline instead of erroring, and a non-C byte is copied instead of erroring
 why: VCPP is the mode in which cc0 is a **preprocessor**, and the text it copies is in the CONSUMER's language, not C. The assembly the kernel build preprocesses (`md.s`, `mmas.s`, `scroll.s`) has apostrophes and a stray ESC inside `/`-comments; as C those are "new line in character literal" and "illegal cpp character", and the unterminated-quote scan then ran on past the end of the line. The 1985 standalone cpp copies both without comment, and our output now matches its output on `md.s` token for token. Nothing changes on the compile path: `VCPP` is never set there
@@ -147,7 +147,7 @@ fix: `rallo()` keeps one register that can address: when an allocation would tak
 why: the reserve is decided entirely by the machine register table's `r_lvalue` -- the set of kinds a register can be dereferenced through -- so it is machine-independent code reading a machine-dependent fact, and on a machine where every register can address (the donor's i386) `hold` is never set and the function returns exactly what the donor returned. On the Z8001 that set is small and exhaustible: a value in the last addressable register cannot be undone, the selector then spills, and the spilled assignment wants the address it could not form -- ICE 5149, which the original 1985 compiler fails on too. Measured over 1017 sources (798 compiling), the reserve fires so rarely that exactly two objects move, awk5.o 1915 -> 1910 instructions and the kernel's bio.o 1523 -> 1521, both FEWER, and the 13 sources shared with the 1985 compiler are unchanged -- so it costs nothing against the efficiency baseline
 
 patch: driver-z8001-model
-file: coh/cc.c 06bd8d853d87f9a62d25af5ba96ea0e5dc9bffc9df59b651e2d3d90001615427
+file: coh/cc.c 62bbf2f82d13cde35904482b5d002dcd6ac28a9342e2a6f959d31995a2fbfe13
 fix: `#if Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` instead of `V80186`, and the model-selection block chooses `VLARGE` unless `-VSMALL` was asked for, in place of the Intel OMF rules
 why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if Z8001`, so no other target sees them
 
@@ -159,8 +159,8 @@ fix: a parameter declared `char'/`unsigned char' KEEPS that type instead of bein
 why: THE ONE FRONT-END EDIT MADE ON PURPOSE, owner-decided (TASK #321), because no machine layer can express the fix: after `fixtype()` retypes the parameter to `int` the fact that it was a byte object is GONE, and `&c` can only name the whole word. K&R promotes a char ARGUMENT to int at the call, so the parameter does occupy a word (unchanged: callers still push one, and the ABI is untouched) -- but the parameter is still a one-byte object, and on this BIG-ENDIAN machine the caller's byte is the second byte of that word. The donor handed out the word's own address, which is the low-order byte only because the i8086 it descends from is little-endian; here it named the HIGH byte, zero for every ASCII character, so `write(fd,&c,1)` inside `f(c) char c;` wrote a NUL -- libcurses `waddch` drew NULs while the cursor advanced, and kermit could not send a character (#324). `subwordparm()` answers from `mysizes[]`, so a machine whose char is a word gets the donor's promotion unchanged, and short/float are unaffected (a short IS a word; float is promoted to double by both sides). Reading the parameter's value now takes a byte load plus the extend the declared type asks for, where the promoted word allowed one word load; that is the price of the object having an address at all, and it is also what K&R says the object is -- `f(c) char c; c = 300;` now truncates, and a caller passing 200 into a signed `char' parameter reads -56 back, both of which every conforming compiler does (the differential oracle, gcc, agrees on all 18 generators). Code that wants the wider value must say `int' or `unsigned char', as it must anywhere else. Measured cost: over the 315 objects of this compiler's own self-host build, the ONLY two that change are the two files edited here; over 108 COHERENT userland commands the total is +76 bytes, 0.014%, in exactly the five objects that have a byte parameter -- and `units.o' gets SMALLER, because a byte compare no longer widens first. A `register` byte parameter is not given a register, exactly as a `register char' auto is not (`grabreg()` takes word types only), so it stays addressable and correct. Six value assertions through cc0->cc1->cc2->ld->run cover both byte types, both directions and the second parameter's placement (tests/regress.sh, promoted from expected-fail); the byte-identity fixpoint cannot see this class at all, since a compiler reading the wrong byte agrees with itself about it
 
 patch: cc2-free-emitted-function
-file: n2/getfun.c 80f47bb171233599a012e477e7ac73a0e17a59698a7e7bd343da9ff3dbe5bf4e
-file: n2/cc2.c 5543d4e78d1becbfba130dd540b9bef081633f67dd38db43076e43e082ee8012
+file: n2/getfun.c 33405f035e6c0ec639a0e958ca03b3bf55654e7f1afb34003d1bbf39aa68ed96
+file: n2/cc2.c 3526dc610b5777794a6ebebadf8dc8e892c9fbf7e50ae11fea5ba5f10b46f24d
 fix: `freefunc()' releases the instruction list of the function just emitted; cc2.c calls it after genepilog()
 why: the donor never frees an INS.  getfunc() starts each function's list at
 why: `ins' without looking back, so on the native C900 -- where cc2's heap is
@@ -171,7 +171,7 @@ why: into the list, because the fixups outcoh records name symbols and not
 why: instructions.  Found by Michal Pleban compiling this tree natively
 
 patch: optim-newlabel-nomem
-file: n2/optim.c ac9ca6b234950960736b2c83c76a2b8a709f04686a2decc2422e87b13f6899b1
+file: n2/optim.c a757be22b37f962c07afa27c9fee313f83a3aad01c28615ac528b2889f1a7b7f
 fix: `newlabel()' takes cfatal("out of space") on a failed malloc, in place of a NULL test whose `else' was missing
 why: the donor initialises the record inside `if (lp != NULL)' and then returns
 why: `lp' regardless, so an exhausted heap threads a NULL INS into the list.
@@ -182,7 +182,7 @@ why: one a real compile can actually exhaust.  cfatal is the pass's own
 why: out-of-space exit (common/diag.c).  Found by Michal Pleban
 
 patch: get-carriage-return
-file: n0/get.c b76e9452c7519a9bcb7613507f59ace19764e1844b38f88e7573819787159152
+file: n0/get.c 0077dd755f6b7ff6c3a61c2b6f27880426f68f2fde7f32dfdb2e4faf8dda0dec
 fix: both `\r' tests in get() -- skipped at a line start, and skipped between a backslash and its newline -- are unconditional, not `#if GEMDOS || MSDOS'
 why: the donor guarded them as a DOS concern, but a carriage return is nothing
 why: on every host: what the guard actually decides is whether a CR LF source
@@ -196,7 +196,7 @@ why: throughout (upstream's own kernel tree), and a compiler that miscompiles
 why: them quietly is worse than one that refuses them.  Found by Michal Pleban
 
 patch: driver-eflag-preprocess-only
-file: coh/cc.c 06bd8d853d87f9a62d25af5ba96ea0e5dc9bffc9df59b651e2d3d90001615427
+file: coh/cc.c 62bbf2f82d13cde35904482b5d002dcd6ac28a9342e2a6f959d31995a2fbfe13
 fix: `if (Eflag) setvariant(VCPP);' moved out of `#if TEMPBUF' to the head of resolve()
 why: TEMPBUF is defined nowhere in this tree -- it guards a COH386 malloc
 why: efficiency hack -- so on the C900 driver that line never ran and -E did

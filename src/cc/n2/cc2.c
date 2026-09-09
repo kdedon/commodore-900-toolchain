@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * Copyright (c) 2026 Kevin Dedon.
+ * Copyright (c) 2026 Michał Pleban.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * n2/cc2.c
  * Main driving routine for the code assembly phase of the C compiler.
  * It reads the intermediate file and calls

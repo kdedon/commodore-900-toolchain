@@ -1,4 +1,10 @@
 /*
+ * Copyright (c) 1977-1995 Robert Swartz.
+ * Copyright (c) 2026 Kevin Dedon.
+ * Copyright (c) 2026 Michał Pleban.
+ * SPDX-License-Identifier: BSD-3-Clause
+ */
+/*
  * The routines in this file handle
  * the reading in of functions. The internal data
  * structures are built and threaded together.
