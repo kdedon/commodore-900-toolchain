@@ -2,7 +2,7 @@
  * sys/select.h -- BSD select() emulated over poll() (cf. the Coherent 4.2
  * header of the same name: "an emulation of the BSD select() call via
  * poll()"; this is the 16-bit twin).  fd_set is a plain long bit mask:
- * FD_SETSIZE 32 covers NUFILE (20) with room.
+ * FD_SETSIZE 32 covers NUFILE (24) with room.
  */
 #ifndef	SYS_SELECT_H
 #define	SYS_SELECT_H

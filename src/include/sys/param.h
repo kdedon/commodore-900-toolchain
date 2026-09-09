@@ -12,7 +12,7 @@
 
 /* WARNING!  Fix references to dev_loaded if ever NDRV > 8*sizeof(int) */
 #define NDRV	32			/* Number of major device entries */
-#define NOFILE	20			/* Number of user open files */
+#define NOFILE	24			/* Number of user open files */
 #define NUFILE	NOFILE			/* For historical reasons */
 #define	NEXREAD	6			/* Read ahead */
 
