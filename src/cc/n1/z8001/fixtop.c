@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/fixtop.c
  * Adjust the type at the top of a tree node to a computational type.
  * Z8001: the ALU is 16-bit, so the natural compute width is WORD (int). Bytes

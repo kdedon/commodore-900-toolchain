@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/cc1mch.h
  * Machine-specific macros, types and definitions used ONLY by the cc1 code
  * generator, for the segmented Z8001.

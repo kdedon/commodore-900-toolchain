@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * common/z8001/mdonam.c
  * Machine dependent operator names.
  * None for the Z8001; see common/z8001/mdlnam.c.

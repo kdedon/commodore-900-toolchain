@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / mul.t - Z8001 '*' (MUL:).
 / The Z8000 MULT RRd,Rs multiplies the LOW word of the destination pair RRd by the
 / source Rs and leaves the 32-bit product in RRd; the C `int` result is that low

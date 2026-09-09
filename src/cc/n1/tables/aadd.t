@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / aadd.t - Z8001 compound add 'AADD' (x += y).  The Z8000 has NO memory-destination
 / arithmetic (unlike the i8086), so a compound op on a memory lvalue is load-modify-
 / store: load the lvalue value into a result temp R, ADD the rhs, store R back.  R

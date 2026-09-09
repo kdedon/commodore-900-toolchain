@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / arem.t - Z8001 compound remainder 'AREM' (x %= y).  As adiv but the result is the
 / remainder, left in R0 (high word of RR0) after DIV; store R0 back to the lvalue.
 

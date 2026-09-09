@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / sub.t - Z8001 selection rules for binary '-' (SUB:). DRAFT; grammar validated
 / via tabgen. Opcodes from ../../../generated/opcode.h. Mirrors add.t.
 

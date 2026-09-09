@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/gen1.c
  * Address printing, function prologue/epilogue framing, switch compilation, and
  * the low-level instruction-emission primitives. Segmented Z8001.

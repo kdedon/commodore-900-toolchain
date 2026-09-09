@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / adiv.t - Z8001 compound divide 'ADIV' (x /= y).  Load lvalue into R1 (low word of
 / the RR0 dividend), extend into R0 (UNSIGNED: CLR zero-extend; SIGNED: EXTS sign-
 / extend), DIV RR0,rhs (quotient -> R1), store R1 back.

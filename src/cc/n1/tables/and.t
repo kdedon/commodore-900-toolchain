@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / and.t - Z8001 selection rules for binary 'AND' (logical, word+byte). DRAFT.
 
 AND:

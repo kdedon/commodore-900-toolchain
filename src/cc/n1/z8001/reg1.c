@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/reg1.c
  * Machine-specific parts of the cc1 register allocator. Segmented Z8001.
  * Template: n1/i8086/reg1.c. Z8001 deltas: byte values may occupy only the

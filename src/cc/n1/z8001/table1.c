@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/table1.c
  * Machine-specific tables used by the cc1 code generator. Segmented Z8001.
  * Template: n1/i386/table1.c. Values from src/h/mch.h (register model + type

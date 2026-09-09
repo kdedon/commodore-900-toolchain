@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Peephole optimizer.  Walk the code list, tracking the state of the machine registers,
  * and delete or simplify instructions that do not change that state.  subdec narrows a
  * small-constant ADD/SUB into a one-word INC/DEC; shldouble turns a short shift left

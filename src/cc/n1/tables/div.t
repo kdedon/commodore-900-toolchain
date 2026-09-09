@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / div.t - Z8001 '/' (DIV:). Z8000 DIV RRd,Rs: 32-bit RRd / 16-bit Rs -> quotient
 / in the low word (Rd+1), remainder in the high word (Rd). We use the fixed pair
 / RR0; the C int result is the quotient = R1. The Z8000 DIV is SIGNED, so the

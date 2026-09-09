@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Read, write, and compare the address fields of the i1 stream.  The address-mode bit
  * layout (A_AMOD/A_REGM/A_PREFX/A_OFFS/A_LID/A_GID and the A_* mode values) is the
  * cc1->n2 i1 contract in h/mch.h.

@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / neg.t - Z8001 selection rules for unary '-' (NEG:). DRAFT.
 
 NEG:

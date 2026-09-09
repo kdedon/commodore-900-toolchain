@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n3/z8001/icode.c
  * The machine dependent part of the intermediate file printer: it reads and
  * prints encoded machine instructions and their operands.  Segmented Z8001.

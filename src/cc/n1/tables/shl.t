@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / shl.t - Z8001 '<<' (SHL).  One Z8000 SHIFT does an arbitrary-width shift in a
 / single (2-word) instruction; the count word/register is positive for a left
 / shift.  Left shift is bit-identical for signed and unsigned, so one logical

@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / add.t - Z8001 instruction-selection rules for binary '+'  (operator ADD:).
 / Grammar is the
 / MWC .t format (10-field % header + emit body); opcodes are the verified Z*

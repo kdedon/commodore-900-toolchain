@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / bef.t - Z8001 prefix increment/decrement (++x / --x). The value of the
 / expression is the NEW (incremented) value, so increment FIRST, then fetch.
 / [OP1] resolves to ZINC (INCBEF) or ZDEC (DECBEF) from table1.c optab; the

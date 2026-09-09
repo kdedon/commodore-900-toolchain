@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/altemp.c -- allocate a stack temporary as *(FP - n).
  * Z8001: frame pointer is R13 (FPREG); pointer type is the segmented LPTR.
  */

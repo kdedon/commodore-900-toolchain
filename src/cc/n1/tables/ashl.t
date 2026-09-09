@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / ashl.t - Z8001 compound shift-left 'ASHL' (x <<= n).  Load-modify-store (Z8000
 / shifts are register-only): load lvalue into temp R, shift, store R back.  Left
 / shift is sign-agnostic.  Constant count -> static SLL; variable -> dynamic SDL.

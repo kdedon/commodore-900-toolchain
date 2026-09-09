@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / or.t - Z8001 selection rules for binary 'OR' (logical, word+byte). DRAFT.
 
 OR:

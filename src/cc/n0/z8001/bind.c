@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n0/z8001/bind.c
  * Machine-dependent parser binding (storage layout, type sizes, alignment, arg
  * ABI). Segmented Z8001. Template: n0/i8086/bind.c -- its 16-bit-int + segmented

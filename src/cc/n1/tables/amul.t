@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / amul.t - Z8001 compound multiply 'AMUL' (x *= y).  Like mul.t but load-modify-
 / store the lvalue: load it into R1 (the multiplicand/low half of RR0), MULT
 / RR0,rhs (product low word -> R1), store R1 back.  Low word is sign-agnostic.

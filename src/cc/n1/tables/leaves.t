@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / leaves.t - Z8001 CONVERT / CAST / FIXUP / LEAF.
 / Leaf loads, type conversions, casts, and the universal fixup safety-net.
 / DEEPENED draft (cf. the i8086 ~1075-line original): covers the integer load +

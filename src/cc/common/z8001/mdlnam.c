@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * common/z8001/mdlnam.c
  * Machine dependent leaf names.
  * None for the Z8001: the back end adds no leaf operators to ops.h's

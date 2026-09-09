@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * h/z8001/cc2mch.h
  * Machine-specific definitions for the C compiler's final phase (cc2, the
  * direct-to-bits assembler/object writer). Segmented Z8001.

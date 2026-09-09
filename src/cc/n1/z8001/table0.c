@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/table0.c
  * Operator subgoal-context table for the cc1 tree modifier (mtree3.c).
  * Machine-INDEPENDENT contents; ported verbatim from n1/i386/table0.c (the

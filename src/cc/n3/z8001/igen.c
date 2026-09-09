@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n3/z8001/igen.c
  * C compiler - intermediate file printer.
  *	machine and assembly format dependent output routines.  Segmented Z8001.

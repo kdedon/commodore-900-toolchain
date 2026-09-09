@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * The emit-time listing: print the buffered function the way cc2 is about to encode it.
  * cc3 shows the i1 stream cc1 wrote; between the two, cc2's peephole rewrites the INS
  * list and genins/genprolog make encoding choices below it, so the two views disagree --

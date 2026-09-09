@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/mtree4.c -- machine tree-modification helpers (machine-independent
  * apart from idiom comments; ported verbatim from i386).
  */

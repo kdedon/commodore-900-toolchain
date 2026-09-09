@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / ASUB.t - Z8001 compound subtract 'ASUB' (x -= y).  Z8000 arithmetic is register-
 / destination only, so a compound op on a memory lvalue is load-modify-store:
 / load the lvalue into a result temp R, apply the op with the rhs, store R back.

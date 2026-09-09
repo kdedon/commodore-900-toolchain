@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * common/z8001/tyname.c
  * Machine dependent type names, indexed by the machine type codes in
  * h/z8001/mch.h.  The Z8001 codes follow the i8086's (the template this back

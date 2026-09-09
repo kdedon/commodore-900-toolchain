@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * h/z8001/cc3mch.h
  * C compiler intermediate file interpreter (cc3).
  * Machine dependent defines.  Segmented Z8001.

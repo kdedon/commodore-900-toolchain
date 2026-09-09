@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Read the intermediate (i1) CODE stream into the MI's INS list.  getcode() is almost
  * machine-independent; getfield() (afield.c) is the only Z8001-specific reader.  Two
  * Z8001 i1 conventions are handled here (pseudops.h):

@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/outmch.c
  * Small machine-dependent output routines called from out.c -- mostly function
  * calls and argument lists. Segmented Z8001. Template: n1/i8086/outmch.c.

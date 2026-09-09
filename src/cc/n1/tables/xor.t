@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / xor.t - Z8001 selection rules for binary 'XOR' (logical, word+byte). DRAFT.
 
 XOR:

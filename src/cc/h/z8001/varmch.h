@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * h/z8001/varmch.h
  * Machine-specific variant bits for the segmented Z8000 (Z8001) compiler.
  * Template: h/i386/varmch.h. Slots VMBASE..VMAXIM (34..47, see h/var.h).

@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / rem.t - Z8001 '%' (REM:). Same DIV as div.t but the result is the REMAINDER =
 / the high word (R0). The dividend goes in R1 (low word) -- a different register
 / than the result R0 -- so it is loaded there explicitly.

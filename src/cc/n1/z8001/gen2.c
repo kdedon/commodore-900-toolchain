@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/gen2.c
  * External and static initializer generation. Segmented Z8001.
  * Machine-INDEPENDENT body (ported from i8086): emits ZBYTE/ZWORD/ZGPTR data

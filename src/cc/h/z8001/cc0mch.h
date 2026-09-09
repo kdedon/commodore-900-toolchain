@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * h/z8001/cc0mch.h
  * Machine-specific parser definitions (float input + bitfield align). Segmented
  * Z8001. Software-fp (DECVAX) constants are format-driven, identical to i386.

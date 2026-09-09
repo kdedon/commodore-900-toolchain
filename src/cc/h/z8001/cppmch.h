@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * h/z8001/cppmch.h -- preprocessor machine definitions, Segmented Z8001 (== i386 base).
  * i386.
  */

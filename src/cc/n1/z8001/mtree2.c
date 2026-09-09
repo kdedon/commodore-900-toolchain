@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/mtree2.c
  * Machine-dependent tree rewriting (modoper/modcall/modswap/constcvt/isokareg
  * + field/arg helpers) run after the MI transforms. Segmented Z8001.

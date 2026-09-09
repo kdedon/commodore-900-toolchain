@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / ashr.t - Z8001 compound shift-right 'ASHR' (x >>= n).  Load-modify-store; right
 / shift = SLL/SLA (or dynamic SDL/SDA) with a NEGATIVE count (decoder infers SRL/
 / SRA).  Constant count was negated by modtree; variable count is NEG'd at runtime.

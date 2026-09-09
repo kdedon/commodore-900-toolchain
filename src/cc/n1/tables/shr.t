@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / shr.t - Z8001 '>>' (SHR).  The Z8000 has no distinct right-shift opcode: a right
 / shift is the SAME SHIFT instruction (SLL/SLA or dynamic SDL/SDA) with a NEGATIVE
 / count, and the decoder infers SRL (logical) / SRA (arithmetic) from the sign.

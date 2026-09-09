@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / assign.t - Z8001 scalar assignment '=' (ASSIGN:). Picks the most efficient
 / Z8000 tool for each shape:
 /   dst = 0          -> CLR        (shortest zero, reg or memory)

@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * h/z8001/pseudops.h
  * Compiler PSEUDO-OPCODES for the n1->n2 CODE-record stream. These are NOT real
  * Z8000 instructions: they direct n2 to emit DATA (initializers, jump-table

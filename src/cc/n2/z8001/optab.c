@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
 /* optab.c - the cc2-z8001 OPINFO instruction table.  SOURCE OF RECORD: this
  * table was generated from the Go n2's opinfo_gen.go, which was retired with
  * the Go code generator; the generator has no input any more, so this file is

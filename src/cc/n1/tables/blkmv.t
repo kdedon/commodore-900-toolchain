@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / blkmv.t - Z8001 block move (BLKMOVE op, struct/array copy > INLINEBLK bytes).
 / The Z8000 LDIRB copies the whole byte block in ONE self-repeating instruction:
 / load the byte count into a word temp [R], then LDIRB @dst,@src,Rcount with the

@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * The Z8001 instruction encoder (genins), function frame (genprolog/genepilog), the
  * per-function emit driver (genfunc), and the data pseudo-ops.  genins() forms each
  * instruction from the opcode-table base opcode and the addressing hi-nibble: 0x8000 for

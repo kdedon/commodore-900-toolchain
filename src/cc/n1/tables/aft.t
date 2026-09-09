@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / aft.t - Z8001 postfix increment/decrement (x++ / x--). The value of the
 / expression is the OLD value, so FETCH first, then increment. Same right-hand
 / handling as bef.t. [OP1] = ZINC (INCAFT) / ZDEC (DECAFT). Adapted from i8086.

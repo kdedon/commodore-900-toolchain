@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * n1/z8001/amd.c
  * Set the addressing-mode tree flags (T_*) for a node. Segmented Z8001.
  * Template: n1/i8086/amd.c. The constant / half-constant / segment-class logic

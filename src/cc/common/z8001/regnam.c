@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * common/z8001/regnam.c
  * Register names, including pseudos, indexed by the compiler's internal
  * register numbers (h/z8001/mch.h): R0..R15, the pairs, the quads, the byte

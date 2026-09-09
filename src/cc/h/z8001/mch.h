@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * mch.h - Z8001 (segmented Z8000) machine description for Mark Williams C.
  *
  * Follows the donor's i8086/mch.h: same macro structure, Z8000 content.

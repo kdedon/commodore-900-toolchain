@@ -1,3 +1,5 @@
+/ Copyright (c) 2026 Kevin Dedon.
+/ SPDX-License-Identifier: MIT
 / relop.t - Z8001 relational operators (test context only; the parser turns all
 / value contexts into ?: ). Each rule compares, then [REL0] emits the per-condition
 / relative jump ZJREL|cc (table1.c optab relation rows) to [LAB]. Adapted from the

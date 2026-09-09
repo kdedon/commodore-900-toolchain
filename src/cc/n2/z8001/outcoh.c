@@ -1,4 +1,8 @@
 /*
+ * Copyright (c) 2026 Kevin Dedon.
+ * SPDX-License-Identifier: MIT
+ */
+/*
  * Coherent l.out object writer (Z8001): a 48-byte native header, then the text (SHRI), data (PRVD),
  * symbol-table and relocation sections.  Words are big-endian (Z8000 byte order).
  *
