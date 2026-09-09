@@ -117,7 +117,7 @@ way precisely so that headers installed single-user are not hidden when
 `/etc/rc` mounts a separate `/usr` over them.
 
 **3. Ship it on the image.** `os/dist/lists/toolchain.list` in
-`commodore-900-coh-dist` stages the `ours` environment permanently: `bin/*` to
+`commodore-900-dist` stages the `ours` environment permanently: `bin/*` to
 `/usr/bin`, `lib/*` to `/usr/lib`, `usr/include` to `/usr/include` — every one
 of them a path the driver's own defaults already search (`DEFPATH`,
 `DEFLIBPATH`, cpp's `DEFDISK`), so nothing needs `-B` or `-I` and nothing needs
