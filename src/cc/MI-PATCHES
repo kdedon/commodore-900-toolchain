@@ -169,3 +169,14 @@ why: unit at once and a large module cannot be compiled at all.  The emit
 why: boundary is the safe place to free: once genfunc() has run nothing points
 why: into the list, because the fixups outcoh records name symbols and not
 why: instructions.  Found by Michal Pleban compiling this tree natively
+
+patch: optim-newlabel-nomem
+file: n2/optim.c ac9ca6b234950960736b2c83c76a2b8a709f04686a2decc2422e87b13f6899b1
+fix: `newlabel()' takes cfatal("out of space") on a failed malloc, in place of a NULL test whose `else' was missing
+why: the donor initialises the record inside `if (lp != NULL)' and then returns
+why: `lp' regardless, so an exhausted heap threads a NULL INS into the list.
+why: On the C900 the dereference is a write through a 4-byte far pointer whose
+why: segment is whatever the register happened to hold -- there is no mapped
+why: page 0 to absorb it as there was on the donor's host -- and a 64 K heap is
+why: one a real compile can actually exhaust.  cfatal is the pass's own
+why: out-of-space exit (common/diag.c).  Found by Michal Pleban

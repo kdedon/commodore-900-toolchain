@@ -399,8 +399,9 @@ register INS	*ip;
 		increfc(ip);
 		return ip;
 	}
-	lp = (INS *) malloc(sizeof(INS));
-	if (lp != NULL) {
+	if ((lp = (INS *) malloc(sizeof(INS))) == NULL)
+		cfatal("out of space");
+	{
 		lp->i_type = LLABEL;
 		lp->i_labno = newlab();
 		lp->i_sp = NULL;
