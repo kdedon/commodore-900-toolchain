@@ -17,6 +17,26 @@
  * shared data, so this works w.r.t. label reference
  * counts. The PROLOG item has been already read.
  */
+/*
+ * Release the instruction list of the function just emitted.
+ * getfunc() starts the next list at `ins' without looking back, so
+ * every function's records stay allocated until exit and a large
+ * file holds all of its instructions at once.  Nothing points into
+ * the list once genfunc() has emitted it: fixups name symbols, not
+ * instructions.
+ */
+freefunc()
+{
+	register INS	*ip, *np;
+
+	for (ip = ins.i_fp; ip != &ins; ip = np) {
+		np = ip->i_fp;
+		free((char *) ip);
+	}
+	ins.i_fp = &ins;
+	ins.i_bp = &ins;
+}
+
 getfunc()
 {
 	register INS	*ip;

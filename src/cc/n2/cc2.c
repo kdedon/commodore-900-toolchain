@@ -400,6 +400,7 @@ work2()
 			genprolog();
 			genfunc();
 			genepilog();
+			freefunc();
 			break;
 
 		case ALIGN:
