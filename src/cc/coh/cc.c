@@ -721,10 +721,14 @@ resolve()
 {
 	register int i;
 
+	/*
+	 * -E is the preprocessor alone, which has nothing to do with
+	 * whether this build buffers its temporary files.
+	 */
+	if (Eflag) setvariant(VCPP);
 #if	TEMPBUF
 	register char *p;
 
-	if (Eflag) setvariant(VCPP);
 	/*
 	 * The following malloc is a temporary hack for COH386 efficiency.
 	 * The rationale is:
