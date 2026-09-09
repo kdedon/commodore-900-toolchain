@@ -109,10 +109,14 @@ file_char:
 		switch (ct[c]) {
 
 		case SKIP:			/* New line? */
-#if	GEMDOS || MSDOS				/* Assuming use of bingetc() */
+			/*
+			 * A carriage return is nothing, on every host: the
+			 * sources this compiles are edited on machines that
+			 * end lines CR LF, and a CR that survives here makes
+			 * the splice below miss.
+			 */
 			if (c == '\r')
 				continue;
-#endif
 			if (c == '\n') {
 				if (incpp) {
 				    ungetc(c, ifp);
@@ -212,10 +216,8 @@ file_char:
 
 		case BACKDIV:			/* Splice? */
 			c = get_non_EOF(0);
-#if	GEMDOS || MSDOS				/* Assuming use of bingetc() */
-			while (c == '\r')
+			while (c == '\r')		/* backslash CR LF is a splice too */
 				c = get_non_EOF(0);
-#endif
 			if (c != '\n') {
 				ungetc(c, ifp);
 				c = '\\';

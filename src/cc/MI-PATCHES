@@ -40,7 +40,7 @@ fix: `file[NFNAME-1] = 0` after `strncpy` in `setfname()`
 why: strncpy leaves the name unterminated at exactly NFNAME; `sput()` then scans past the buffer
 
 patch: get-terminal-eof
-file: n0/get.c b22c828530c0362b33cd1b311fb256d49dbf4938b17d632e5b2788eff29fa460
+file: n0/get.c b76e9452c7519a9bcb7613507f59ace19764e1844b38f88e7573819787159152
 fix: terminal-EOF guard: NULL `ifp` after `fclose`, return EOF on re-entry
 why: use-after-free + double `fclose` when error recovery pulls tokens past EOF
 
@@ -119,7 +119,7 @@ fix: new `OLDMACHINE` ("Z8001"), predefined beside `MACHINE` ("_Z8001")
 why: the June 1985 compiler's standalone cpp predefines the target unprefixed, and the COHERENT 3.2 sources select on that spelling: `<l.out.h>` takes the **n.out object layout** under `#ifdef Z8001`, `sbrk()` its segment-crossing arithmetic, `exec()` its shared-library arms. A compiler that defines only `_Z8001`/`__Z8001__` builds the wrong layout silently, so this is a target-macro requirement, not a convenience. Guarded by `#ifdef`, so a machine layer that does not define it is unchanged
 
 patch: vcpp-copy-text
-file: n0/get.c b22c828530c0362b33cd1b311fb256d49dbf4938b17d632e5b2788eff29fa460
+file: n0/get.c b76e9452c7519a9bcb7613507f59ace19764e1844b38f88e7573819787159152
 file: n0/cpp.c e9d3190445d57ff493744babb3e6f343359b09628152e90e5b9d88845abdada7
 fix: in `isvariant(VCPP)` (standalone-preprocessor) runs only: a quote literal ends at the newline instead of erroring, and a non-C byte is copied instead of erroring
 why: VCPP is the mode in which cc0 is a **preprocessor**, and the text it copies is in the CONSUMER's language, not C. The assembly the kernel build preprocesses (`md.s`, `mmas.s`, `scroll.s`) has apostrophes and a stray ESC inside `/`-comments; as C those are "new line in character literal" and "illegal cpp character", and the unterminated-quote scan then ran on past the end of the line. The 1985 standalone cpp copies both without comment, and our output now matches its output on `md.s` token for token. Nothing changes on the compile path: `VCPP` is never set there
@@ -180,3 +180,17 @@ why: segment is whatever the register happened to hold -- there is no mapped
 why: page 0 to absorb it as there was on the donor's host -- and a 64 K heap is
 why: one a real compile can actually exhaust.  cfatal is the pass's own
 why: out-of-space exit (common/diag.c).  Found by Michal Pleban
+
+patch: get-carriage-return
+file: n0/get.c b76e9452c7519a9bcb7613507f59ace19764e1844b38f88e7573819787159152
+fix: both `\r' tests in get() -- skipped at a line start, and skipped between a backslash and its newline -- are unconditional, not `#if GEMDOS || MSDOS'
+why: the donor guarded them as a DOS concern, but a carriage return is nothing
+why: on every host: what the guard actually decides is whether a CR LF source
+why: preprocesses correctly.  It does not.  The second test is the load-bearing
+why: one -- with a CR between the backslash and the newline the splice is not
+why: recognised, so a multi-line macro or string silently becomes something
+why: else, with no diagnostic anywhere.  No file in this tree or in the kernel
+why: and userland it compiles carries a CR today, so nothing here changes; it
+why: is the C900 sources this compiler is aimed at next that are CR LF
+why: throughout (upstream's own kernel tree), and a compiler that miscompiles
+why: them quietly is worse than one that refuses them.  Found by Michal Pleban
