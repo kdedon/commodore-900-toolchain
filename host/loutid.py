@@ -7,6 +7,8 @@
 #					l.out or a Z8001 archive; exit 1 then
 #	loutid.py -e FILE...		also print an l.out's entry point, as
 #					`entry=0x3000000' (segment 3, offset 0)
+#	loutid.py -s FILE...		also list an l.out's symbol table, one
+#					`  SHRI 0x300014a main_' line per symbol
 #
 # WHY THIS EXISTS.  An environment tree is a directory of binaries that a GUEST
 # will execute.  Every host build harness in this repository runs the host
@@ -27,6 +29,13 @@
 #	off 8	long l_ssize[9]
 #	off 44	long l_entry	 segment in the high word, offset in the low
 #
+# The sections follow the header in l_ssize[] order, except that the two BSS
+# sections (L_BSSI 2, L_BSSD 5) occupy no file space.  The symbol section L_SYM
+# (7) is an array of 22-byte struct ldsym: char ls_id[16] NUL-padded, short
+# ls_type (the section number in its low four bits, L_GLOBAL 020 above them),
+# long ls_addr (for a linked Z8001 program the segment is the high byte, so
+# 0x300014a is segment 3, offset 0x14a).
+#
 # 16-bit fields are little-endian on this target, so 0407 is `07 01'; a 32-bit
 # field is PDP-canonical, high word first, so entry 0x3000000 is `00 03 00 00'.
 # A header whose l_tbase is not 48 has no entry this reader will vouch for.  An
@@ -46,6 +55,11 @@ M_Z8001 = 4
 AR_MAGIC = 0o177535  # include/ar.h ARMAG
 LDHDR_SIZE = 48      # sizeof(struct ldheader), and so l_tbase
 L_ENTRY_OFF = 44
+L_SYM = 7
+LDSYM_SIZE = 22      # sizeof(struct ldsym)
+NOT_IN_FILE = (2, 5)  # L_BSSI, L_BSSD
+SECTIONS = ("SHRI", "PRVI", "BSSI", "SHRD", "PRVD", "BSSD", "DEBUG", "SYM",
+            "REL", "ABS", "REF")
 MACHINES = {
     1: "pdp11", 2: "vax", 3: "s360", 4: "z8001", 5: "z8002",
     6: "i8086", 7: "i8080", 8: "m6800", 9: "m6809", 10: "m68000", 11: "i386",
@@ -76,10 +90,34 @@ def entry_of(b):
     return (hi << 16) | lo
 
 
-def ident(path, want_entry=False):
+def symbols_of(b):
+    """[(section-name, address, name)] from an l.out's L_SYM section, or None
+    when the header is not the 48-byte one or the section runs past the file."""
+    if len(b) < LDHDR_SIZE or struct.unpack_from("<h", b, 6)[0] != LDHDR_SIZE:
+        return None
+    sizes = []
+    for i in range(9):
+        hi, lo = struct.unpack_from("<HH", b, 8 + 4 * i)
+        sizes.append((hi << 16) | lo)
+    off = LDHDR_SIZE + sum(sizes[i] for i in range(L_SYM)
+                           if i not in NOT_IN_FILE)
+    end = off + sizes[L_SYM]
+    if sizes[L_SYM] % LDSYM_SIZE or end > len(b):
+        return None
+    out = []
+    for o in range(off, end, LDSYM_SIZE):
+        name = b[o:o + 16].split(b"\0", 1)[0].decode("latin-1")
+        typ = struct.unpack_from("<h", b, o + 16)[0] & 0o17
+        hi, lo = struct.unpack_from("<HH", b, o + 18)
+        sect = SECTIONS[typ] if typ < len(SECTIONS) else "?%d" % typ
+        out.append((sect, (hi << 16) | lo, name))
+    return out
+
+
+def ident(path, want_entry=False, want_syms=False):
     """(ok_machine, description) -- ok_machine is None when unidentifiable."""
     with open(path, "rb") as f:
-        b = f.read(4096)
+        b = f.read() if want_syms else f.read(4096)
     if len(b) < 2:
         return None, "empty or too short"
     if b[:4] == b"\x7fELF":
@@ -101,6 +139,12 @@ def ident(path, want_entry=False):
     if want_entry:
         e = entry_of(b)
         desc += " entry=?" if e is None else " entry=%#x" % e
+    if want_syms:
+        syms = symbols_of(b)
+        if syms is None:
+            desc += "\n  symbols=?"
+        else:
+            desc += "".join("\n  %s %#x %s" % t for t in syms)
     return mach, desc
 
 
@@ -136,6 +180,7 @@ def archive_machines(path):
 def main(argv):
     quiet = False
     entry = False
+    syms = False
     want = None
     files = []
     i = 1
@@ -145,6 +190,8 @@ def main(argv):
             quiet = True
         elif a == "-e":
             entry = True
+        elif a == "-s":
+            syms = True
         elif a == "-m":
             i += 1
             want = argv[i]
@@ -155,12 +202,12 @@ def main(argv):
             files.append(a)
         i += 1
     if not files:
-        sys.stderr.write("usage: loutid.py [-q] [-e] [-m MACHINE] FILE...\n")
+        sys.stderr.write("usage: loutid.py [-q] [-e] [-s] [-m MACHINE] FILE...\n")
         return 2
     bad = 0
     for p in files:
         try:
-            mach, desc = ident(p, entry)
+            mach, desc = ident(p, entry, syms)
         except OSError as e:
             mach, desc = None, "cannot read: %s" % e
         wrong = want is not None and mach != want

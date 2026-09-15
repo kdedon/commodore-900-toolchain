@@ -75,17 +75,20 @@ ld: as
 # regress.sh does not: cc2's object as the linker sees it, relocation, the
 # register-clobber contract, and the soft-float runtime.
 #
-# tests/multiseg-text.sh is the same family and is NOT here: it links through
-# ccz against libc-z8001, so it needs an OS tree.  It belongs wherever
-# check-selfhost lives, not in `check'.
+# tests/multiseg-text.sh links through ccz against the libc-z8001 that
+# check-libc builds from src/, and runs the result, so it needs nothing beyond
+# that target and the emulator.  It is the `ld -L' multi-segment text gate:
+# placement of named modules across three and four text segments, read back
+# with host/loutid.py -s.
 #
-# tests/ld-commons.sh is here because it needs neither: .comm states the sizes,
-# so as and ld alone build the case.
+# tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
+# build the case.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
 	sh tests/ld-commons.sh
+	sh tests/multiseg-text.sh
 	sh tests/regclob.sh
 	sh tests/blkmove-variant.sh
 	sh tests/lssaddr-variant.sh
