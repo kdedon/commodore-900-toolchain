@@ -469,6 +469,29 @@ chkf 'int f(n) int n; { int a[5]; int *q; q = &a[n]; *q = 42; return a[3]; }' 3 
 chkf 'int f(n) int n; { int a[5]; int *q; a[2]=99; q = &a[n]; return *q; }' 2 0 99
 chkf 'int f(i) int i; { int a[5]; int *p; a[1]=55; p = &a[3]; p = p - i; return *p; }' 2 0 55
 chkf 'int f() { int a[4]; int *q; int i; int s; a[0]=1;a[1]=2;a[2]=3;a[3]=4; s=0; for(i=0;i<4;i++){ q=&a[i]; s+=*q; } return s; }' 0 0 10
+# `(long)' of a local-array address as the RIGHT operand of a long operator
+# (`top - (long)&frame[0]', EDFA62): modoper keeps the conversion as a node and
+# leaves.t shares the far pointer's pair as the long.  The difference is the
+# element distance whatever the frame address is, so each case has one answer.
+chkf 'int f(n) int n; { char fr[8]; long top; top = (long)&fr[n]; return (int)(top - (long)&fr[0]); }' 5 0 5
+chkf 'int f(n) int n; { char fr[8]; long top; top = (long)&fr[0] + 70000L; return (int)((top - (long)&fr[n]) / 1000L); }' 0 0 70
+chkf 'int f(n) int n; { char fr[8]; long k; k = (long)&fr[7]; k -= (long)&fr[n]; return (int)k; }' 2 0 5
+chkf 'int f(n) int n; { char fr[8]; long top; top = (long)&fr[n]; return (top < (long)&fr[4]) + 2*(top == (long)&fr[3]); }' 3 0 3
+chkf 'long g(x) long x; { return x; } int f() { char fr[8]; return (int)(g((long)fr - (long)&fr[2]) >> 16); }' 0 0 -1
+# The same conversion under an operator with no far-pointer rule, in either operand
+# position (modfold reverses an associative cluster's leaves, so `top & (long)fr'
+# reaches modoper with the conversion on the left), and under an add or compare of
+# two such addresses.  Each answer is a relationship between addresses, not one.
+chkf 'int f(n) int n; { char fr[8]; long top, r; top = -1L; r = top & (long)&fr[n]; return (r == (long)&fr[n]) * 7; }' 5 0 7
+chkf 'int f(n) int n; { char fr[8]; long top; top = 0L; return (int)((top | (long)&fr[n]) - (long)&fr[0]); }' 6 0 6
+chkf 'int f(n) int n; { char fr[8]; long top; top = (long)&fr[n]; return (int)(top ^ (long)&fr[n]) + 9; }' 3 0 9
+chkf 'int f(n) int n; { char fr[8]; long top; top = 3L; return (int)(top * (long)&fr[n] - top * (long)&fr[0]); }' 4 0 12
+chkf 'int f(n) int n; { char fr[8]; long top; top = (long)&fr[0]; return (int)((long)&fr[n] / top) * 11 + (int)((long)&fr[n] % top); }' 5 0 16
+chkf 'int f(n) int n; { char fr[8]; return (int)(((long)&fr[n] << 3) - ((long)&fr[0] << 3)); }' 2 0 16
+chkf 'int f(n) int n; { char fr[8]; return (int)(~(long)&fr[n] + (long)&fr[0]) * 10 + (int)(-(long)&fr[n] + (long)&fr[1]); }' 3 0 -42
+chkf 'int f(n) int n; { char fr[8]; long top; top = (long)fr + (long)&fr[n]; return (int)(top - (long)&fr[0] - (long)&fr[1]); }' 6 0 5
+chkf 'int f(n) int n; { char fr[8]; return 3 + ((long)&fr[n] > (long)&fr[1]) * 4 + ((long)fr == (long)&fr[n]) * 8; }' 4 0 7
+chkf 'int f(n) int n; { char fr[8]; char *p; p = fr; return ((long)&fr[1] < (long)(p + n)) * 5 + ((long)(p + n) & (long)&fr[n]) - (long)&fr[n]; }' 3 0 5
 # 2D CHAR array indexed by two register vars (banner.c `font[*s-' '][i]').  cc0 left-
 # associates a[i][j] (scale-1 inner index) as (i*scale + base) + j, leaving the scaled term
 # folded against the static base -- a scaled address gencoll can't encode.  modoper rotates

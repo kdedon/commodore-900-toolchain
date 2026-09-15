@@ -200,6 +200,106 @@ register TREE *tp;
 }
 
 /*
+ * True if `tp' is pointer arithmetic (a pointer ADD/SUB).
+ */
+static
+isptrarith(tp)
+register TREE *tp;
+{
+	return ispoint(tp->t_type) && (tp->t_op == ADD || tp->t_op == SUB);
+}
+
+/*
+ * True if `tp', through any conversion, is a pointer value whose type the next
+ * pass re-derives from its operands: a frame address, lowered (`FP + k') or not
+ * yet (`&auto'), or pointer arithmetic on anything but a static address
+ * (`p + 1', `&auto[i]').  A static address keeps its relabel, and a bare
+ * pointer variable is a leaf whose relabel holds.
+ */
+static
+isderivedptr(tp)
+register TREE *tp;
+{
+	register TREE *bp;
+
+	for (;;) {
+		if (tp->t_op == CONVERT || tp->t_op == CAST || tp->t_op == LEAF)
+			tp = tp->t_lp;
+		else if (tp->t_op == ADDR && tp->t_lp->t_op == STAR)
+			tp = tp->t_lp->t_lp;	/* `&auto[i]' before modtree folds `&*' */
+		else
+			break;
+	}
+	switch (tp->t_op) {
+	case ADDR:
+		return tp->t_lp->t_op == AID || tp->t_lp->t_op == PID;
+	case REG:
+		return tp->t_reg == FPREG;
+	case ADD:
+	case SUB:
+		if (!ispoint(tp->t_type))
+			return 0;
+		bp = tp->t_lp;
+		if (tp->t_op == ADD && !ispoint(bp->t_type))
+			bp = tp->t_rp;
+		while (bp->t_op == LEAF)
+			bp = bp->t_lp;
+		if ((bp->t_flag&T_CON) != 0)
+			return 0;
+		if (bp->t_op == ADDR)
+			return bp->t_lp->t_op == AID || bp->t_lp->t_op == PID;
+		return bp->t_op != GID && bp->t_op != LID;
+	default:
+		return 0;
+	}
+}
+
+/*
+ * True if the conversion `tp' of far-pointer arithmetic to an integer must stay
+ * a node under its parent `ptp'.  Dropping it hands the parent an LPTX operand:
+ * its pointer type is re-derived from its operands on the next pass, whatever
+ * the relabel said.  Only the far-pointer rules take one -- pointer-left ADD and
+ * SUB, and a relational operator's left operand -- so the conversion is kept
+ *   - as the RIGHT operand of any binary, op-assign or relational operator but
+ *     ADD, which modswap turns pointer-left (`top - (long)&fr[0]');
+ *   - as either operand of MUL, DIV, REM, AND, OR, XOR, SHL or SHR, and under
+ *     NEG and COM, which have no pointer rule at all.  modfold rebuilds an
+ *     associative cluster with its leaves reversed before the children are
+ *     walked, so `top & (long)fr' reaches here with the conversion on the left;
+ *   - under ADD or a relational operator whose other operand is far-pointer
+ *     arithmetic too (`(long)fr + (long)&fr[2]'), where the two pointers match
+ *     no pointer rule.
+ * leaves.t's LONG <- LPTX identity then shares the pair the operand is built in.
+ */
+static
+iskeptptrcvt(tp, ptp)
+register TREE *tp;
+register TREE *ptp;
+{
+	register int op;
+	register TREE *sp;
+
+	if (ptp == NULL)
+		return 0;
+	op = ptp->t_op;
+	if (op == NEG || op == COM)
+		return 1;
+	if (op < ADD || op > ULT)
+		return 0;
+	if (ptp->t_rp == tp)
+		sp = ptp->t_lp;
+	else if (ptp->t_lp == tp)
+		sp = ptp->t_rp;
+	else
+		return 0;
+	if (op >= MUL && op <= SHR)
+		return 1;
+	if (ptp->t_rp == tp && op != ADD)
+		return 1;
+	return (op == ADD || isrelop(op)) && sp != NULL && isderivedptr(sp);
+}
+
+/*
  * This function performs machine specific tree modifications.
  * It is called from "modtree" after all of the machine
  * independent transformations have been done.
@@ -993,6 +1093,15 @@ TREE		*ptp;
 
 	case CONVERT:
 	case CAST:
+		/*
+		 * `top - (long)&fr[0]', `top & (long)fr': pointer arithmetic (a far
+		 * pointer ADD/SUB, here the frame address) converted to an integer
+		 * where no far-pointer rule takes it (iskeptptrcvt).  KEEP the node:
+		 * the operand is built as a far pointer (segment half included) and
+		 * leaves.t's LONG <- LPTX identity shares its pair.
+		 */
+		if (!ispoint(tt) && isptrarith(lp) && iskeptptrcvt(tp, ptp))
+			break;
 		if (modkind(tt) == modkind(lp->t_type)) {
 			/*
 			 * Same machine kind (same regs/bits) so the convert emits

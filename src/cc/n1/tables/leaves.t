@@ -540,6 +540,17 @@ LEAF:
 		*		*
 			;
 
+/ `(long)p' of a far pointer already built in its temp pair: the pair holds the
+/ segment word high and the offset word low, which are the long's 32 bits.  Share
+/ the temp, emit nothing.  modoper keeps this CONVERT as a node over pointer
+/ arithmetic that is the right operand of a long operator (`top - (long)&fr[0]'),
+/ where dropping it leaves an LPTX operand that no long rule takes.
+%	PRVALUE|P_SLT
+	LONG		ANYR	ANYR	*	TEMP
+		TREG		LPTX
+		*		*
+			;
+
 /////////
 / Segmented-pointer conversions (LPTX <-> LONG share the 2-word layout; the
 / offset is the low word, the segment the high word).  [DRAFT -- full seg:offset
