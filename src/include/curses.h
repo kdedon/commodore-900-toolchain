@@ -18,14 +18,13 @@
  */
 
 /*
- * This is the header libcurses.a itself is compiled against, so it is the
- * one that decides the layout of a WINDOW.  The toolchain's <curses.h> is a
- * byte copy of it, because a program that reaches <curses.h> through the
- * system include directory rather than through -I on the libcurses source
- * directory must get the same struct: the guard below is `# ifndef WINDOW',
- * which both copies share, so include order alone decides which one is read
- * and a mismatch links without a diagnostic.  hostbuild/build-curses.sh
- * compares the two and refuses to build them apart.
+ * This is the header libcurses.a itself is compiled against, so it is the one
+ * that decides the layout of a WINDOW, and it is the only copy: the archive
+ * and every program that links against it reach this file through the system
+ * include directory.  A second copy would be read instead of this one wherever
+ * an -I named its directory first -- the guard below is `# ifndef WINDOW', so
+ * include order alone would decide which struct a translation unit sees, and
+ * the mismatch links without a diagnostic.
  */
 
 # ifndef WINDOW

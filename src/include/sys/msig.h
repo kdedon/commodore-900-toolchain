@@ -14,11 +14,11 @@
 #ifndef	MSIG_H
 #define	MSIG_H	MSIG_H
 
-#define	SIGDIVE	12			/* Divide error */
-#define SIGOVFL	13			/* Overflow */
-#define SIGNO14	14			/* Signal 14 */
-#define SIGNO15	15			/* Signal 15 */
-#define SIGNO16	16			/* Signal 16 */
+#define	SIGEPA	12			/* Extended processor trap (uni) */
+#define	SIGPRV	13			/* Privileged instruction */
+#define	SIGNVI	14			/* Non vectored interrupt */
+#define	SIGNMI	15			/* Non-maskable interrupt (not passed) */
+#define	SIGI16	16			/* Signal 16 */
 #define NSIG	16			/* Number of signals */
 
 /*
