@@ -6,7 +6,6 @@
 #   tests/check.sh                      build cc1 + n2, run the full regression
 #   tests/check.sh -q                   quick: skip cc1 rebuild, just n2 + regression
 #   tests/check.sh probe '<C src>' A B WANT   build, run snippet f(A,B), assert ==WANT
-#   tests/check.sh dis   '<C src>'      build, disassemble cc2's object for a snippet
 #   tests/check.sh run   '<C src>' A B  build, run snippet f(A,B), print the result
 #
 # Env: VAR (variant flags, default VLARGE 800000000800), N2 (guest runner, default: host/runner.sh).
@@ -73,9 +72,5 @@ case "$cmd" in
   run)        build_cc1; build_n2
               z1=$(compile "$2") || { echo "$z1"; exit 1; }
               runsnip "$z1" "${3:-0}" "${4:-0}" ;;
-  dis)        build_cc1; build_n2
-              z1=$(compile "$2") || { echo "$z1"; exit 1; }
-              "$O/cc2-z8001" 0010 "$z1" /tmp/chk.o /tmp/chk.scr 0 || { echo "cc2 FAILED"; exit 1; }
-              "$(sh "$HERE/host/loutdis.sh")" -v /tmp/chk.o ;;
   *) echo "unknown: $cmd (see header)"; exit 2 ;;
 esac

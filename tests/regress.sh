@@ -576,7 +576,7 @@ chkf 'char c; int f(x) int x; { c=x; c++; return c; }' 7 0 8
 # temp holds the untruncated result over a stale high byte: `--c' from 0 reads as +255,
 # `c += 91' from 37 as +128, `c <<= 3' from 127 as +1016.  The real sites were the rec/mm.c
 # console driver (`if (--mmrow < 0)' never scrolled) and split.c's `if (++*cp <= 'z')'.
-# Effect-only forms must stay extension-free -- see the codesize gate.
+# Effect-only forms, whose value is discarded, emit no extension.
 chkf 'char c; int f(x) int x; { c=x; return --c; }' 0 0 -1
 chkf 'char c; int f(x) int x; { c=x; return ++c; }' 127 0 -128
 chkf 'char c; int f(x) int x; { c=x; return (c += 91); }' 37 0 -128

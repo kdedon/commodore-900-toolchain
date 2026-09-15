@@ -75,10 +75,9 @@ ld: as
 # regress.sh does not: cc2's object as the linker sees it, relocation, the
 # register-clobber contract, and the soft-float runtime.
 #
-# tests/segexec.sh and tests/multiseg-text.sh are the same family and are NOT
-# here: both link through ccz against libc-z8001, so they need an OS tree, and
-# segexec reads the entry segment with loutdis, which is not in this
-# repository.  They belong wherever check-selfhost lives, not in `check'.
+# tests/multiseg-text.sh is the same family and is NOT here: it links through
+# ccz against libc-z8001, so it needs an OS tree.  It belongs wherever
+# check-selfhost lives, not in `check'.
 #
 # tests/ld-commons.sh is here because it needs neither: .comm states the sizes,
 # so as and ld alone build the case.
@@ -95,7 +94,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/float-e2e.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
-# loutdis, so it cannot run here -- but its NEGATIVE CONTROL needs python3 and
+# an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it
+# cannot run here -- but its NEGATIVE CONTROL needs python3 and
 # nothing else, and a differential harness that has never been demonstrated to
 # fail is not yet an instrument.  This target is that demonstration: it feeds
 # effdiff's own matcher a pair it must call equal and a pair it must call

@@ -1,9 +1,9 @@
 #!/bin/sh
 # segrun.sh -- MULTI-SEGMENT execution gate.  Links each program BOTH flat (ld -R 0x200,
 # code in segment 0) AND at the real Coherent user base (no -R -> ld userbase = segment 3),
-# runs both through the sim (-runobjint), and requires the seg-3 result to equal the flat
-# result AND a fixed expected value.  This protects the segmented run path (runsim.go segImage:
-# code loaded into its segment, cross-segment CALL from the seg-0 stub, stack in segment 0).
+# runs both through the guest runner (-runobjint), and requires the seg-3 result to equal the
+# flat result AND a fixed expected value.  This protects the segmented run path (code loaded
+# into its segment, cross-segment CALL from the seg-0 stub, stack in segment 0).
 #
 # cc2 emits segmented LR_LONG relocations (Phase 2), so globals, cross-function calls, and
 # far-pointers-to-global relocate correctly at a nonzero segment: their CALL/data operands
@@ -13,11 +13,9 @@ H="$(cd "$(dirname "$0")/.." && pwd)"
 B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR=800000020800; PEEP=0010
-# loutdis is RESOLVED, not guessed at: it is not part of this repository (it
-# decodes through a simulator), and host/loutdis.sh finds or builds it and
-# names the variable to set when it cannot.  A hardcoded path to a tool that is
-# not there silently empties `es' and fails every case as a wrong ANSWER.
-LOUTDIS=$(sh "$H/host/loutdis.sh")
+# The entry point comes from host/loutid.py, this repository's l.out header
+# reader: `-e' prints l_entry as `entry=0x...', segment in the high word.
+entry() { python3 "$H/host/loutid.py" -e "$1" 2>/dev/null; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s" 2>/dev/null
 pass=0; fail=0
@@ -30,7 +28,7 @@ chk() {	# "<function body>" want
 	"$LD" -R 0x200 -e f_ -o "$T/flat" "$T/c.o" "$T/ss.o" 2>/dev/null
 	"$LD"          -e f_ -o "$T/seg3" "$T/c.o" "$T/ss.o" 2>/dev/null	# no -R -> userbase (seg 3)
 	# confirm the seg-3 link really placed the entry in segment 3
-	es=$("$LOUTDIS" -hdr "$T/seg3" 2>/dev/null | grep -oE 'entry=0x[0-9a-f]+')
+	es=$(entry "$T/seg3" | grep -oE 'entry=0x[0-9a-f]+')
 	f=$(r1 "$T/flat"); s=$(r1 "$T/seg3")
 	if [ "$es" != "entry=0x3000000" ]; then echo "  FAIL seg-3 link base=[$es] [$1]"; fail=$((fail+1)); return; fi
 	if [ -n "$s" ] && [ "$s" = "$f" ] && [ "$s" = "$2" ]; then pass=$((pass+1))
@@ -65,7 +63,7 @@ whole() {	# "<full source with int f() + helpers/globals>" want
 	"$O/cc2-z8001" $PEEP "$T/w.z1" "$T/w.o" "$T/scr" 0 2>/dev/null || { echo "  FAIL(cc2) [whole]"; fail=$((fail+1)); return; }
 	"$LD" -R 0x200 -e f_ -o "$T/flat" "$T/w.o" "$T/ss.o" 2>/dev/null
 	"$LD"          -e f_ -o "$T/seg3" "$T/w.o" "$T/ss.o" 2>/dev/null
-	es=$("$LOUTDIS" -hdr "$T/seg3" 2>/dev/null | grep -oE 'entry=0x3[0-9a-f]+')
+	es=$(entry "$T/seg3" | grep -oE 'entry=0x3[0-9a-f]+')
 	fl=$(r1 "$T/flat"); s=$(r1 "$T/seg3")
 	if [ -z "$es" ]; then echo "  FAIL seg-3 entry not in seg 3 [whole]"; fail=$((fail+1)); return; fi
 	if [ -n "$s" ] && [ "$s" = "$fl" ] && [ "$s" = "$2" ]; then pass=$((pass+1))
@@ -125,7 +123,7 @@ libc() {	# "<source with int f()>" want
 	"$O/cc2-z8001" $PEEP "$T/lc.z1" "$T/lc.o" "$T/scr" 0 2>/dev/null || { echo "  FAIL(cc2) [libc]"; fail=$((fail+1)); return; }
 	"$LD" -R 0x200 -e f_ -o "$T/flat" "$T/lc.o" "$T/ss.o" "$LIBC/libc-z8001.a" 2>/dev/null
 	"$LD"          -e f_ -o "$T/seg3" "$T/lc.o" "$T/ss.o" "$LIBC/libc-z8001.a" 2>/dev/null
-	es=$("$LOUTDIS" -hdr "$T/seg3" 2>/dev/null | grep -oE 'entry=0x3[0-9a-f]+')
+	es=$(entry "$T/seg3" | grep -oE 'entry=0x3[0-9a-f]+')
 	fl=$(r1 "$T/flat"); s=$(r1 "$T/seg3")
 	if [ -z "$es" ]; then echo "  FAIL seg-3 entry not in seg 3 [libc]"; fail=$((fail+1)); return; fi
 	if [ -n "$s" ] && [ "$s" = "$fl" ] && [ "$s" = "$2" ]; then pass=$((pass+1))

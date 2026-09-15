@@ -49,14 +49,8 @@ that includes them.
   would produce, so a hand-edit or a stale commit fails too. `make check-isa`
   runs `--check`, which asserts rather than writes.
 - **`gen_optab.py`** — generates `src/cc/generated/OF_styles.h` + `optab.c` here
-  from the inventory + `pst.c`, and — when a `gotools` tree is reachable
-  (`$C900_GOTOOLS`) — `cmd/rt_z8001/inv_data.go` there (every
-  `(mnem, shape, base, varmask, style)` row: the data the round-trip driver
-  consumes). Without that tree it writes the C outputs and says out loud that
-  it skipped the Go one; `rt_z8001` needs a decoder this repository has not
-  got. It reads MWC's `pst.c` from `src/as/z8001/`; before the split it
-  read a donor checkout that is not part of this repository, which is why that
-  path had to be repointed at the assembler this repo ships.
+  from the inventory + `pst.c`. It reads MWC's `pst.c` from `src/as/z8001/`,
+  the assembler this repository ships.
 
 ## How to read an inventory row
 

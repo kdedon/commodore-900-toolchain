@@ -4,7 +4,7 @@
 # per-function byte sizes to the ORIGINAL MWC-compiled binary.  The original binaries
 # are the only meaningful efficiency baseline: comparing our backend to another of our
 # own encoders says nothing about whether we are fast enough for the machine.  Uses
-# loutdis on both sides; the sim is never invoked.
+# $EFFDIFF_DIS on both sides; the sim is never invoked.
 #
 # The originals are STRIPPED, so there is no name to match on.  Functions are split out
 # of the text by their FP-setup prologue and paired by opcode-profile signature: each
@@ -27,7 +27,7 @@
 #     and the affected functions land beyond the threshold.  Deliberately perturbing
 #     struct-copy codegen does not move the matched-function totals.  Read the unmatched
 #     line, not the delta, for that class.
-#   * Anything the pairing gets WRONG.  The signature is loutdis's top-four opcodes plus
+#   * Anything the pairing gets WRONG.  The signature is the -funcs report's top-four opcodes plus
 #     an instruction count, which is not an identity: two same-sized leaf functions can
 #     pair with each other's originals and both compare clean.  There is no name-level
 #     confirmation available on a stripped binary.
@@ -45,7 +45,7 @@
 #
 # Inputs, all external and none assumed:
 #   $Z8001_DONOR   the userland corpus, cmd/ and include/       (tests/donor.sh)
-#   $LOUTDIS       the l.out disassembler                       (host/loutdis.sh)
+#   $EFFDIFF_DIS   an l.out disassembler with a -funcs report  (required)
 #   $ORIG_BIN      the original MWC-compiled binaries; defaults to $Z8001_DONOR/bin
 #
 # Usage:
@@ -66,8 +66,13 @@ if [ "$MODE" = run ]; then
 	. "$(dirname "$0")/donor.sh"
 	B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 	O="$B/z8001"; VAR="${VAR:-800000000800}"
-	# $LOUTDIS wins over the search, the way every other caller resolves it.
-	LD="${LOUTDIS:-$(sh "$H/host/loutdis.sh")}"
+	# The disassembler is an input, like the corpus: nothing here provides one.
+	LD="${EFFDIFF_DIS:-}"
+	if [ ! -f "$LD" ] || [ ! -x "$LD" ]; then
+		echo "effdiff.sh: \$EFFDIFF_DIS must name an l.out disassembler" >&2
+		echo "  with a -funcs report.  This repository carries none." >&2
+		exit 2
+	fi
 	CMD="$Z8001_DONOR/cmd"; INC="$Z8001_DONOR/include"
 	BIN="${ORIG_BIN:-$Z8001_DONOR/bin}"
 
@@ -110,7 +115,7 @@ MINBINS =int(os.environ.get("EFFDIFF_MIN_BINS","5"))
 def sh(c): return subprocess.run(c,shell=True,capture_output=True,text=True)
 
 def funcs(p):
-    """loutdis -funcs, parsed.  Empty means unreadable or textless, and the
+    """$EFFDIFF_DIS -funcs, parsed.  Empty means unreadable or textless, and the
     caller distinguishes that from a file that is simply absent."""
     r=sh(f"{LD} -funcs {p}")
     out=[]
@@ -127,7 +132,7 @@ def funcs(p):
     return out
 
 def dist(a,b):
-    """Opcode-profile distance plus instruction-count distance.  loutdis reports
+    """Opcode-profile distance plus instruction-count distance.  -funcs lists
     only the top opcodes, so this is a resemblance, never an identity."""
     ks=set(a['ops'])|set(b['ops'])
     return sum(abs(a['ops'].get(k,0)-b['ops'].get(k,0)) for k in ks)+abs(a['insns']-b['insns'])
@@ -167,7 +172,7 @@ def bloat(fs,nbytes,ninsns,op):
     return out
 
 def synth():
-    """A function set with the shape loutdis produces, for the dependency-free
+    """A function set with the shape -funcs produces, for the dependency-free
     leg of the control."""
     out=[]
     for i in range(24):
@@ -255,7 +260,7 @@ for src in srcs:
     compiled+=1
     cf=funcs(f"{d}/c.o")
     if not cf:
-        skip("loutdis found no function in cc2's object"); continue
+        skip("the disassembler found no function in cc2's object"); continue
     tools+=1
     nfun_cc2+=len(cf); tot_c+=sum(c['bytes'] for c in cf)
 
@@ -266,7 +271,7 @@ for src in srcs:
     bins_present+=1
     of=funcs(op)
     if not of:
-        skip("loutdis could not read the original binary")
+        skip("the disassembler could not read the original binary")
         unmatched_no_bin+=len(cf); continue
     bins_readable+=1
     nfun_orig+=len(of)

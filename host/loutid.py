@@ -5,6 +5,8 @@
 #	loutid.py FILE...		print one line per file
 #	loutid.py -q -m z8001 FILE...	silent unless a file is not a Z8001
 #					l.out or a Z8001 archive; exit 1 then
+#	loutid.py -e FILE...		also print an l.out's entry point, as
+#					`entry=0x3000000' (segment 3, offset 0)
 #
 # WHY THIS EXISTS.  An environment tree is a directory of binaries that a GUEST
 # will execute.  Every host build harness in this repository runs the host
@@ -21,8 +23,13 @@
 #	off 0	short l_magic	 0407
 #	off 2	short l_flag	 LF_SHR 01 / LF_SEP 02 / LF_NRB 04 / LF_32 020
 #	off 4	short l_machine	 M_Z8001 4 (include/mtype.h)
+#	off 6	short l_tbase	 sizeof(struct ldheader), 48
+#	off 8	long l_ssize[9]
+#	off 44	long l_entry	 segment in the high word, offset in the low
 #
-# 16-bit fields are little-endian on this target, so 0407 is `07 01'.  An
+# 16-bit fields are little-endian on this target, so 0407 is `07 01'; a 32-bit
+# field is PDP-canonical, high word first, so entry 0x3000000 is `00 03 00 00'.
+# A header whose l_tbase is not 48 has no entry this reader will vouch for.  An
 # archive (include/ar.h) starts with the magic word 0177535 instead and holds
 # objects, which are checked individually.
 #
@@ -37,6 +44,8 @@ import sys
 L_MAGIC = 0o407
 M_Z8001 = 4
 AR_MAGIC = 0o177535  # include/ar.h ARMAG
+LDHDR_SIZE = 48      # sizeof(struct ldheader), and so l_tbase
+L_ENTRY_OFF = 44
 MACHINES = {
     1: "pdp11", 2: "vax", 3: "s360", 4: "z8001", 5: "z8002",
     6: "i8086", 7: "i8080", 8: "m6800", 9: "m6809", 10: "m68000", 11: "i386",
@@ -59,7 +68,15 @@ def ident_lout(b, off=0):
     return ("l.out", MACHINES.get(mach, "machine%d" % mach), flagstr(flag))
 
 
-def ident(path):
+def entry_of(b):
+    """An l.out's l_entry, or None when the header is not the 48-byte one."""
+    if len(b) < LDHDR_SIZE or struct.unpack_from("<h", b, 6)[0] != LDHDR_SIZE:
+        return None
+    hi, lo = struct.unpack_from("<HH", b, L_ENTRY_OFF)
+    return (hi << 16) | lo
+
+
+def ident(path, want_entry=False):
     """(ok_machine, description) -- ok_machine is None when unidentifiable."""
     with open(path, "rb") as f:
         b = f.read(4096)
@@ -80,7 +97,11 @@ def ident(path):
     if got is None:
         return None, "not an l.out (magic %#06x)" % struct.unpack_from("<H", b, 0)[0]
     kind, mach, flags = got
-    return mach, "%s %s [%s]" % (kind, mach, flags)
+    desc = "%s %s [%s]" % (kind, mach, flags)
+    if want_entry:
+        e = entry_of(b)
+        desc += " entry=?" if e is None else " entry=%#x" % e
+    return mach, desc
 
 
 def archive_machines(path):
@@ -114,6 +135,7 @@ def archive_machines(path):
 
 def main(argv):
     quiet = False
+    entry = False
     want = None
     files = []
     i = 1
@@ -121,6 +143,8 @@ def main(argv):
         a = argv[i]
         if a == "-q":
             quiet = True
+        elif a == "-e":
+            entry = True
         elif a == "-m":
             i += 1
             want = argv[i]
@@ -131,12 +155,12 @@ def main(argv):
             files.append(a)
         i += 1
     if not files:
-        sys.stderr.write("usage: loutid.py [-q] [-m MACHINE] FILE...\n")
+        sys.stderr.write("usage: loutid.py [-q] [-e] [-m MACHINE] FILE...\n")
         return 2
     bad = 0
     for p in files:
         try:
-            mach, desc = ident(p)
+            mach, desc = ident(p, entry)
         except OSError as e:
             mach, desc = None, "cannot read: %s" % e
         wrong = want is not None and mach != want

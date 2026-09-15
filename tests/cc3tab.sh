@@ -2,7 +2,7 @@
 # cc3tab.sh -- assert that everything indexed by generated/opcode.h is in step.
 #
 # opcode.h is an INDEX, not a name list: its numbers are the ROW NUMBERS of four
-# separate tables, and it is machine-generated (gotools/cmd/genz8001tab,
+# separate tables, and it is machine-generated (genz8001tab,
 # from the simulator's decoder) while all four tables are kept by hand.  So a
 # regeneration that renumbers one mnemonic and lands without them does not fail
 # to build and does not mis-print a line -- cc2 encodes a DIFFERENT INSTRUCTION

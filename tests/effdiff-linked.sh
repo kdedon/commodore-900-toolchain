@@ -32,7 +32,7 @@
 #     original's shape, and a summary that printed only the byte delta would have thrown
 #     the signal away.  A fall in pairing is a regression report even when the delta on
 #     what still pairs looks fine.
-#   * Anything the pairing gets WRONG.  The signature is loutdis's top opcodes plus an
+#   * Anything the pairing gets WRONG.  The signature is the -funcs report's top opcodes plus an
 #     instruction count, which is not an identity: two same-shaped leaf functions can pair
 #     with each other's originals and both compare clean.  A stripped binary offers no
 #     name-level confirmation.
@@ -56,7 +56,7 @@
 #
 # Inputs, all external and none assumed:
 #   $Z8001_DONOR   the userland corpus, cmd/ and include/       (tests/donor.sh)
-#   $LOUTDIS       the l.out disassembler                       (host/loutdis.sh)
+#   $EFFDIFF_DIS   an l.out disassembler with a -funcs report  (required)
 #   $ORIG_BIN      the original MWC-compiled binaries; defaults to $Z8001_DONOR/bin
 #
 # Usage:
@@ -78,8 +78,13 @@ if [ "$MODE" = run ]; then
 	B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 	O="$B/z8001"; AS="$B/as-z8001"; LDD="$B/ld-z8001"
 	LIBC="$B/libc-z8001"; V2="${VAR:-800000020800}"
-	# $LOUTDIS wins over the search, the way every other caller resolves it.
-	LDIS="${LOUTDIS:-$(sh "$H/host/loutdis.sh")}"
+	# The disassembler is an input, like the corpus: nothing here provides one.
+	LDIS="${EFFDIFF_DIS:-}"
+	if [ ! -f "$LDIS" ] || [ ! -x "$LDIS" ]; then
+		echo "effdiff-linked.sh: \$EFFDIFF_DIS must name an l.out disassembler" >&2
+		echo "  with a -funcs report.  This repository carries none." >&2
+		exit 2
+	fi
 	D="$Z8001_DONOR"; CMD="$D/cmd"; INC="$D/include"
 	BIN="${ORIG_BIN:-$Z8001_DONOR/bin}"
 
@@ -129,7 +134,7 @@ MINLINKED=int(os.environ.get("EFFDIFF_MIN_LINKED","5"))
 def sh(c): return subprocess.run(c,shell=True,capture_output=True,text=True)
 
 def funcs(p):
-    """loutdis -funcs, parsed.  Empty means unreadable or textless, and the
+    """$EFFDIFF_DIS -funcs, parsed.  Empty means unreadable or textless, and the
     caller distinguishes that from a file that is simply absent."""
     out=[]
     for ln in sh(f"{LDIS} -funcs {p}").stdout.splitlines():
@@ -143,7 +148,7 @@ def funcs(p):
     return out
 
 def dist(a,b):
-    """Opcode-profile distance plus instruction-count distance.  loutdis reports
+    """Opcode-profile distance plus instruction-count distance.  -funcs lists
     only the top opcodes, so this is a resemblance, never an identity."""
     ks=set(a['ops'])|set(b['ops'])
     return sum(abs(a['ops'].get(k,0)-b['ops'].get(k,0)) for k in ks)+abs(a['insns']-b['insns'])
@@ -183,7 +188,7 @@ def bloat(fs,nbytes,ninsns,op):
     return out
 
 def synth():
-    """A function set with the shape loutdis produces, for the dependency-free
+    """A function set with the shape -funcs produces, for the dependency-free
     leg of the control."""
     out=[]
     for i in range(24):
@@ -323,9 +328,9 @@ for src in srcs:
     linked+=1
     cf=funcs(f"{d}/a.out"); of=funcs(op)
     if not cf:
-        skip("loutdis found no function in the linked program"); continue
+        skip("the disassembler found no function in the linked program"); continue
     if not of:
-        skip("loutdis could not read the original binary"); continue
+        skip("the disassembler could not read the original binary"); continue
     nfun_cc2+=len(cf); nfun_orig+=len(of)
     if control_real is None: control_real=(f"original {u}",of)
     pairs,un=match(cf,of)
