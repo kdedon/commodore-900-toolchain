@@ -1,22 +1,31 @@
 The COHERENT Lexicon, for what this repository owns.
 
-COHERENT.1/ and COHERENT.2/ hold 359 articles of Mark Williams Company's
-on-line manual -- the two halves the Lexicon splits itself into, a-l and m-z --
-covering the C library this repository builds (297), the C language and
-preprocessor its compiler implements (59), and the compiler passes themselves,
-cc0, cc1 and cc2 (3).  man.index is the index of exactly those articles, one
-row per article: <path> <TAB> <title> <TAB> <one-line description>, the format
-/bin/man reads.  Paths are relative to this directory, so an image builder
-copies the two directories into its manual root and appends these rows to the
-index it is assembling.
+COHERENT.1/ and COHERENT.2/ hold 362 articles of the on-line manual -- the two
+halves the Lexicon splits itself into, a-l and m-z -- covering the C library
+this repository builds (297), the C language and preprocessor its compiler
+implements (59), the compiler passes themselves, cc0, cc1 and cc2 (3), and the
+three programs this repository builds for the machine: as, cc and ld (3).
+man.index is the index of exactly those articles, one row per article: <path>
+<TAB> <title> <TAB> <one-line description>, the format /bin/man reads.  Paths
+are relative to this directory, so an image builder copies the two directories
+into its manual root and appends these rows to the index it is assembling.
 
-The pages are MWC's text, staged exactly as the archive has it: plain ASCII as
-a *roff terminal driver rendered it, bold and underline carried as backspace
-overstrike, and two half-line motions in #define.  Nothing here is written or
-edited by this project.  347 articles are the 4.2 edition; 12 are the 3.x
-edition, of names 4.2 withdrew from the manual and left no counterpart for --
-the canonical-conversion family, nlist, and the linker-defined symbols end and
-etext.
+359 of the pages are MWC's text, staged exactly as the archive has it: plain
+ASCII as a *roff terminal driver rendered it, bold and underline carried as
+backspace overstrike, and two half-line motions in #define.  347 of those are
+the 4.2 edition; 12 are the 3.x edition, of names 4.2 withdrew from the manual
+and left no counterpart for -- the canonical-conversion family, nlist, and the
+linker-defined symbols end and etext.
+
+THREE PAGES ARE WRITTEN BY THIS PROJECT: COHERENT.1/as, COHERENT.1/cc and
+COHERENT.1/ld, the assembler, the compiler driver and the loader this
+repository builds for the Z8001.  The Lexicon's articles of those names
+describe Mark Williams' i80386 tools, which this system does not ship, so they
+document a different program and are not carried here.  These three are plain
+text with no overstrike, written from the source of the programs they
+describe, and they are original work of this project under the terms LICENSE
+at the root of this repository states for it.  The terms below govern the 359
+MWC articles.
 
 TERMS
 -----

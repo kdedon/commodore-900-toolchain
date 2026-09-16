@@ -15,6 +15,8 @@
 #   make env        stage a compiler environment for a guest (docs/ENVIRONMENTS.md)
 #   make libc libm libmisc selfhost native   parts of the `ours' env; each needs $COHERENT_OS
 #   make env-fallback  cut the two compiler dists consumers place with `make deps'
+#   make packages   cut the release packages into $(PKGOUT), each judged against
+#                   its own .contents and .provenance before it is left there
 #   make deps       acquire what DEPS says this repository consumes
 #   make clean      remove host/build
 #
@@ -28,7 +30,7 @@ SHELL = /bin/sh
 	check-paths \
 	mi-baseline mi-table \
 	check-selfhost check-native check-tools check-libc \
-	deps os-fallback env-fallback clean env env-ours env-inherited env-mwc1985 \
+	deps os-fallback env-fallback packages clean env env-ours env-inherited env-mwc1985 \
 	libc libm libmisc selfhost native help
 
 # Overridable so lanes sharing one checkout keep their artifacts apart; every
@@ -49,6 +51,7 @@ help:
 	  'make check-native    compare native assembler/linker output' \
 	  'make tools           build conversion tools' \
 	  'make env             stage a guest compiler environment' \
+	  'make packages        cut and judge the release packages' \
 	  'make deps            fetch inputs listed in DEPS' \
 	  'make clean           remove build products'
 
@@ -314,6 +317,22 @@ os-fallback:
 # why, and why a third would not belong.
 env-fallback: env-ours env-mwc1985
 	sh host/pack-fallback.sh $(B)
+
+# The release packages -- this host's archive, deliverable 3 alone, the Z8001
+# libraries and the target headers -- cut by host/release-pack.sh, which judges
+# each archive against what it says it carries and refuses the whole cut on one
+# failure.  Needs `make all libc libm libmisc native'; the packer names whichever
+# is missing.  PKGVERSION defaults to what `git describe' says this checkout is.
+# Each cut starts from an empty PKGOUT: the two packers only ever add archives
+# there, so a stale one from a prior version or a prior dirty tree would
+# otherwise sit alongside the new cut and be just as collectible.
+PKGVERSION ?=
+PKGOUT ?= $(C900_TC_BUILD)/dist
+packages:
+	rm -rf $(PKGOUT)
+	mkdir -p $(PKGOUT)
+	sh host/release-pack.sh "$(PKGVERSION)" $(PKGOUT)
+	sh host/pack-components.sh "$(PKGVERSION)" $(PKGOUT)
 
 clean:
 	rm -rf $(B)

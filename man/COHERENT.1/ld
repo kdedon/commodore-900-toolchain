@@ -1,0 +1,58 @@
+ld -- Command
+
+Link relocatable object modules
+ld [option ...] file ...
+
+ld combines relocatable objects -- produced by cc, by as, or by an earlier
+run of ld -- with the members of libraries produced by ar, and writes an
+executable l.out file.  Arguments are scanned in order; an argument that is
+not an option is a relocatable object or a library archive.
+
+A library is searched only to resolve references that are still undefined
+when ld reaches it, so a library named before the objects that need it
+contributes nothing.
+
+The output is made executable only when no symbol is left undefined, or
+when -d was given.
+
+Options
+-d         Define common regions even when relocation information is
+           retained.
+-e entry   Take the next argument as the entry point.
+-i         Separate instruction and data spaces.
+-k[system] Link a kernel image, reading its symbols from system, or from
+           /coherent when the option carries no name.
+-lname     Search the library libname.a: /lib/libname.a first, then
+           /usr/lib/libname.a.  ld fails if neither is there.
+-L         Large model.
+-m         Load in memory where possible.
+-n         Shared instruction space.
+-o file    Write the output to file.  The default is l.out.
+-R value   Take the next argument as the relocation base.
+-r         Retain relocation information in the output and issue no
+           diagnostic for undefined symbols.
+-s         Strip the symbol table from the output.
+-u symbol  Enter symbol in the symbol table as undefined, so that a library
+           member defining it is loaded.
+-w         Watch: report progress as the link proceeds.
+-X         Discard local compiler-generated symbols -- those whose names
+           begin with `L'.
+-x         Discard all local symbols.
+
+An unrecognised option is refused with the usage message
+
+     Usage: ld [-d] [-e entry] [-k[sysnam]] [-i] [-l<name>] [-m] [-n]
+             [-o file] [-R relocbase] [-L] [-r] [-s] [-u symbol] [-X|x]
+             file ...
+
+ld also loads in memory, without -m, when the data address it has reached
+is below the in-memory threshold its build sets (BREADBOX, 16384 bytes in
+src/ld/run).
+
+Files
+l.out           the output file, when -o names none
+/lib/lib*.a     libraries, searched first
+/usr/lib/lib*.a libraries, searched second
+
+See Also
+ar, as, cc

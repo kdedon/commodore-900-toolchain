@@ -1,0 +1,67 @@
+as -- Command
+
+Z8001 assembler
+as [-glx] [-o outfile] file ...
+
+as assembles Z8001 assembly language into a relocatable l.out object, which
+ld links with other objects and with libraries produced by ar.  It is the
+assembler cc runs over the code generator's output: the driver execs it by
+the name `as' off its command path.
+
+Every file named on the command line is assembled, in the order given, into
+ONE object file.  With no file named, as prints its usage message and exits
+non-zero.  Options and file names may be interspersed.
+
+Options
+-g     Make global every symbol that is referenced and never defined, as
+       though each had been named in a .globl directive.
+-l     Write a listing -- error flags, address, generated code, line number
+       and source line -- to the standard output.
+-o outfile
+       Write the object to outfile.  The default is l.out.
+-x     Leave local compiler-generated symbols out of the object's symbol
+       table: a symbol is written only if it is global or its name does not
+       begin with `L'.
+
+Any other option is refused with the usage message
+
+     Usage: as [-glx] [-o file] file [file ...]
+
+The Machine
+The assembler this system builds is the segmented one: SEGCPU is 1 in
+src/as/z8001/asmch.h, so its CPU is the Zilog Z-8001.  One assembler
+produces both forms, and a source file chooses with the .seg and .nonseg
+directives.
+
+Register names are the Zilog ones: the words r0 through r15, the byte
+halves rh0 through rh7 and rl0 through rl7, the register pairs rr0, rr2,
+rr4, rr6, rr8, rr10, rr12 and rr14, and the quadruples rq0, rq4, rq8 and
+rq12.
+
+Directives
+.          The location counter.
+.byte .word .long
+           Emit initialised data: one byte, one word or one long per
+           expression.
+.ascii     Emit a string.
+.blkb .blkw .blkl
+           Reserve uninitialised space, counted in bytes, words or longs.
+.comm      Declare a common block.
+.globl     Make a symbol global.
+.even .odd Align the location counter.
+.seg .nonseg
+           Assemble for the segmented (Z8001) or the non-segmented (Z8002)
+           form.
+.page .title
+           Listing control.
+
+Diagnostics
+as counts the errors it detects and exits non-zero if the count is not
+zero.  The count itself is printed, as `<n> errors detected.', only when a
+listing was asked for with -l.
+
+Files
+l.out      the object file, when -o names none
+
+See Also
+ar, cc, cc0, cc1, cc2, ld

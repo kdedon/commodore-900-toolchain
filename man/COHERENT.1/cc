@@ -1,0 +1,127 @@
+cc -- Command
+
+C compiler driver
+cc [option ...] file ...
+
+cc runs the phases of the C compiler over the files it is given and links
+what they produce.  It decides what to do with each file from the letter
+its name ends in: a .c file is compiled, a .s file is assembled, a .o file
+is handed to the loader, and anything else is offered to the loader as a
+library.
+
+The phases are separate programs that cc execs by name.  cpp, cc0, cc1 and
+cc2 are looked up on the library path, /lib:/usr/lib; as and ld on the
+command path, :/bin:/usr/bin.  The C runtime startoff is asked for by the
+name crts0.o, and the default library is libc.a, reached as though -lc had
+been given.
+
+The list of phases belongs to the driver, which serves more than one
+machine, and is not the same as what this system installs.  What is
+installed is cc0, cc1, cc2, crts0.o, libc.a and libm.a in /usr/lib, and cc,
+as and ld in /usr/bin.  There is no cpp on the machine, so the pass the
+driver knows by that name has no program to exec here.
+
+The Model
+This is a segmented machine and the segmented model is the default: a
+pointer is a two-word segment:offset.  cc sets it for every compilation,
+along with the readonly keyword the system headers use, so neither has to
+be asked for.  -VSMALL asks instead for the non-segmented Z8002 model, one
+word to a pointer, and clears the segmented bit; the two are one variant
+slot apart and are never both set.
+
+cc also sets, by default: -VSUVAR, -VSMEMB, -VSLCON, -VSPVAL, -VPEEP,
+-VCOMM and -VPSTR.
+
+Options
+`cc -?' prints the list below and exits.
+
+     -A              Auto edit mode
+     -Bpathname      Use pathname to find substitute compiler passes
+     -Dname[=value]  cpp: #define
+     -E              Expand: run preprocessor to stdout
+     -G              ld: suppress common/global warnings
+     -Ipathname      cpp: #include search directory
+     -K              Keep intermediate files
+     -Lpathname      ld: library directory specification
+     -Mstring        Use string as cross-compiler prefix
+     -N[01ab2sdlrt]string   Rename pass with string
+     -O              Optimize: run object code optimizer
+     -Q              Quiet: no error or warning messages
+     -S              Output assembly language
+     -Uname          cpp: #undef
+     -V              Verbose: report everything
+     -Vvariant       Variant enable/disable, see list below
+     -X              ld: remove C-generated local symbols
+     -a              Do not use implicit output file name for loader
+     -c              Compile only, do not load
+     -d              ld: define common space
+     -e name         ld: entry point specification
+     -f              ld: use floating point output conversion routines
+     -g              Generate debug information, same as -VDB
+     -i              ld: separate i and d spaces
+     -lname          ld: library specification
+     -n              ld: shared instruction space
+     -o name         ld: output file name
+     -p              Profile: generate code to profile function calls
+     -q[p012s]       Quit after specified pass
+     -r              ld: retain relocation information in output
+     -s              ld: strip symbol table
+     -t[p012adlrt]   take specified passes from -Bdirectory
+     -u name         ld: undefine name
+     -v              Verbose: report everything, same as -V
+     -w              ld: watch
+     -x              ld: remove all local symbols from symbol table
+
+Variant options:
+
+     -VASM           Assembly language output, same as -S
+     -VCOMM          Common data items (default)
+     -VCPLUS         Ignore C++ style online //-delimited comments
+     -VCPPE          Run cpp in -E mode, same as -E
+     -VDB            Debug: generate debug output, same as -g
+     -VFLOAT         Floating point output conversion, same as -f
+     -VKEEP          Keep intermediate files, same as -K
+     -VNOOPT         No optimization
+     -VNOWARN        No warning messages
+     -VPEEP          Peephole optimization (default)
+     -VPROF          Profile: generate code to profile function calls
+     -VPSTR          Pure strings (default)
+     -VQUIET         No messages, same as -Q
+     -VREADONLY      Recognize "readonly" keyword
+     -VS             Strict: turn on all strict messages
+     -VSBOOK         Strict: only constructs in K&R
+     -VSCCON         Strict: constant conditional
+     -VSINU          Allow struct-in-union constructs
+     -VSLCON         Strict: long constant promotion (default)
+     -VSMEMB         Strict: strict member checking (default)
+     -VSNREG         Strict: declared register but allocated auto
+     -VSPVAL         Strict: pointer value truncation (default)
+     -VSRTVC         Strict: risky constructs in truth contexts
+     -VSTAT          Statistics on optimization
+     -VSUREG         Strict: unused registers
+     -VSUVAR         Strict: unused variables (default)
+     -VVERSION       Print compiler version number
+     -VWIDEN         Widening of parameter or function value warning
+     -VXSTAT         Write static external symbols
+     -V3GRAPH        Recognize ANSI trigraphs
+
+The driver names the i8086 and i386 model and floating-point variants --
+-VSMALL, -VLARGE, -V8087, -VNDP, -VRAM, -VOMF, -V80186, -V80287, -VEMU87,
+-VALIGN -- in the same table, because one driver serves several machines.
+Of these only -VSMALL and -VLARGE mean anything here, as the model
+selection described above; this build maps the rest onto a variant bit no
+back end reads, so asking for one is accepted and ignored rather than
+refused.
+
+Files
+/usr/bin/as      the assembler
+/usr/bin/ld      the loader
+/usr/lib/cc0     parser
+/usr/lib/cc1     code generator
+/usr/lib/cc2     optimizer and object writer
+/usr/lib/crts0.o C runtime startoff
+/usr/lib/libc.a  C library, linked unless -VLIB says otherwise
+/usr/lib/libm.a  maths library, linked when -lm is given
+
+See Also
+ar, as, cc0, cc1, cc2, ld

@@ -346,17 +346,39 @@ fi
 # rest 0644.  A consumer loses nothing -- it copies native/ to the machine,
 # where the modes are the installer's business.  -type f skips the symlinks in
 # host/, which must not be chmod'd through to their targets.
+mode_of() {			# mode_of <file> -- the mode the rule gives it
+	case $(dd if="$1" bs=4 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n') in
+	7f454c46*|4d5a*|2321*)	echo 755 ;;
+	*)			echo 644 ;;
+	esac
+}
 canon_modes() {			# canon_modes <dir>
 	find "$1" -type d -exec chmod 755 {} +
 	find "$1" -type f -print | while read -r f; do
-		case $(dd if="$f" bs=4 count=1 2>/dev/null | od -An -tx1 | tr -d ' \n') in
-		7f454c46*|4d5a*|2321*)	chmod 755 "$f" ;;
-		*)			chmod 644 "$f" ;;
-		esac
+		chmod "$(mode_of "$f")" "$f"
 	done
 }
+# lib/kobj/ carries its own stamp: five loose objects copied out of the package
+# into a kernel's build tree have to be able to say which compiler built them.
+[ "$HOSTONLY" = no ] && stamp_at "$L/lib/kobj" libc-kobj kobj="$KOBJL"
 canon_modes "$A"
 [ "$HOSTONLY" = no ] && { canon_modes "$Z"; canon_modes "$L"; canon_modes "$I"; }
+
+# ---- .contents, and the content id over it ----
+# md5sum's own format over every regular file in a tree but the listing and the
+# stamp, so `md5sum -c .contents' verifies an unpacked package with the tool a
+# consumer already has; .provenance:contentid is the listing's sha1, the id
+# commodore-900-dist's format gate recomputes from the bytes.  Last of all, after
+# the mode rule, so nothing listed changes once it is listed.  lib/kobj is sealed
+# before the package around it, which then lists its .contents and .provenance.
+seal() {			# seal <tree>
+	( cd "$1" && find . -type f ! -path ./.contents ! -path ./.provenance -print |
+	  LC_ALL=C sort | sed 's|^\./||' | xargs md5sum ) > "$1/.contents"
+	echo "contentid=$(sha1sum "$1/.contents" | cut -c1-12)" >> "$1/.provenance"
+	chmod 644 "$1/.contents" "$1/.provenance"
+}
+seal "$A"
+[ "$HOSTONLY" = no ] && { seal "$Z"; seal "$L/lib/kobj"; seal "$L"; seal "$I"; }
 
 ( cd "$W" && case $ARCH in
 	tar) tar czf "$name.tar.gz" "$name" ;;
@@ -368,6 +390,161 @@ canon_modes "$A"
   tar czf "$zname.tar.gz" "$zname"
   tar czf "$lname.tar.gz" "$lname"
   tar czf "$iname.tar.gz" "$iname" )
+
+# ---- each package is judged, as cut, before it leaves ----
+# The archive just written is unpacked and read back against what it says it
+# carries: one top-level directory named for the archive, VERSION, the
+# .provenance keys its kind declares, the files and counts a consumer names, no
+# link that dangles or leaves the package, each declared link resolving to its
+# target, every file at the mode the rule above gives it, and .contents against
+# the files present in both directions with contentid its sha1.  These are the
+# assertions commodore-900-dist's declarations make of these kinds, made here by
+# the packer so that a bad cut is refused where it was cut.  One failure refuses
+# the whole cut: nothing is moved into $DEST.
+#
+# A link the unpacking host cannot represent (MSYS copies rather than links) is
+# judged by its bytes against its target instead.
+nbad=0
+J="$W/judge"
+refuse() { echo "release-pack.sh: $1: $2" >&2; nbad=$((nbad + 1)); }
+kv() { sed -n "s/^$2=//p" "$1" 2>/dev/null | head -1; }
+
+judge_contents() {		# judge_contents <archive> <tree> <subdir|.>
+	_s=${3#.}; _s=${_s:+$_s/}; _d="$2/$3"
+	if [ ! -f "$_d/.contents" ]; then
+		refuse "$1" "file.present: ${_s}.contents is missing"; return
+	fi
+	[ "$(sha1sum "$_d/.contents" | cut -c1-12)" = "$(kv "$_d/.provenance" contentid)" ] ||
+		refuse "$1" "content.id: ${_s}.contents is not the file ${_s}.provenance:contentid names"
+	(cd "$_d" && md5sum --quiet -c .contents) > "$J/md5" 2>&1 ||
+		refuse "$1" "contents.md5: $_s$(grep -v '^md5sum:' "$J/md5" | head -1)"
+	# md5sum names a file after the digest and a two-character separator:
+	# two spaces when it read the file as text, a space and a `*' when it
+	# read it as bytes, which is what a Windows host does by default and
+	# what a package of executables wants there.  Both forms are the name
+	# of the same file, so strip either one, and read the comparison a
+	# line at a time so a name is never split on whitespace or expanded as
+	# a glob.
+	sed 's/^[0-9a-f]\{32\} [ *]//' "$_d/.contents" | LC_ALL=C sort > "$J/listed"
+	(cd "$_d" && find . -type f ! -path ./.contents ! -path ./.provenance |
+		sed 's|^\./||' | LC_ALL=C sort) > "$J/present"
+	LC_ALL=C comm -13 "$J/listed" "$J/present" > "$J/unlisted"
+	while IFS= read -r _f; do
+		refuse "$1" "contents.complete: $_s$_f is in the package and ${_s}.contents does not list it"
+	done < "$J/unlisted"
+	LC_ALL=C comm -23 "$J/listed" "$J/present" > "$J/absent"
+	while IFS= read -r _f; do
+		refuse "$1" "contents.complete: ${_s}.contents lists $_s$_f and the package does not carry it"
+	done < "$J/absent"
+}
+
+# judge <archive> <package> <stamp keys> <files> <glob:count ...> [<link> <target>]...
+judge() {
+	_a=$1; _p=$2; _keys="kind commit version package tcid contentid $3"; _files=$4; _globs=$5
+	shift 5
+	_n=${_a%.tar.gz}; _n=${_n%.zip}
+	_j="$J/$_n"; rm -rf "$_j"; mkdir -p "$_j"
+	case "$_a" in
+	*.zip)	command -v unzip >/dev/null 2>&1 ||
+			{ refuse "$_a" "archive.unpack: this host has no unzip, so the zip cannot be judged"; return; }
+		unzip -qq "$W/$_a" -d "$_j" || { refuse "$_a" "archive.unpack: the zip just written does not unpack"; return; } ;;
+	*)	tar xpzf "$W/$_a" -C "$_j" || { refuse "$_a" "archive.unpack: the tarball just written does not unpack"; return; } ;;
+	esac
+	if [ "$(ls -A "$_j")" != "$_n" ] || [ ! -d "$_j/$_n" ]; then
+		refuse "$_a" "archive.toplevel: holds \`$(ls -A "$_j" | tr '\n' ' ')', not the one directory $_n"; return
+	fi
+	_u="$_j/$_n"; _ua=$(cd "$_u" && pwd -P)
+
+	[ "$(sed -n 1p "$_u/VERSION" 2>/dev/null)" = "$V" ] ||
+		refuse "$_a" "version.match: VERSION does not say $V"
+	for _k in $_keys; do
+		[ -n "$(kv "$_u/.provenance" "$_k")" ] || refuse "$_a" "stamp.keys: .provenance carries no $_k"
+	done
+	grep -qx "package=$_p" "$_u/.provenance" 2>/dev/null ||
+		refuse "$_a" "stamp.text: .provenance has no line package=$_p"
+	for _f in LICENSE $_files; do
+		[ -s "$_u/$_f" ] || refuse "$_a" "file.present: $_f is missing or empty"
+	done
+	for _g in $_globs; do
+		_c=$(cd "$_u" && eval "ls -d ${_g%:*}" 2>/dev/null | wc -l)
+		[ "$_c" -ge "${_g##*:}" ] ||
+			refuse "$_a" "glob.count: ${_g%:*} matches $_c, at least ${_g##*:} are carried"
+	done
+
+	for _l in $(cd "$_u" && find . -type l | LC_ALL=C sort); do
+		_t=$(readlink "$_u/$_l")
+		case "$_t" in
+		/*) refuse "$_a" "path.escape: $_l -> $_t is absolute" ;;
+		*)  _r=$(cd "$_u/$(dirname "$_l")" && realpath -m "$_t")
+		    case "$_r" in "$_ua"|"$_ua"/*) ;; *) refuse "$_a" "path.escape: $_l -> $_t leaves the package" ;; esac ;;
+		esac
+		[ -e "$_u/$_l" ] || refuse "$_a" "link.dangling: $_l -> $_t resolves to nothing"
+	done
+	while [ $# -ge 2 ]; do
+		if [ -L "$_u/$1" ]; then
+			[ "$(cd "$_u/$(dirname "$1")" && realpath -m "$(readlink "$_u/$1")")" = "$_ua/$2" ] ||
+				refuse "$_a" "link.target: $1 does not resolve to $2"
+		elif ! cmp -s "$_u/$1" "$_u/$2"; then
+			refuse "$_a" "link.target: $1 is neither a link to $2 nor its bytes"
+		fi
+		shift 2
+	done
+
+	(cd "$_u" && find . -type d ! -perm 755 | LC_ALL=C sort) > "$J/dirs"
+	for _f in $(cat "$J/dirs"); do refuse "$_a" "mode.rule: directory $_f is not 755"; done
+	(cd "$_u" && find . -type f | LC_ALL=C sort) > "$J/files"
+	while read -r _f; do
+		_m=$(stat -c %a "$_u/$_f"); _w=$(mode_of "$_u/$_f")
+		[ "$_m" = "$_w" ] || echo "$_f $_m $_w"
+	done < "$J/files" > "$J/modes"
+	while read -r _f _m _w; do
+		refuse "$_a" "mode.rule: $_f is mode $_m, and its first bytes make it $_w"
+	done < "$J/modes"
+
+	judge_contents "$_a" "$_u" .
+	if [ "$_p" = libc ]; then
+		for _k in kind commit version package tcid kobj contentid; do
+			[ -n "$(kv "$_u/lib/kobj/.provenance" "$_k")" ] ||
+				refuse "$_a" "stamp.keys: lib/kobj/.provenance carries no $_k"
+		done
+		grep -qx "package=libc-kobj" "$_u/lib/kobj/.provenance" 2>/dev/null ||
+			refuse "$_a" "stamp.text: lib/kobj/.provenance has no line package=libc-kobj"
+		[ "$(kv "$_u/lib/kobj/.provenance" tcid)" = "$(kv "$_u/.provenance" tcid)" ] ||
+			refuse "$_a" "stamp.pair: lib/kobj/.provenance and .provenance name different compilers"
+		judge_contents "$_a" "$_u" lib/kobj
+	fi
+}
+
+mkdir -p "$J"
+case $ARCH in tar) hostarch=$name.tar.gz ;; zip) hostarch=$name.zip ;; esac
+TB=host/build
+judge "$hostarch" compiler "cc0 cc1 cc2 cc3 kobj" \
+	"native/cc native/as native/ld native/crt0.o native/libc-z8001.a native/libm-z8001.a native/libmisc-z8001.a host/ccz host/cppz" \
+	"native/kobj/*.o:5 bin/*:10 usr/include/*.h:30" \
+	$TB/z8001/cc0-z8001 bin/cc0-z8001$X  $TB/z8001/cc1-z8001 bin/cc1-z8001$X \
+	$TB/z8001/cc2-z8001 bin/cc2-z8001$X  $TB/z8001/cc3-z8001 bin/cc3-z8001$X \
+	$TB/as-z8001 bin/as-z8001$X  $TB/ld-z8001 bin/ld-z8001$X  $TB/mkarz bin/mkarz \
+	$TB/libc-z8001/libc-z8001.a native/libc-z8001.a  $TB/libc-z8001/crt0.o native/crt0.o \
+	$TB/libm-z8001/libm-z8001.a native/libm-z8001.a \
+	$TB/libmisc-z8001/libmisc-z8001.a native/libmisc-z8001.a
+if [ "$HOSTONLY" = no ]; then
+	judge "$zname.tar.gz" z8001 kobj \
+		"native/cc native/as native/ld native/crt0.o native/libc-z8001.a" \
+		"native/kobj/*.o:5 usr/include/*.h:30"
+	judge "$lname.tar.gz" libc kobj \
+		"lib/libc-z8001.a lib/libm-z8001.a lib/libmisc-z8001.a lib/crt0.o" \
+		"lib/kobj/*.o:5" \
+		$TB/libc-z8001/libc-z8001.a lib/libc-z8001.a  $TB/libc-z8001/crt0.o lib/crt0.o \
+		$TB/libm-z8001/libm-z8001.a lib/libm-z8001.a \
+		$TB/libmisc-z8001/libmisc-z8001.a lib/libmisc-z8001.a
+	judge "$iname.tar.gz" include include_scope "" \
+		"usr/include/*.h:30 usr/include/sys/*.h:20"
+fi
+if [ "$nbad" -gt 0 ]; then
+	echo "release-pack.sh: $nbad assertion(s) failed against what the packages say they carry; nothing was left in $DEST" >&2
+	exit 1
+fi
+echo "judged: every package matches its .contents and .provenance"
 
 for f in "$W"/*.tar.gz "$W"/*.zip; do
 	[ -f "$f" ] || continue

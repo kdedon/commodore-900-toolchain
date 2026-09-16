@@ -23,6 +23,7 @@ COHERENT.1/alarm	alarm()	Set a timer
 COHERENT.1/alloca	alloca()	Dynamically allocate space on the stack
 COHERENT.1/argc	argc	Argument passed to main()
 COHERENT.1/argv	argv	Argument passed to main()
+COHERENT.1/as	as	Z8001 assembler
 COHERENT.1/asctime	asctime()	Convert time structure to ASCII string
 COHERENT.1/assert	assert()	Check assertion at run time
 COHERENT.1/atexit	atexit()	Register a function to be called when the program exits
@@ -35,6 +36,7 @@ COHERENT.1/brk	brk()	Change size of data area
 COHERENT.1/bsearch	bsearch()	Search an array
 COHERENT.1/calloc	calloc()	Allocate dynamic memory
 COHERENT.1/case.k	case	Introduce entry in switch statement
+COHERENT.1/cc	cc	C compiler driver
 COHERENT.1/cc0	cc0	Definition
 COHERENT.1/cc1	cc1	Definition
 COHERENT.1/cc2	cc2	Definition
@@ -168,6 +170,7 @@ COHERENT.1/isupper	isupper()	Check if a character is an upper-case letter
 COHERENT.1/isxdigit	isxdigit()	Check if a character is a hexadecimal numeral
 COHERENT.1/kill.s	kill()	Kill a system process
 COHERENT.1/l3tol	l3tol()	Convert file system block number to long integer
+COHERENT.1/ld	ld	Link relocatable object modules
 COHERENT.1/ldexp	ldexp()	Combine fraction and exponent
 COHERENT.1/ldiv	ldiv()	Perform long integer division
 COHERENT.1/link	link()	Create a link
