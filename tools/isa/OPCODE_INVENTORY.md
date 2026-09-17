@@ -1,6 +1,6 @@
 # Z8000 opcode inventory — GENERATED from the verified decoder
 
-Source: `z8000/cpu.Decode` driven exhaustively over 0x0000-0xFFFF (segmented). `base` = bits fixed=1 across the group AND'd with the complement of variable bits (i.e. the opcode skeleton with operand fields zeroed). `varmask` = bits that vary within the group = the operand/register/CC fields.
+Source: `z8000/cpu.Decode` driven exhaustively over 0x0000-0xFFFF (segmented). `base` = bits fixed=1 across the group AND'd with the complement of variable bits (i.e. the opcode skeleton with operand fields zeroed). `varmask` = bits that vary within the group = the operand/register/CC fields. Regenerate: `cd c900oses/gotools && go run ./cmd/genz8001tab` (needs $C900_TOOLCHAIN).
 
 Distinct mnemonics: **162**; (mnemonic,shape) groups: **514**.
 
