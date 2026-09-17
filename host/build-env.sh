@@ -368,7 +368,13 @@ for f in $files; do
 	esac
 	checked="$checked $f"
 done
-python3 "$HERE/loutid.py" -m z8001 $checked
+# tools/loutid when it is built, the script when it is not: this gate runs
+# during the build, and `make tools' is not a prerequisite of one.
+if [ -x "$BUILD/tools/loutid" ]; then
+	"$BUILD/tools/loutid" -m z8001 $checked
+else
+	python3 "$HERE/loutid.py" -m z8001 $checked
+fi
 
 n=$(find "$ENV" -type f | wc -l)
 b=$(find "$ENV" -type f -exec cat {} + | wc -c)

@@ -149,7 +149,13 @@ done
 for t in $what; do
 	[ -f "$OUT/$t" ] || { echo "build-native.sh: $t was not produced" >&2; exit 1; }
 done
-python3 "$HERE/loutid.py" -m z8001 $(for t in $what; do echo "$OUT/$t"; done)
+# tools/loutid when it is built, the script when it is not: this gate runs
+# during the build, and `make tools' is not a prerequisite of one.
+if [ -x "$BUILD/tools/loutid" ]; then
+	"$BUILD/tools/loutid" -m z8001 $(for t in $what; do echo "$OUT/$t"; done)
+else
+	python3 "$HERE/loutid.py" -m z8001 $(for t in $what; do echo "$OUT/$t"; done)
+fi
 
 publish_dir native
 trap - EXIT INT TERM			# $OUT is published now
