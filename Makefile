@@ -199,13 +199,15 @@ TOOLBIN = $(B)/tools
 TOOLCC  = cc -std=gnu89 -g -w
 M32     = gcc -m32
 
-tools: $(TOOLBIN)/coff2elf $(TOOLBIN)/mkfix $(TOOLBIN)/lout2cpm
+tools: $(TOOLBIN)/coff2elf $(TOOLBIN)/mkfix $(TOOLBIN)/lout2cpm $(TOOLBIN)/loutid
 
 $(TOOLBIN)/coff2elf: tools/coff2elf/coff2elf.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
 $(TOOLBIN)/mkfix: tools/coff2elf/mkfix.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
 $(TOOLBIN)/lout2cpm: tools/lout2cpm/lout2cpm.c | $(TOOLBIN)
+	$(TOOLCC) -o $@ $<
+$(TOOLBIN)/loutid: tools/loutid/loutid.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
 
 # The 32-bit glue a converted object links against: crt0, syscall stubs, sbrk.
