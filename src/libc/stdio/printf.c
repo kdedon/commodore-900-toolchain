@@ -109,6 +109,7 @@ int *iap;
 	int pwidth;
 	int count;
 	int isnumeric;
+	int lower;
 	union alltypes elem;
 	char cbuf[64];
 
@@ -156,8 +157,14 @@ int *iap;
 				for (prec=0; c>='0' && c<='9'; c=*fmt++)
 					prec = prec*10 + c-'0';
 		}
+		/*
+		 * %x and %lx write their hex digits in lower case, as C's do;
+		 * %X, the long form, keeps upper case.
+		 */
+		lower = 0;
 		if (c == 'l') {
 			c = *fmt++;
+			lower = c == 'x';
 			if (c=='d' || c=='o' || c=='u' || c=='x')
 				c = toupper(c);
 		}
@@ -183,6 +190,7 @@ int *iap;
 			break;
 
 		case 'x':
+			lower = 1;
 			cbp = printi(cbp, *iap++, 16);
 			break;
 
@@ -250,6 +258,10 @@ int *iap;
 			putc(c, fp);
 			continue;
 		}
+		if (lower)
+			for (s = cbs; s < cbp; s++)
+				if (*s >= 'A' && *s <= 'F')
+					*s += 'a' - 'A';
 		if ((pwidth = fwidth + cbs-cbp) < 0)
 			pwidth = 0;
 		count += pwidth + (cbp - cbs);
