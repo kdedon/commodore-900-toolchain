@@ -4,7 +4,7 @@
 #	sh host/release-pack.sh [-hostonly] [VERSION] [DESTDIR]
 #
 # VERSION = the tag, without the v.  -hostonly packs THIS host's archive and
-# nothing else: the other three assets are host-independent, so only one host's
+# nothing else: the other assets are host-independent, so only one host's
 # copies can be published and the second host's are waste.  See "the packages
 # that are not this host's" below.
 #
@@ -12,19 +12,41 @@
 # $BUILD/dist.  Writes, for
 # the host it is run on:
 #
-#	c900-toolchain-vX.Y.Z-<host>.tar.gz|.zip   deliverables 1|2 + 3
-#	c900-toolchain-vX.Y.Z-z8001.tar.gz         deliverable 3 alone
+#	c900-toolchain-vX.Y.Z-<host>.tar.gz|.zip   deliverable 1 or 2
+#	c900-toolchain-vX.Y.Z-z8001.tar.gz         deliverable 3
 #	c900-libc-vX.Y.Z-z8001.tar.gz              the Z8001 libraries alone
 #	c900-include-vX.Y.Z.tar.gz                 the target headers alone
 #	c900-tools-vX.Y.Z-<host>.tar.gz|.zip       the tools, host-run
 #	c900-tools-vX.Y.Z-z8001.tar.gz             the tools, target-run
 #
-# Deliverable 3 rides in the host archive AND ships alone: it is
-# host-independent, so shipping it twice looks redundant, but a Windows user
-# must not have to work out that a second archive is needed to build anything
-# for the machine, and an image builder wanting only the native binaries should
-# not download a host compiler to get them.  150 KB against archives measured
-# in megabytes.
+# EVERY ARCHIVE'S bin/ HOLDS PROGRAMS THE MACHINE IN ITS NAME CAN RUN, AND NO
+# OTHERS.  That is the whole layout rule, and it is worth stating because it was
+# broken once: the host archives carried native/cc, native/as, native/ld and the
+# three compiler passes -- Z8001 l.out files -- which no host can execute and
+# which nothing in a host archive resolves.  They rode in all three archives, so
+# a release shipped them three times and published two copies no code path could
+# reach; the Windows job existed partly to copy them from the Linux one so the
+# two agreed.  Now they ship once, in the archive named for the machine that
+# runs them.
+#
+# A TARGET LIBRARY IS NOT A TARGET PROGRAM.  lib/ -- crt0.o, libc-z8001.a,
+# libm-z8001.a, libmisc-z8001.a, kobj/ -- and usr/include are Z8001 bytes that
+# ride in the host archives too, and that is not a violation of the rule above:
+# they are INPUTS the host cross compiler reads to produce a Z8001 binary, not
+# programs anybody runs.  host/ccz resolves lib/ for exactly that, and a host
+# archive without them is a cross compiler that can emit an object and link
+# nothing.  So they are shipped by both, and the same bytes: the z8001 archive's
+# lib/ is copied from the host archive's staged tree, and cmp-archives.sh holds
+# the two hosts' copies to byte equality.
+#
+# Deliverable 3 is the driver, the assembler, the linker AND the three compiler
+# passes cc0/cc1/cc2, which are what the driver execs: a package that carried
+# the driver alone would compile nothing on the machine it names.  It lays them
+# out in the GUEST's own paths -- bin/cc, lib/cc0, lib/crts0.o via the view --
+# and carries host/build/env/ours, the shape host/build-env.sh composes from a
+# built checkout, so a consumer stages a compiler from an unpacked release by
+# the same paths it spells against a source tree.  The view is here and only
+# here, because every file it names is here and only here.
 #
 # The libc and include packages are the same files again, cut from the SAME
 # staged tree the host archive was built from, so all three carry one build of
@@ -39,7 +61,9 @@
 # included, because a libc built by one compiler and unpacked beside another is
 # exactly the mixed codegen the consumer toolchain check exists to refuse.
 #
-# Prereqs: make all, make libc selfhost native, make check-selfhost.
+# Prereqs: make all libc.  The z8001 archive additionally needs `make selfhost
+# native' and `make check-selfhost'; -hostonly does not, and no longer asks for
+# them, because a host archive carries nothing either target builds.
 set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
@@ -91,17 +115,23 @@ for p in "$BUILD/z8001/cc0-z8001:make all" \
 	 "$BUILD/libm-z8001/libm-z8001.a:sh host/build-libm-z8001.sh" \
 	 "$BUILD/libmisc-z8001/libmisc-z8001.a:sh host/build-libmisc-z8001.sh" \
 	 "$BUILD/mkarz:make ld -- host/arz -b compiles mkarz against its canon.o" \
-	 "$BUILD/native/cc:make native" \
 	 "$BUILD/tools/loutid:make tools" \
 	 "$BUILD/tools/lout2cpm:make tools" \
 	 "$BUILD/tools/loutdis:make tools"; do
 	f=${p%:*}; t=${p#*:}
 	[ -e "$f" ] || { echo "release-pack.sh: $f is missing -- run \`$t'" >&2; exit 1; }
 done
-# The target-run tools are host-independent, so only the host that packs them
-# needs them built.
+# The target-run programs and tools are host-independent, so only the host that
+# packs them needs them built.  A host archive carries none of them, which is
+# why a -hostonly run is not asked for `make selfhost native' at all.
 if [ "$HOSTONLY" = no ]; then
-	for p in "$BUILD/tools-z8001/loutid:make tools-z8001" \
+	for p in "$BUILD/native/cc:make native" \
+		 "$BUILD/native/as:make native" \
+		 "$BUILD/native/ld:make native" \
+		 "$BUILD/selfhost/cc0:make selfhost" \
+		 "$BUILD/selfhost/cc1:make selfhost" \
+		 "$BUILD/selfhost/cc2:make selfhost" \
+		 "$BUILD/tools-z8001/loutid:make tools-z8001" \
 		 "$BUILD/tools-z8001/lout2cpm:make tools-z8001" \
 		 "$BUILD/tools-z8001/loutdis:make tools-z8001"; do
 		f=${p%:*}; t=${p#*:}
@@ -140,9 +170,18 @@ stamp_at() {	# stamp_at <tree> <package> [k=v ...]
 	{ cat "$S"; echo "package=$_p"; for _kv; do echo "$_kv"; done; } > "$_t/.provenance"
 }
 
+# THE GUEST LAYOUT IS NOT AN ARCHIVE LAYOUT.  A compiler environment -- bin/cc,
+# lib/cc0, lib/crts0.o, lib/libc.a, usr/include -- is what a GUEST looks up by
+# path, and host/build-env.sh composes it: from a built checkout, or from this
+# archive unpacked (build-env.sh -R).  It is not a shape any release archive is
+# cut in.  An env view shipped inside the archives once, and because every file
+# it named was a Z8001 binary it pulled those binaries into the host archives to
+# have something to point at.  Composing is the composer's job.
 
-# ---- the host archive: deliverables 1 (or 2) and 3 ----
-mkdir -p "$A/bin" "$A/include" "$A/usr" "$A/native"
+# ---- the host archive: deliverable 1 (or 2) ----
+# bin/ is host programs, lib/ and usr/include are what they READ.  Nothing here
+# is a Z8001 program; see the layout rule at the top.
+mkdir -p "$A/bin" "$A/include" "$A/usr" "$A/lib"
 for f in cc0-z8001 cc1-z8001 cc2-z8001 cc3-z8001 tabgen; do
 	cp "$BUILD/z8001/$f"* "$A/bin/" 2>/dev/null || cp "$BUILD/z8001/$f" "$A/bin/"
 done
@@ -154,29 +193,28 @@ cp "$HERE/buildlog.sh" "$A/bin/"	# ccz sources it from beside itself; inert unse
 cp "$HERE"/include/*.h "$A/include/"
 cp -r "$HERE/include/sys" "$A/include/"
 cp -r "$COHERENT_OS/include" "$A/usr/include"
-cp "$BUILD/native/cc" "$BUILD/native/as" "$BUILD/native/ld" "$A/native/"
-cp "$BUILD/libc-z8001/crt0.o" "$BUILD/libc-z8001/libc-z8001.a" "$A/native/"
-# native/kobj: the five libc objects the KERNEL links by name (build-libc-z8001.sh
+cp "$BUILD/libc-z8001/crt0.o" "$BUILD/libc-z8001/libc-z8001.a" "$A/lib/"
+# lib/kobj: the five libc objects the KERNEL links by name (build-libc-z8001.sh
 # says which and proves they are model-neutral).  They ride in every archive that
 # carries libc, because a kernel built against an unpacked RELEASE has no
 # harnesses to make them with -- that shape "serves a KERNEL and plain
 # userland", and this is now part of what a kernel needs.
 #
 # No .provenance goes in HERE, and the reason is a gate: cmp-archives.sh compares
-# native/ and usr/ byte for byte between the two hosts' archives, and a stamp
+# lib/ and usr/ byte for byte between the two hosts' archives, and a stamp
 # carries the build host and the build time.  The archives that hold a compiler
 # already answer "which compiler built these" with the stamp at their root; the
 # separately-packaged libc is the shape that needs a stamp beside the objects,
 # and gets one below.
-mkdir -p "$A/native/kobj"
-cp "$BUILD/libc-z8001/kobj/"*.o "$A/native/kobj/"
-KOBJL=$(cd "$A/native/kobj" && printf '%s ' *.o); KOBJL=${KOBJL% }
+mkdir -p "$A/lib/kobj"
+cp "$BUILD/libc-z8001/kobj/"*.o "$A/lib/kobj/"
+KOBJL=$(cd "$A/lib/kobj" && printf '%s ' *.o); KOBJL=${KOBJL% }
 # libm and libmisc ride with libc for the same reason libc does: they are Z8001
 # libraries this repository builds from an OS tree, the archive is already
 # identified by the commit that produced libc, and a consumer that has
 # to build them itself has to have the OS tree and the harnesses -- which is to
 # say, has to be a source checkout after all.
-cp "$BUILD/libm-z8001/libm-z8001.a" "$BUILD/libmisc-z8001/libmisc-z8001.a" "$A/native/"
+cp "$BUILD/libm-z8001/libm-z8001.a" "$BUILD/libmisc-z8001/libmisc-z8001.a" "$A/lib/"
 echo "$V" > "$A/VERSION"			# written, not copied: the tag said it
 cp "$ROOT/LICENSE" "$ROOT/README.md" "$A/"
 # man/: the Lexicon articles for what this repository owns -- the C library, the
@@ -205,7 +243,7 @@ cp -r "$ROOT/tools/lout2cpm" "$A/tools/lout2cpm"
 #
 # ONE FILE, not src/: this archive deliberately carries no source tree and no
 # harnesses (see host/ below), so what ships is what a consumer NAMES, the same
-# discipline as native/kobj.  qsort.c is self-contained K&R with no #include at
+# discipline as lib/kobj.  qsort.c is self-contained K&R with no #include at
 # all, so the file alone is the whole of what it needs.
 mkdir -p "$A/src/libc/gen"
 cp "$ROOT/src/libc/gen/qsort.c" "$A/src/libc/gen/qsort.c"
@@ -239,17 +277,20 @@ for f in cc0-z8001 cc1-z8001 cc2-z8001 cc3-z8001 tabgen; do
 done
 ln -s "../../bin/as-z8001$X" "$A/host/build/as-z8001"
 ln -s "../../bin/ld-z8001$X" "$A/host/build/ld-z8001"
-ln -s ../../../native/crt0.o "$A/host/build/libc-z8001/crt0.o"
-ln -s ../../../native/libc-z8001.a "$A/host/build/libc-z8001/libc-z8001.a"
+ln -s ../../../lib/crt0.o "$A/host/build/libc-z8001/crt0.o"
+ln -s ../../../lib/libc-z8001.a "$A/host/build/libc-z8001/libc-z8001.a"
 mkdir -p "$A/host/build/libc-z8001/kobj"
-for f in "$A"/native/kobj/*.o; do
-	ln -s "../../../../native/kobj/$(basename "$f")" \
+for f in "$A"/lib/kobj/*.o; do
+	ln -s "../../../../lib/kobj/$(basename "$f")" \
 	      "$A/host/build/libc-z8001/kobj/$(basename "$f")"
 done
 mkdir -p "$A/host/build/libm-z8001" "$A/host/build/libmisc-z8001"
-ln -s ../../../native/libm-z8001.a "$A/host/build/libm-z8001/libm-z8001.a"
-ln -s ../../../native/libmisc-z8001.a "$A/host/build/libmisc-z8001/libmisc-z8001.a"
+ln -s ../../../lib/libm-z8001.a "$A/host/build/libm-z8001/libm-z8001.a"
+ln -s ../../../lib/libmisc-z8001.a "$A/host/build/libmisc-z8001/libmisc-z8001.a"
 ln -s ../../bin/mkarz "$A/host/build/mkarz"
+# No compiler-environment view here: it names Z8001 programs, which this archive
+# does not carry.  host/build-env.sh composes one, from a checkout or from the
+# z8001 archive unpacked (-R); see the head of this file.
 cp "$HERE/arz" "$A/host/arz"		# execs build/mkarz; nothing else of ld's
 cp "$HERE/buildlog.sh" "$A/host/"	# a consumer sources it as $TC/buildlog.sh
 for d in ccz cppz; do
@@ -297,9 +338,29 @@ stamp_at "$T" tools
 # a host where the result was never going to be released.  -hostonly says "pack
 # my archive and nothing else", which is what the second host actually wants.
 if [ "$HOSTONLY" = no ]; then
-	# ---- deliverable 3 alone ----
-	mkdir -p "$Z/native" "$Z/usr"
-	cp -r "$A"/native/* "$Z/native/"		# -r: native/kobj is a directory
+	# ---- deliverable 3 ----
+	#
+	# THE SAME SHAPE AS A HOST ARCHIVE, and for the same reason any two of
+	# them share one: bin/ is the programs this archive's machine runs, lib/
+	# is what those programs read, usr/include is the headers they compile
+	# against.  Only the machine differs, and the archive's name is where
+	# that is said.  A consumer that knows one archive knows all three.
+	#
+	# So cc0/cc1/cc2 are in bin/ here, beside cc, as and ld: they are
+	# PROGRAMS the machine runs -- the driver execs them -- exactly as the
+	# host archive's bin/ holds cc0-z8001 beside as-z8001.  A guest driver
+	# looks them up in lib/; that is the guest's layout, and build-env.sh
+	# composes it.  cc3 is not among them: cc2 emits the object directly in
+	# this configuration.
+	#
+	# lib/ and usr/ are copied from the host archive's staged tree rather
+	# than rebuilt, so the two archives carry one build of the libraries by
+	# construction.
+	mkdir -p "$Z/bin" "$Z/lib/kobj" "$Z/usr"
+	cp "$BUILD/native/cc" "$BUILD/native/as" "$BUILD/native/ld" "$Z/bin/"
+	cp "$BUILD/selfhost/cc0" "$BUILD/selfhost/cc1" "$BUILD/selfhost/cc2" "$Z/bin/"
+	cp "$A"/lib/*.a "$A/lib/crt0.o" "$Z/lib/"
+	cp "$A"/lib/kobj/*.o "$Z/lib/kobj/"
 	cp -r "$A/usr/include" "$Z/usr/include"
 	echo "$V" > "$Z/VERSION"
 	cp "$ROOT/LICENSE" "$Z/"
@@ -311,14 +372,12 @@ if [ "$HOSTONLY" = no ]; then
 
 	# ---- the libraries alone ----
 	#
-	# lib/ rather than native/: native/ in the archives above means "what runs on
-	# the machine", compiler and libraries together, and it cannot be renamed
-	# without moving a path every consumer spells.  A new package gets the name
-	# that describes what is in it, and the host/ view below carries the contract
-	# -- host/build/libc-z8001/libc-z8001.a is the path a consuming makefile
-	# already spells, so this package unpacks into an existing toolchain tree, or
-	# stands alone under a variable of its own, without either consumer learning a
-	# second spelling.
+	# lib/, the same name and the same contents as the archives above give it:
+	# this package IS their lib/, cut out and stamped.  The host/ view below
+	# carries the contract -- host/build/libc-z8001/libc-z8001.a is the path a
+	# consuming makefile already spells -- so this package unpacks over an
+	# unpacked toolchain archive, file for file, or stands alone under a
+	# variable of its own, without either consumer learning a second spelling.
 	#
 	# lib/kobj/ holds the loose objects the KERNEL links by name -- the five libc
 	# routines it used to compile out of the OS tree.  They are archive members as
@@ -334,9 +393,9 @@ if [ "$HOSTONLY" = no ]; then
 	# (§A.1's version-skew rule) after the objects have been copied anywhere.
 	mkdir -p "$L/lib/kobj" "$L/host/build/libc-z8001" "$L/host/build/libm-z8001" \
 		 "$L/host/build/libmisc-z8001"
-	cp "$A/native/crt0.o" "$A/native/libc-z8001.a" "$A/native/libm-z8001.a" \
-	   "$A/native/libmisc-z8001.a" "$L/lib/"
-	cp "$A"/native/kobj/*.o "$L/lib/kobj/"
+	cp "$A/lib/crt0.o" "$A/lib/libc-z8001.a" "$A/lib/libm-z8001.a" \
+	   "$A/lib/libmisc-z8001.a" "$L/lib/"
+	cp "$A"/lib/kobj/*.o "$L/lib/kobj/"
 	ln -s ../../../lib/crt0.o "$L/host/build/libc-z8001/crt0.o"
 	ln -s ../../../lib/libc-z8001.a "$L/host/build/libc-z8001/libc-z8001.a"
 	ln -s ../../../lib/libm-z8001.a "$L/host/build/libm-z8001/libm-z8001.a"
@@ -384,15 +443,15 @@ fi
 # decided from the file rather than inherited from the build tree.
 #
 # Inheriting it does not survive the crossing.  as-z8001 and ld-z8001 chmod
-# their output +x -- so crt0.o and native/cc,as,ld arrive 0755 -- and those are
-# l.out files for the machine, which no host can execute.  MSYS does not store
+# their output +x -- so crt0.o, and the z8001 archive's bin/, arrive 0755 -- and
+# those are l.out files for the machine, which no host can execute.  MSYS does not store
 # mode bits at all: it derives them from the content, calls a PE image or a #!
 # script executable and everything else not, and the tarball's 0755 on an l.out
 # object is simply gone by the time zip stats it.  The layouts then differ on
 # five entries, in the one direction that cannot be fixed by chmod.
 #
 # So the rule is MSYS's own, applied on both sides: PE, ELF or #! is 0755, the
-# rest 0644.  A consumer loses nothing -- it copies native/ to the machine,
+# rest 0644.  A consumer loses nothing -- it copies the tree to the machine,
 # where the modes are the installer's business.  -type f skips the symlinks in
 # host/, which must not be chmod'd through to their targets.
 mode_of() {			# mode_of <file> -- the mode the rule gives it
@@ -571,21 +630,21 @@ mkdir -p "$J"
 case $ARCH in tar) hostarch=$name.tar.gz ;; zip) hostarch=$name.zip ;; esac
 TB=host/build
 judge "$hostarch" compiler "cc0 cc1 cc2 cc3 kobj" \
-	"native/cc native/as native/ld native/crt0.o native/libc-z8001.a native/libm-z8001.a native/libmisc-z8001.a host/ccz host/cppz" \
-	"native/kobj/*.o:5 bin/*:10 usr/include/*.h:30" \
+	"lib/crt0.o lib/libc-z8001.a lib/libm-z8001.a lib/libmisc-z8001.a host/ccz host/cppz" \
+	"lib/kobj/*.o:5 bin/*:10 usr/include/*.h:30" \
 	$TB/z8001/cc0-z8001 bin/cc0-z8001$X  $TB/z8001/cc1-z8001 bin/cc1-z8001$X \
 	$TB/z8001/cc2-z8001 bin/cc2-z8001$X  $TB/z8001/cc3-z8001 bin/cc3-z8001$X \
 	$TB/as-z8001 bin/as-z8001$X  $TB/ld-z8001 bin/ld-z8001$X  $TB/mkarz bin/mkarz \
-	$TB/libc-z8001/libc-z8001.a native/libc-z8001.a  $TB/libc-z8001/crt0.o native/crt0.o \
-	$TB/libm-z8001/libm-z8001.a native/libm-z8001.a \
-	$TB/libmisc-z8001/libmisc-z8001.a native/libmisc-z8001.a
+	$TB/libc-z8001/libc-z8001.a lib/libc-z8001.a  $TB/libc-z8001/crt0.o lib/crt0.o \
+	$TB/libm-z8001/libm-z8001.a lib/libm-z8001.a \
+	$TB/libmisc-z8001/libmisc-z8001.a lib/libmisc-z8001.a
 case $ARCH in tar) toolsarch=$tname.tar.gz ;; zip) toolsarch=$tname.zip ;; esac
 judge "$toolsarch" tools "" "" "bin/*:3"
 if [ "$HOSTONLY" = no ]; then
 	judge "$ztname.tar.gz" tools-z8001 "" "" "bin/*:3"
 	judge "$zname.tar.gz" z8001 kobj \
-		"native/cc native/as native/ld native/crt0.o native/libc-z8001.a" \
-		"native/kobj/*.o:5 usr/include/*.h:30"
+		"bin/cc bin/as bin/ld bin/cc0 bin/cc1 bin/cc2 lib/crt0.o lib/libc-z8001.a lib/libm-z8001.a lib/libmisc-z8001.a" \
+		"bin/*:6 lib/kobj/*.o:5 usr/include/*.h:30"
 	judge "$lname.tar.gz" libc kobj \
 		"lib/libc-z8001.a lib/libm-z8001.a lib/libmisc-z8001.a lib/crt0.o" \
 		"lib/kobj/*.o:5" \

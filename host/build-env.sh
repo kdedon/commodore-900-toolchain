@@ -3,9 +3,20 @@
 # everything needed to compile ON the target, laid out in the guest's own paths,
 # for a guest to reach through a host-mapped filesystem.
 #
-#	sh host/build-env.sh [-o DIR] [CCENV]
+#	sh host/build-env.sh [-o DIR] [-R REL] [CCENV]
 #	CCENV		ours (default), inherited, mwc1985 -- see the table below
 #	-o DIR		where to build it (default build/env/<CCENV>)
+#	-R REL		compose `ours' from an unpacked c900-toolchain-vX-z8001
+#			release instead of from this checkout's build tree
+#
+# -R IS WHY NO RELEASE ARCHIVE SHIPS AN ENVIRONMENT.  The guest layout below is
+# not the shape anything is packaged in -- every archive is bin/ + lib/ +
+# usr/include for the machine it names, and the passes sit in bin/ there because
+# the machine RUNS them.  Moving them to lib/, renaming crt0.o to crts0.o and
+# libc-z8001.a to libc.a, is composition, and it belongs in the composer.  An
+# env view was shipped inside the archives once; because every file it named was
+# a Z8001 binary, it dragged those binaries into the host archives to have
+# something to point at.
 #
 # The consumer is a guest that mounts a host directory via COHERENT's hostfs.
 # The emulator renders the directory onto a floppy at RUN time;
@@ -61,14 +72,22 @@ B="$BUILD"
 
 OUTDIR=""
 CCENV=""
+REL=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-o)	OUTDIR="$2"; shift;;
+	-R)	REL="$2"; shift;;
 	-*)	echo "build-env.sh: unknown option $1" >&2; exit 2;;
 	*)	CCENV="$1";;
 	esac
 	shift
 done
+[ -z "$REL" ] || [ -d "$REL" ] || {
+	echo "build-env.sh: -R $REL is not a directory" >&2
+	echo "  It wants an UNPACKED c900-toolchain-vX.Y.Z-z8001 release:" >&2
+	echo "  bin/{cc,as,ld,cc0,cc1,cc2}, lib/, usr/include." >&2
+	exit 2
+}
 CCENV=${CCENV:-ours}
 PUBENV=${OUTDIR:-$B/env/$CCENV}
 
@@ -90,7 +109,54 @@ inst() {
 }
 
 # ---------------------------------------------------------------- ours
+#
+# Two sources, one output.  A CHECKOUT has the parts spread across the build
+# tree by the harness that made each; an unpacked z8001 RELEASE has them in the
+# two directories every archive uses, bin/ and lib/.  Either way what is
+# composed is the guest's layout, which is neither of those.
+env_ours_release() {	# env_ours_release -- -R: from an unpacked z8001 archive
+	for f in cc as ld cc0 cc1 cc2; do
+		need "$REL/bin/$f" "unpack c900-toolchain-v<V>-z8001.tar.gz and pass -R to it"
+	done
+	need "$REL/lib/crt0.o"        "unpack c900-toolchain-v<V>-z8001.tar.gz"
+	need "$REL/lib/libc-z8001.a"  "unpack c900-toolchain-v<V>-z8001.tar.gz"
+	need "$REL/lib/libm-z8001.a"  "unpack c900-toolchain-v<V>-z8001.tar.gz"
+	need "$REL/usr/include"       "unpack c900-toolchain-v<V>-z8001.tar.gz"
+
+	inst 755 "$REL/bin/cc" bin/cc
+	inst 755 "$REL/bin/as" bin/as
+	inst 755 "$REL/bin/ld" bin/ld
+	# bin/ in the archive, lib/ in the guest: the archive says "the machine
+	# runs these", the driver says where it looks them up.  See the header.
+	inst 755 "$REL/bin/cc0" lib/cc0
+	inst 755 "$REL/bin/cc1" lib/cc1
+	inst 755 "$REL/bin/cc2" lib/cc2
+	inst 644 "$REL/lib/crt0.o" lib/crts0.o
+	inst 644 "$REL/lib/libc-z8001.a" lib/libc.a
+	inst 644 "$REL/lib/libm-z8001.a" lib/libm.a
+	copy_headers "$REL/usr/include" usr/include
+
+	# bin/ar is NOT here, and cannot be: ar is an OS command cross-built from
+	# $COHERENT_OS/ar/ar.c, and a release carries no OS tree.  An image that
+	# ships a userland already has one; a guest that needs to build a library
+	# and has neither wants the checkout path above.  Said once, here, rather
+	# than found as a missing file inside the guest.
+	echo "== ar: not composed from a release (no OS tree); the guest's own is used"
+
+	echo "this repository's compiler, self-hosted, from an unpacked z8001 release" \
+		> "$ENV/CCENV"
+	# The release names itself, and that is the whole provenance there is:
+	# composing from an archive, this script never saw the checkout that
+	# built these bytes.  tcid is the compiler's source id, the same key the
+	# archive's own stamp carries, so a consumer can still ask the
+	# version-skew question of an environment composed this way.
+	_rv=$(sed -n 1p "$REL/VERSION" 2>/dev/null)
+	_rt=$(sed -n 's/^tcid=//p' "$REL/.provenance" 2>/dev/null | head -1)
+	PROV="release ${_rv:-unknown}${_rt:+ tcid $_rt}"
+}
+
 env_ours() {
+	[ -z "$REL" ] || { env_ours_release; return; }
 	. "$HERE/coherent-os.sh"	# $COHERENT_OS, or a legible refusal
 	SH="$B/selfhost"
 	NAT="$B/native"
@@ -325,6 +391,13 @@ ours|inherited|mwc1985) ;;
 *)	echo "build-env.sh: unknown environment \`$CCENV' (ours, inherited, mwc1985)" >&2
 	exit 2;;
 esac
+# -R names OUR release, so it composes OUR environment and no other.  inherited
+# and mwc1985 take their compilers from a COHERENT staging root and a
+# commodore-900-coherent checkout, neither of which this repository publishes.
+[ -z "$REL" ] || [ "$CCENV" = ours ] || {
+	echo "build-env.sh: -R is for CCENV=ours; \`$CCENV' comes from a COHERENT tree" >&2
+	exit 2
+}
 
 # Built from empty, every time.  An environment assembled on top of a previous
 # one hides a part that stopped being produced: the file is still there, the

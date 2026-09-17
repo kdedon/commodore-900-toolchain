@@ -24,17 +24,20 @@
 #                    link naming a file that is not there is a path a consumer
 #                    resolves to nothing.  That is how the .exe suffix breaks a
 #                    layout, so it is checked by name.
-#   deliverable 3    native/ and usr/ must be IDENTICAL BYTES -- recursively, so
-#                    native/kobj/, the loose objects the KERNEL links by name,
-#                    is inside this check and not merely in the entry list; a
-#                    loose object set is the shape that most needs it.  One of them is
-#                    copied from the other's archive precisely so that both
-#                    ship the same native compiler; that is a claim, and this
-#                    is where it is checked rather than hoped.
+#   the target bytes lib/ and usr/ must be IDENTICAL BYTES -- recursively, so
+#                    lib/kobj/, the loose objects the KERNEL links by name, is
+#                    inside this check and not merely in the entry list; a loose
+#                    object set is the shape that most needs it.  These are the
+#                    Z8001 libraries and headers the host compiler links and
+#                    compiles against, and the two hosts must offer one build of
+#                    them; that is a claim, and this is where it is checked
+#                    rather than hoped.  The target PROGRAMS are not compared
+#                    here because neither archive carries any: they ship in the
+#                    z8001 archive, which is cut once.
 #
 # The standalone libc and include packages are not arguments here and do not
 # need to be: release-pack.sh cuts them from the same staged tree as the host
-# archive's native/ and usr/, and this check is what ties that tree to the
+# archive's lib/ and usr/, and this check is what ties that tree to the
 # other host's.  A comparison between a file and a copy of itself made three
 # lines earlier would report agreement it could not fail to find.
 set -e
@@ -103,9 +106,10 @@ else
 	rc=1
 fi
 
-# Deliverable 3 rides in both host archives and must be one build of it.
+# The target libraries and headers ride in both host archives as compiler
+# INPUTS, and must be one build of them.
 same=0
-for sub in native usr; do
+for sub in lib usr; do
 	[ -d "$da/$sub" ] || { echo "*** $la has no $sub/"; rc=1; continue; }
 	[ -d "$db/$sub" ] || { echo "*** $lb has no $sub/"; rc=1; continue; }
 	for f in $(cd "$da/$sub" && find . -type f | LC_ALL=C sort); do
@@ -119,7 +123,7 @@ for sub in native usr; do
 		fi
 	done
 done
-echo "deliverable 3: $same files byte-identical in both archives"
+echo "target inputs: $same files byte-identical in both archives"
 
 [ $rc = 0 ] || echo "*** REFUSED: a release a consumer cannot unpack and use is not a release." >&2
 exit $rc

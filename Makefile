@@ -335,11 +335,13 @@ os-fallback:
 env-fallback: env-ours env-mwc1985
 	sh host/pack-fallback.sh $(B)
 
-# The release packages -- this host's archive, deliverable 3 alone, the Z8001
+# The release packages -- this host's archive, the z8001 archive, the Z8001
 # libraries and the target headers -- cut by host/release-pack.sh, which judges
 # each archive against what it says it carries and refuses the whole cut on one
-# failure.  Needs `make all libc libm libmisc native'; the packer names whichever
-# is missing.  PKGVERSION defaults to what `git describe' says this checkout is.
+# failure.  Each carries programs for the machine its name gives and no other.
+# Needs `make all libc libm libmisc selfhost native'; the packer names whichever
+# is missing, and asks for less under -hostonly, where no Z8001 program is
+# packed at all.  PKGVERSION defaults to what `git describe' says this checkout is.
 # Each cut starts from an empty PKGOUT: the two packers only ever add archives
 # there, so a stale one from a prior version or a prior dirty tree would
 # otherwise sit alongside the new cut and be just as collectible.

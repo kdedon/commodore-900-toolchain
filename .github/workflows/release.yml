@@ -4,7 +4,9 @@
 # The assets are the two host archives, the Z8001 one, and -- cut from the same
 # staged tree, so they are one build of the same files -- the libc and include
 # packages, which let a consumer take and name the libraries or the headers
-# without a host compiler.  host/release-pack.sh emits all of them and the
+# without a host compiler.  Each archive carries programs for the machine its
+# name gives and no other; a consumer that wants a compiler for the machine
+# downloads the z8001 archive, which is the only place those programs are.  host/release-pack.sh emits all of them and the
 # publish job uploads dist/*, so a new package needs no step of its own here.
 # Only the Linux job cuts them: the three assets besides the host archive are
 # host-independent, so the Windows job packs its zip alone (release-pack.sh
@@ -105,10 +107,13 @@ jobs:
           make tools
           sh host/selfhost-root.sh
           sh host/build-selfhost2.sh -hostonly
-      # Deliverable 3 is host-independent and the Linux job already built it, so
-      # the Windows archive takes it from there rather than cross-building it
-      # twice: it must be the SAME native compiler in both archives, and copying
-      # is the only way to say that rather than hope it.
+      # The Windows archive carries no Z8001 PROGRAM -- those ship once, in the
+      # z8001 archive the Linux job cuts -- so nothing of deliverable 3 is
+      # fetched here.  What it does need is the Z8001 LIBRARIES and headers,
+      # which are compiler inputs every host archive carries: they are
+      # host-independent, the Linux job built them, and they must be the same
+      # bytes in both archives.  The libc package is exactly that set, and it is
+      # 60 KB where the z8001 archive is 500.
       - uses: actions/download-artifact@v4
         with: { name: linux-dist, path: dist-linux }
 
@@ -120,22 +125,23 @@ jobs:
       # the fix; the equivalence job now compares the two archives' contents so
       # that a second drift is a red build rather than a broken release.
       #
-      # What the script needs beyond `make all' is deliverable 3, which is what
-      # the Linux -z8001 archive holds: it is unpacked into the build directory
-      # under the names the packer reads, so the two archives ship the same
-      # native compiler and the same Z8001 libraries by construction.
-      - name: Seed deliverable 3 from the Linux archive
+      # What the script needs beyond `make all' is the Z8001 libraries, which
+      # this job does not build: they are unpacked into the build directory
+      # under the names the packer reads, so both host archives offer one build
+      # of them -- which is what the equivalence job then checks.  `make
+      # selfhost native' is NOT needed and NOT run: no Z8001 program goes into
+      # a host archive, so there is nothing here to cross-build twice.
+      - name: Seed the Z8001 libraries from the Linux archive
         working-directory: src
         run: |
           set -e
-          tar xzf ../dist-linux/c900-toolchain-v$V-z8001.tar.gz -C ..
-          z=../c900-toolchain-v$V-z8001/native
+          tar xzf ../dist-linux/c900-libc-v$V-z8001.tar.gz -C ..
+          z=../c900-libc-v$V-z8001/lib
           B=host/build
-          mkdir -p $B/native $B/libc-z8001/kobj $B/libm-z8001 $B/libmisc-z8001
-          cp $z/cc $z/as $z/ld $B/native/
+          mkdir -p $B/libc-z8001/kobj $B/libm-z8001 $B/libmisc-z8001
           cp $z/crt0.o $z/libc-z8001.a $B/libc-z8001/
-          # kobj/: the five objects the KERNEL links by name.  They are part of
-          # deliverable 3 and travel in the archive beside the library.
+          # kobj/: the five objects the KERNEL links by name.  They travel in
+          # the archive beside the library.
           cp $z/kobj/*.o $B/libc-z8001/kobj/
           cp $z/libm-z8001.a $B/libm-z8001/
           cp $z/libmisc-z8001.a $B/libmisc-z8001/

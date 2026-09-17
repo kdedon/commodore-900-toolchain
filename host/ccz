@@ -24,13 +24,16 @@ set -e
 HERE=$(cd "$(dirname "$0")" && pwd)
 # Two layouts.  In a CHECKOUT the parts are under the build directory and the
 # target headers come from an OS tree, because they belong to the OS and are
-# edited there.  In an UNPACKED RELEASE (bin/, native/, usr/include/ beside each
+# edited there.  In an UNPACKED RELEASE (bin/, lib/, usr/include/ beside each
 # other) there is no OS tree and there is not meant to be one: the archive
 # carries the headers it was built against, and a consumer who has only the
-# release must still be able to compile.
-if [ -x "$HERE/cc0-z8001" ] && [ -d "$HERE/../native" ]; then
+# release must still be able to compile.  lib/ is the one thing taken from
+# beside us: the Z8001 libraries and crt0.o, which are what this HOST compiler
+# links against -- they are inputs, and the only Z8001 bytes a host archive has
+# any business carrying.
+if [ -x "$HERE/cc0-z8001" ] && [ -d "$HERE/../lib" ]; then
 	O="$HERE"; AS="$HERE/as-z8001"; LD="$HERE/ld-z8001"
-	LIBC=$(cd "$HERE/../native" && pwd)
+	LIBC=$(cd "$HERE/../lib" && pwd)
 	OS=$(cd "$HERE/.." && pwd)		# $OS/include, $OS/include/sys below
 	OS="$OS/usr"
 else

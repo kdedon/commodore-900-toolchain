@@ -10,11 +10,29 @@ builds; the host edits it with `cp`.
 make env                # the default environment, ours -> host/build/env/ours
 make env CCENV=inherited
 make env-mwc1985
+
+# from a published release instead of a checkout: unpack the z8001 archive,
+# which is the one that carries Z8001 programs, and compose from it.
+tar xzf c900-toolchain-v1.2.3-z8001.tar.gz
+sh host/build-env.sh -R c900-toolchain-v1.2.3-z8001 -o /tmp/env ours
 ```
+
+**No release archive is cut in this shape.** Every archive is `bin/` + `lib/`
++ `usr/include` for the machine its name gives — the z8001 archive keeps
+`cc0/cc1/cc2` in `bin/`, because the machine *runs* them. Moving them to
+`lib/`, renaming `crt0.o` to `crts0.o` and `libc-z8001.a` to `libc.a`, is
+composition, and it is this script's job. An environment view was shipped
+inside the archives once; since every file it named was a Z8001 binary, it
+pulled those binaries into the *host* archives, which can neither run nor
+resolve them. `-R` is what replaced it. Composed from a release, the tree is
+identical to the checkout-composed one but for `bin/ar` — an OS command
+cross-built from `$COHERENT_OS/ar/ar.c`, which a release has no tree for — and
+the two lines of provenance that name where it came from.
 
 This repository produces environments. The OS repositories **consume** them:
 they locate one through `$C900_TOOLCHAIN`, the variable they already use to
-find the compiler, and vendor nothing. The emulator publishes only itself and
+find the compiler, or through `$C900_ENV` when it was composed from a release,
+and vendor nothing. The emulator publishes only itself and
 is located the way `host/runner.sh` locates it (`$C900_EMU`, then `$PATH`,
 then siblings).
 
