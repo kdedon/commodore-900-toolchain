@@ -28,11 +28,11 @@
 #                 dependency that cannot be acquired is reported as one, not
 #                 passed over -- `make deps' that exits 0 having placed nothing
 #                 is indistinguishable from one that placed everything.
-#   kind release  a third-party BINARY.  <ref> is a TAG, unpacked into
-#                 external/<basename of url>/, which is gitignored.  Pinned
-#                 because we cannot fix it and nothing about a binary is
-#                 recoverable from our own history: "which one ran this" has
-#                 to be a number chosen in advance.  <asset> is the release
+#   kind release  a third-party BINARY.  <ref> is a TAG, or `latest' for the
+#                 newest published release, unpacked into
+#                 external/<basename of url>/, which is gitignored.  A tag
+#                 records which one ran a build; `latest' takes the current
+#                 one at fetch time.  <asset> is the release
 #                 asset's file name, with @REF@ standing for the tag and
 #                 @HOST@ for the platform suffix INCLUDING the archive
 #                 extension -- the two axes are not independent, since a
@@ -87,6 +87,17 @@ fetch_local() {
 	return 1
 }
 
+# The newest published release's tag, read off the redirect /releases/latest
+# answers with.  Not the API: that is rate-limited per IP, and CI runners share
+# them.  A repository with no release redirects to /releases, which has no tag
+# in it, so this prints nothing and the caller refuses by name.
+latest_tag() {
+	_lt=$(curl -fsLI -o /dev/null -w '%{url_effective}' "$1/releases/latest") || return 1
+	case $_lt in
+	*/releases/tag/*) echo "${_lt##*/releases/tag/}" ;;
+	esac
+}
+
 fetch_release() {
 	# $1 name  $2 url  $3 ref  $4 dest  $5 asset
 	if [ -d "$4" ]; then
@@ -94,6 +105,13 @@ fetch_release() {
 		return 0
 	fi
 	[ -n "$5" ] || { echo "$1: a release line needs an asset name" >&2; return 1; }
+	# `latest' names no tag, so the newest published one is asked for: the
+	# asset name and the download path both carry it.
+	if [ "$3" = latest ]; then
+		set -- "$1" "$2" "$(latest_tag "$2")" "$4" "$5"
+		[ -n "$3" ] || { echo "$1: no published release at $2" >&2; return 1; }
+		echo "$1: latest release is $3"
+	fi
 	case $(uname -s) in
 	Linux)			host=linux-x86_64.tar.gz ;;
 	MINGW*|MSYS*|CYGWIN*)	host=windows-x86_64.zip ;;

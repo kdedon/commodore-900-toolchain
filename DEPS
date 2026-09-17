@@ -12,4 +12,4 @@
 # The C library, the headers and crts0 are not an edge: they are in src/,
 # beside the compiler that builds them.
 
-emu       release  https://github.com/kdedon/commodore-900-emulator   v0.1  c900-@REF@-@HOST@
+emu       release  https://github.com/kdedon/commodore-900-emulator   latest  c900-@REF@-@HOST@
