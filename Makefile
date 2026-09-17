@@ -191,16 +191,20 @@ check-cc3tab:
 # Side tools.  Not part of `all', but `env' and `native' depend on `tools':
 # build-native.sh and build-env.sh both run loutid to identify l.out objects.
 # libcoh wants a 32-bit gcc a plain host may not have; coff2elf/mkfix/lout2cpm/
-# loutid are K&R-clean so an MWC compiler can build them too.
+# loutid/loutdis are K&R-clean so an MWC compiler can build them too.
 #
 #   coff2elf/mkfix  COFF32 -> ELF32, the x86-target host-link bridge
 #   lout2cpm        l.out -> CP/M-8000 x.out (commodore-900-cpm compiles its
 #                   own copy of the source rather than consuming this one)
+#   loutdis         l.out disassembler.  Its instruction knowledge is entirely
+#                   in tools/loutdis/z8ktab.h, generated from a verified
+#                   decoder that is not reachable from this repository.
 TOOLBIN = $(B)/tools
 TOOLCC  = cc -std=gnu89 -g -w
 M32     = gcc -m32
 
-tools: $(TOOLBIN)/coff2elf $(TOOLBIN)/mkfix $(TOOLBIN)/lout2cpm $(TOOLBIN)/loutid
+tools: $(TOOLBIN)/coff2elf $(TOOLBIN)/mkfix $(TOOLBIN)/lout2cpm $(TOOLBIN)/loutid \
+	$(TOOLBIN)/loutdis
 
 $(TOOLBIN)/coff2elf: tools/coff2elf/coff2elf.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
@@ -210,6 +214,9 @@ $(TOOLBIN)/lout2cpm: tools/lout2cpm/lout2cpm.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
 $(TOOLBIN)/loutid: tools/loutid/loutid.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
+$(TOOLBIN)/loutdis: tools/loutdis/loutdis.c tools/loutdis/z8kdis.c \
+		tools/loutdis/z8ktab.h | $(TOOLBIN)
+	$(TOOLCC) -Itools/loutdis -o $@ tools/loutdis/loutdis.c tools/loutdis/z8kdis.c
 
 # The 32-bit glue a converted object links against: crt0, syscall stubs, sbrk.
 # exit.o is a separate member so it is pulled only when stdio's exit() is not.
