@@ -350,7 +350,7 @@ env_$CCENV
 # EVERY executable and object in the tree must be a Z8001 program.  This is not
 # a formality: each environment's parts come from a directory that also holds HOST
 # binaries built by the same harnesses, and a wrong path here produces a tree
-# that mounts, lists, and fails only inside the guest.  loutid.py reads the
+# that mounts, lists, and fails only inside the guest.  tools/loutid reads the
 # l.out header's machine field (include/mtype.h M_Z8001) and exits nonzero on
 # anything else -- including an ELF, which is the mistake being guarded.
 echo "== verify: every binary is a Z8001 l.out"
@@ -368,13 +368,7 @@ for f in $files; do
 	esac
 	checked="$checked $f"
 done
-# tools/loutid when it is built, the script when it is not: this gate runs
-# during the build, and `make tools' is not a prerequisite of one.
-if [ -x "$BUILD/tools/loutid" ]; then
-	"$BUILD/tools/loutid" -m z8001 $checked
-else
-	python3 "$HERE/loutid.py" -m z8001 $checked
-fi
+"$BUILD/tools/loutid" -m z8001 $checked
 
 n=$(find "$ENV" -type f | wc -l)
 b=$(find "$ENV" -type f -exec cat {} + | wc -c)

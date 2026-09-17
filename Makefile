@@ -188,9 +188,10 @@ check-cc3tab:
 	sh tests/cc3tab.sh
 
 # ---------------------------------------------------------------------------
-# Side tools.  Not part of `all': nothing in the toolchain proper needs them,
-# and libcoh wants a 32-bit gcc a plain host may not have.  Both are K&R-clean
-# so an MWC compiler can build them too.
+# Side tools.  Not part of `all', but `env' and `native' depend on `tools':
+# build-native.sh and build-env.sh both run loutid to identify l.out objects.
+# libcoh wants a 32-bit gcc a plain host may not have; coff2elf/mkfix/lout2cpm/
+# loutid are K&R-clean so an MWC compiler can build them too.
 #
 #   coff2elf/mkfix  COFF32 -> ELF32, the x86-target host-link bridge
 #   lout2cpm        l.out -> CP/M-8000 x.out (commodore-900-cpm compiles its
@@ -249,7 +250,7 @@ check-coff2elf: tools libcoh
 # none; build-env.sh refuses to guess at their inputs.
 CCENV ?= ours
 
-env:
+env: tools
 ifeq (ours,$(CCENV))
 	sh host/build-cc.sh
 	sh host/build-as.sh
@@ -282,7 +283,7 @@ libmisc:
 	sh host/build-libmisc-z8001.sh
 selfhost:
 	sh host/build-selfhost.sh
-native:
+native: tools
 	sh host/build-native.sh
 
 # The self-host FIXPOINT: run the target-built passes over every compiler source

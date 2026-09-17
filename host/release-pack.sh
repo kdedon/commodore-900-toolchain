@@ -89,7 +89,8 @@ for p in "$BUILD/z8001/cc0-z8001:make all" \
 	 "$BUILD/libm-z8001/libm-z8001.a:sh host/build-libm-z8001.sh" \
 	 "$BUILD/libmisc-z8001/libmisc-z8001.a:sh host/build-libmisc-z8001.sh" \
 	 "$BUILD/mkarz:make ld -- host/arz -b compiles mkarz against its canon.o" \
-	 "$BUILD/native/cc:make native"; do
+	 "$BUILD/native/cc:make native" \
+	 "$BUILD/tools/loutid:make tools"; do
 	f=${p%:*}; t=${p#*:}
 	[ -e "$f" ] || { echo "release-pack.sh: $f is missing -- run \`$t'" >&2; exit 1; }
 done

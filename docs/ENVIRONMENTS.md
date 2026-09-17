@@ -218,7 +218,7 @@ repoints one `DEPS` line. A third dist here is a deliberate edit to
 Every host build harness in this repository also runs the host compiler, and
 the failure that matters is a host binary reaching a tree the guest will
 execute — it mounts, it lists, and it fails inside the guest with a bad magic
-number. So `build-env.sh` ends by running `host/loutid.py -m z8001` over every
+number. So `build-env.sh` ends by running `tools/loutid -m z8001` over every
 file in `bin/` and `lib/`, which reads the l.out header's machine field
 (`include/mtype.h` `M_Z8001`) and exits nonzero on anything else, ELF
 included. Archives are opened and every member is checked.
@@ -231,7 +231,7 @@ host/build/env/ours/bin/as              ELF (a HOST binary)   <-- WANTED z8001
 GATE EXIT=1
 ```
 
-`loutid.py` is a header identification and deliberately not a disassembly: it
+`tools/loutid` is a header identification and deliberately not a disassembly: it
 answers "is this a Z8001 program" for a whole tree in milliseconds with no Go,
 no simulator and no sibling checkout. Whether a program also *runs* is a
 different question, and only the guest answers it.
