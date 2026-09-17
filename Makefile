@@ -31,7 +31,7 @@ SHELL = /bin/sh
 	mi-baseline mi-table \
 	check-selfhost check-native check-tools check-libc \
 	deps os-fallback env-fallback packages clean env env-ours env-inherited env-mwc1985 \
-	libc libm libmisc selfhost native help
+	libc libm libmisc selfhost native tools-z8001 help
 
 # Overridable so lanes sharing one checkout keep their artifacts apart; every
 # host/ script resolves it through $C900_TC_BUILD, which is also the name a
@@ -292,6 +292,11 @@ selfhost:
 	sh host/build-selfhost.sh
 native: tools
 	sh host/build-native.sh
+
+# The same tools as `tools', built to run on the machine.  Not a prerequisite of
+# `env': they are utilities, and env/ours/bin is the compiler.
+tools-z8001: tools libc
+	sh host/build-tools-z8001.sh
 
 # The self-host FIXPOINT: run the target-built passes over every compiler source
 # and byte-compare the objects against the host build's.  It is the one gate that

@@ -16,6 +16,8 @@
 #	c900-toolchain-vX.Y.Z-z8001.tar.gz         deliverable 3 alone
 #	c900-libc-vX.Y.Z-z8001.tar.gz              the Z8001 libraries alone
 #	c900-include-vX.Y.Z.tar.gz                 the target headers alone
+#	c900-tools-vX.Y.Z-<host>.tar.gz|.zip       the tools, host-run
+#	c900-tools-vX.Y.Z-z8001.tar.gz             the tools, target-run
 #
 # Deliverable 3 rides in the host archive AND ships alone: it is
 # host-independent, so shipping it twice looks redundant, but a Windows user
@@ -90,10 +92,22 @@ for p in "$BUILD/z8001/cc0-z8001:make all" \
 	 "$BUILD/libmisc-z8001/libmisc-z8001.a:sh host/build-libmisc-z8001.sh" \
 	 "$BUILD/mkarz:make ld -- host/arz -b compiles mkarz against its canon.o" \
 	 "$BUILD/native/cc:make native" \
-	 "$BUILD/tools/loutid:make tools"; do
+	 "$BUILD/tools/loutid:make tools" \
+	 "$BUILD/tools/lout2cpm:make tools" \
+	 "$BUILD/tools/loutdis:make tools"; do
 	f=${p%:*}; t=${p#*:}
 	[ -e "$f" ] || { echo "release-pack.sh: $f is missing -- run \`$t'" >&2; exit 1; }
 done
+# The target-run tools are host-independent, so only the host that packs them
+# needs them built.
+if [ "$HOSTONLY" = no ]; then
+	for p in "$BUILD/tools-z8001/loutid:make tools-z8001" \
+		 "$BUILD/tools-z8001/lout2cpm:make tools-z8001" \
+		 "$BUILD/tools-z8001/loutdis:make tools-z8001"; do
+		f=${p%:*}; t=${p#*:}
+		[ -e "$f" ] || { echo "release-pack.sh: $f is missing -- run \`$t'" >&2; exit 1; }
+	done
+fi
 
 mkdir -p "$DEST"
 W=$(stage_at "$DEST/pack")
@@ -103,7 +117,10 @@ name=c900-toolchain-v$V-$HOSTTAG
 zname=c900-toolchain-v$V-z8001
 lname=c900-libc-v$V-z8001
 iname=c900-include-v$V
+tname=c900-tools-v$V-$HOSTTAG
+ztname=c900-tools-v$V-z8001
 A="$W/$name"; Z="$W/$zname"; L="$W/$lname"; I="$W/$iname"
+T="$W/$tname"; ZT="$W/$ztname"
 
 # The stamp every archive carries: the compiler's own (host/build-cc.sh wrote
 # it) plus what only a release knows -- the version, the pinned emulator, and
@@ -253,6 +270,25 @@ stamp_at "$A" compiler kobj="$KOBJL"
 # link any earlier fails on Windows and nowhere else.
 ln -s ../../../.provenance "$A/host/build/z8001/.provenance"
 
+# ---- the tools, host-run ----
+#
+# Its own package, not a directory in the compiler archive: these are utilities
+# a consumer reaches for on their own, and dist installs them or the consumer
+# places them.  bin/ is the whole layout -- there is nothing beside them to
+# resolve, so no host/ view is owed.
+#
+# coff2elf and mkfix ride only on Linux: they bridge COFF32 to ELF32 for the
+# x86 self-host and name a host format that means nothing elsewhere.
+mkdir -p "$T/bin"
+tools="loutid lout2cpm loutdis"
+[ "$HOSTTAG" = linux-x86_64 ] && tools="$tools coff2elf mkfix"
+for f in $tools; do
+	cp "$BUILD/tools/$f"* "$T/bin/" 2>/dev/null || cp "$BUILD/tools/$f" "$T/bin/"
+done
+echo "$V" > "$T/VERSION"
+cp "$ROOT/LICENSE" "$T/"
+stamp_at "$T" tools
+
 # ---- the packages that are not this host's -------------------------------
 #
 # Everything from here to the mode rule is HOST-INDEPENDENT: the same bytes
@@ -328,6 +364,18 @@ if [ "$HOSTONLY" = no ]; then
 	echo "$V" > "$I/VERSION"
 	cp "$ROOT/LICENSE" "$I/"
 	stamp_at "$I" include include_scope=all
+
+	# ---- the tools, target-run ----
+	#
+	# The same three tools as the host package, cross-built to run on the
+	# machine; coff2elf and mkfix are not among them.  Host-independent like
+	# the packages above, so one host cuts it.
+	mkdir -p "$ZT/bin"
+	cp "$BUILD/tools-z8001/loutid" "$BUILD/tools-z8001/lout2cpm" \
+	   "$BUILD/tools-z8001/loutdis" "$ZT/bin/"
+	echo "$V" > "$ZT/VERSION"
+	cp "$ROOT/LICENSE" "$ZT/"
+	stamp_at "$ZT" tools-z8001
 fi
 
 # ---- one mode rule, so the two hosts agree by construction ----
@@ -362,8 +410,9 @@ canon_modes() {			# canon_modes <dir>
 # lib/kobj/ carries its own stamp: five loose objects copied out of the package
 # into a kernel's build tree have to be able to say which compiler built them.
 [ "$HOSTONLY" = no ] && stamp_at "$L/lib/kobj" libc-kobj kobj="$KOBJL"
-canon_modes "$A"
-[ "$HOSTONLY" = no ] && { canon_modes "$Z"; canon_modes "$L"; canon_modes "$I"; }
+canon_modes "$A"; canon_modes "$T"
+[ "$HOSTONLY" = no ] && { canon_modes "$Z"; canon_modes "$L"; canon_modes "$I"
+			  canon_modes "$ZT"; }
 
 # ---- .contents, and the content id over it ----
 # md5sum's own format over every regular file in a tree but the listing and the
@@ -378,19 +427,21 @@ seal() {			# seal <tree>
 	echo "contentid=$(sha1sum "$1/.contents" | cut -c1-12)" >> "$1/.provenance"
 	chmod 644 "$1/.contents" "$1/.provenance"
 }
-seal "$A"
-[ "$HOSTONLY" = no ] && { seal "$Z"; seal "$L/lib/kobj"; seal "$L"; seal "$I"; }
+seal "$A"; seal "$T"
+[ "$HOSTONLY" = no ] && { seal "$Z"; seal "$L/lib/kobj"; seal "$L"; seal "$I"
+			  seal "$ZT"; }
 
 ( cd "$W" && case $ARCH in
-	tar) tar czf "$name.tar.gz" "$name" ;;
+	tar) tar czf "$name.tar.gz" "$name"; tar czf "$tname.tar.gz" "$tname" ;;
 	# -y: store host/'s symlinks as links rather than following them, so the
 	# zip carries each binary once, like the tarball.
-	zip) zip -qry "$name.zip" "$name" ;;
+	zip) zip -qry "$name.zip" "$name"; zip -qry "$tname.zip" "$tname" ;;
   esac
   [ "$HOSTONLY" = no ] || exit 0
   tar czf "$zname.tar.gz" "$zname"
   tar czf "$lname.tar.gz" "$lname"
-  tar czf "$iname.tar.gz" "$iname" )
+  tar czf "$iname.tar.gz" "$iname"
+  tar czf "$ztname.tar.gz" "$ztname" )
 
 # ---- each package is judged, as cut, before it leaves ----
 # The archive just written is unpacked and read back against what it says it
@@ -528,7 +579,10 @@ judge "$hostarch" compiler "cc0 cc1 cc2 cc3 kobj" \
 	$TB/libc-z8001/libc-z8001.a native/libc-z8001.a  $TB/libc-z8001/crt0.o native/crt0.o \
 	$TB/libm-z8001/libm-z8001.a native/libm-z8001.a \
 	$TB/libmisc-z8001/libmisc-z8001.a native/libmisc-z8001.a
+case $ARCH in tar) toolsarch=$tname.tar.gz ;; zip) toolsarch=$tname.zip ;; esac
+judge "$toolsarch" tools "" "" "bin/*:3"
 if [ "$HOSTONLY" = no ]; then
+	judge "$ztname.tar.gz" tools-z8001 "" "" "bin/*:3"
 	judge "$zname.tar.gz" z8001 kobj \
 		"native/cc native/as native/ld native/crt0.o native/libc-z8001.a" \
 		"native/kobj/*.o:5 usr/include/*.h:30"

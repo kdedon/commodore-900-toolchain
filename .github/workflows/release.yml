@@ -54,6 +54,7 @@ jobs:
           make all
           make check
           make libc libm libmisc selfhost native
+          make tools tools-z8001
           make check-selfhost
 
       # The version, the emulator pin and the COHERENT commit are the packer's
@@ -101,6 +102,7 @@ jobs:
           export C900_EMU=$(pwd)/external/commodore-900-emulator
           make all
           make check
+          make tools
           sh host/selfhost-root.sh
           sh host/build-selfhost2.sh -hostonly
       # Deliverable 3 is host-independent and the Linux job already built it, so
