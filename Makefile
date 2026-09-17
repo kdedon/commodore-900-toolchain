@@ -79,14 +79,15 @@ ld: as
 # register-clobber contract, and the soft-float runtime.
 #
 # tests/multiseg-text.sh links through ccz against the libc-z8001 that
-# check-libc builds from src/, and runs the result, so it needs nothing beyond
-# that target and the emulator.  It is the `ld -L' multi-segment text gate:
-# placement of named modules across three and four text segments, read back
-# with tools/loutid -s.
+# check-libc builds from src/, and runs the result, so it needs that target,
+# the emulator and $(B)/tools/loutid.  It is the `ld -L' multi-segment text
+# gate: placement of named modules across three and four text segments, read
+# back with tools/loutid -s.
 #
 # tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
 # build the case.
-check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc
+check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc \
+	$(B)/tools/loutid
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
