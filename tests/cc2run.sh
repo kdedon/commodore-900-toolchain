@@ -11,11 +11,11 @@ LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR=800000000800; PEEP=
 [ -n "$N2" ] || exit 2
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s" 2>/dev/null
-# soft-float runtime (for the double-return tests, vendored in tests/rt): the routines
+# soft-float runtime (for the double-return tests, from src/libc/crt): the routines
 # a double program calls -- dadd/drsub, dmul, ddiv, int<->double (itod=diflt, dtoi=dfix).
 mkdir -p "$T/fl"
 for s in dadd dmul ddiv dcmp itod dtoi ftod dtof; do
-	"$AS" -o "$T/fl/$s.o" "$H/tests/rt/$s.s" 2>/dev/null
+	"$AS" -o "$T/fl/$s.o" "$H/src/libc/crt/$s.s" 2>/dev/null
 done
 pass=0; fail=0
 r1() { "$N2" -runobjint "$1" 2>/dev/null | grep -oE 'signed -?[0-9]+' | grep -oE '\-?[0-9]+'; }

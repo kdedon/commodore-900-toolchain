@@ -1,7 +1,7 @@
 #!/bin/sh
 # End-to-end soft-float: the REAL toolchain, linked and executed.
 #   cc0 -> cc1 -> cc2 -> f.o            (float lowering: a OP b => CALL dl{add,sub,mul,div})
-#   as tests/rt/*.s -> *.o              (the soft-float routines cc1 emits calls to)
+#   as src/libc/crt/*.s -> *.o          (the soft-float routines cc1 emits calls to)
 #   as 'SS=0' -> ss.o                   (flat stack-segment symbol)
 #   ld -R 0x200 -e f_ ... -> a.out       (link; the float CALLs resolved)
 #   n2 -runobj a.out A B WANT           (sim runs f(A,B), checks RQ0 == WANT, IEEE doubles)
@@ -17,7 +17,7 @@ LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR="${VAR:-80000000080
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 mkdir -p "$T/lib"
 for s in dadd dmul ddiv dcmp itod dtoi ftod dtof ldexp frexp modfs; do
-	"$AS" -o "$T/lib/$s.o" "$H/tests/rt/$s.s" 2>/dev/null
+	"$AS" -o "$T/lib/$s.o" "$H/src/libc/crt/$s.s" 2>/dev/null
 done
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s" 2>/dev/null
 fail=0
