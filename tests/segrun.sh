@@ -13,9 +13,9 @@ H="$(cd "$(dirname "$0")/.." && pwd)"
 B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 O="$B/z8001"; AS="$B/as-z8001"
 LD="$B/ld-z8001"; N2="${N2:-$(sh "$H/host/runner.sh")}"; VAR=800000020800; PEEP=0010
-# The entry point comes from host/loutid.py, this repository's l.out header
+# The entry point comes from tools/loutid, this repository's l.out header
 # reader: `-e' prints l_entry as `entry=0x...', segment in the high word.
-entry() { python3 "$H/host/loutid.py" -e "$1" 2>/dev/null; }
+entry() { "$B/tools/loutid" -e "$1" 2>/dev/null; }
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s" 2>/dev/null
 pass=0; fail=0

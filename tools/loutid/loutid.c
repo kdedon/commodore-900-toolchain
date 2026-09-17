@@ -111,13 +111,14 @@ char *t;
 	s->len += n;
 }
 
-/* 16-bit fields are little-endian. */
-static int
+/* 16-bit fields are little-endian.  unsigned long, not int: on the target an
+ * int is 16 bits and a field of 0xFFFF would come back negative. */
+static unsigned long
 le16(b, off)
 unsigned char *b;
 long off;
 {
-	return b[off] | (b[off + 1] << 8);
+	return (unsigned long)b[off] | ((unsigned long)b[off + 1] << 8);
 }
 
 /* 32-bit fields are PDP-canonical: high word first, each word little-endian. */
@@ -126,7 +127,7 @@ pdp32(b, off)
 unsigned char *b;
 long off;
 {
-	return ((unsigned long)le16(b, off) << 16) | (unsigned long)le16(b, off + 2);
+	return (le16(b, off) << 16) | le16(b, off + 2);
 }
 
 static char *
@@ -183,16 +184,13 @@ long n, off;
 int *flags;
 char *mbuf;
 {
-	int magic;
-
 	if (n - off < 8)
 		return 0;
-	magic = le16(b, off);
-	if (magic != L_MAGIC)
+	if (le16(b, off) != L_MAGIC)
 		return 0;
 	if (flags)
-		*flags = le16(b, off + 2);
-	return machname(le16(b, off + 4), mbuf);
+		*flags = (int)le16(b, off + 2);
+	return machname((int)le16(b, off + 4), mbuf);
 }
 
 /* An l.out's l_entry, or 0 when the header is not the 48-byte one. */
@@ -400,7 +398,7 @@ char *mbuf;
 	flags = 0;
 	m = ident_lout(b, n, 0L, &flags, mbuf);
 	if (m == 0) {
-		sprintf(line, "not an l.out (magic 0x%04x)", le16(b, 0));
+		sprintf(line, "not an l.out (magic 0x%04lx)", le16(b, 0));
 		sbcat(sb, line);
 		free(b);
 		return 0;

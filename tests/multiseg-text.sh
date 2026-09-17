@@ -9,13 +9,14 @@
 # after the first filler block, t4h1 beside them, t4h2+t4fpsum after the second,
 # ftail+fback+getfp after the last, t4h3 behind them).  `ld -L' places modules
 # in link order and moves a module that would cross a 64K boundary whole into
-# the next segment, so host/loutid.py -s must find every named symbol in SHRI,
+# the next segment, so tools/loutid -s must find every named symbol in SHRI,
 # at strictly increasing addresses in link order, main_ in segment 3, and the
 # last named module in the highest segment any of the program's own modules
 # reach (libc follows them and may go further), with that many segments.  The program then runs and prints what each cross-segment
 # route returned, and the host's answer to the same source must match.
 set -e
 H="$(cd "$(dirname "$0")/.." && pwd)"
+B="${C900_TC_BUILD:-$H/host/build}"	# the lane's build dir; see host/publish.sh
 T=$(mktemp -d)
 python3 - "$T" <<'PY'
 import sys
@@ -80,7 +81,7 @@ set -- t3 3 "$T/main3.c $FA $T/mid.c $FB $FC $T/tail.c" "main fmid callthru ftai
 while [ $# -gt 0 ]; do
 	p=$1; nseg=$2; srcs=$3; names=$4; shift 4
 	"$H/host/ccz" -i -L -o "$T/$p" $srcs >/dev/null 2>&1
-	python3 "$H/host/loutid.py" -e -s "$T/$p" > "$T/$p.syms"
+	"$B/tools/loutid" -e -s "$T/$p" > "$T/$p.syms"
 	why=$(python3 - "$T/$p.syms" "$nseg" $names <<'PY'
 import sys
 lines = open(sys.argv[1]).read().split("\n")

@@ -82,7 +82,7 @@ ld: as
 # check-libc builds from src/, and runs the result, so it needs nothing beyond
 # that target and the emulator.  It is the `ld -L' multi-segment text gate:
 # placement of named modules across three and four text segments, read back
-# with host/loutid.py -s.
+# with tools/loutid -s.
 #
 # tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
 # build the case.
