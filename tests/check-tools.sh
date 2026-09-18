@@ -11,8 +11,8 @@ missing=
 # git is here because the build STAMPS with it -- without it every artifact
 # says `commit unknown' -- and because check-paths cannot examine a path
 # without it.
-for t in awk basename cc cmp dirname find git grep install make md5sum mktemp \
-	 patch sed sort stat tail tr uniq wc; do
+for t in awk basename cc cmp cut dd dirname find git grep head install make md5sum \
+	 mktemp patch sed sort stat tail tr uniq wc yes; do
 	command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
 done
 # python3 runs the ISA and MI gates; MSYS2 ships it as `python'.

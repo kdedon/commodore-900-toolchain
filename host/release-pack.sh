@@ -117,7 +117,8 @@ for p in "$BUILD/z8001/cc0-z8001:make all" \
 	 "$BUILD/mkarz:make ld -- host/arz -b compiles mkarz against its canon.o" \
 	 "$BUILD/tools/loutid:make tools" \
 	 "$BUILD/tools/lout2cpm:make tools" \
-	 "$BUILD/tools/loutdis:make tools"; do
+	 "$BUILD/tools/loutdis:make tools" \
+	 "$BUILD/tools/cohfs:make tools"; do
 	f=${p%:*}; t=${p#*:}
 	[ -e "$f" ] || { echo "release-pack.sh: $f is missing -- run \`$t'" >&2; exit 1; }
 done
@@ -319,9 +320,11 @@ ln -s ../../../.provenance "$A/host/build/z8001/.provenance"
 # resolve, so no host/ view is owed.
 #
 # coff2elf and mkfix ride only on Linux: they bridge COFF32 to ELF32 for the
-# x86 self-host and name a host format that means nothing elsewhere.
+# x86 self-host and name a host format that means nothing elsewhere.  cohfs
+# rides every host and no target: it makes and reads a machine's disk images
+# from outside it, and the machine has its own mkfs.
 mkdir -p "$T/bin"
-tools="loutid lout2cpm loutdis"
+tools="loutid lout2cpm loutdis cohfs"
 [ "$HOSTTAG" = linux-x86_64 ] && tools="$tools coff2elf mkfix"
 for f in $tools; do
 	cp "$BUILD/tools/$f"* "$T/bin/" 2>/dev/null || cp "$BUILD/tools/$f" "$T/bin/"

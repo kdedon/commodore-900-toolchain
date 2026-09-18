@@ -87,7 +87,8 @@ ld: as
 # tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
 # build the case.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc \
-	$(B)/tools/loutid
+	$(B)/tools/loutid $(B)/tools/cohfs
+	sh tests/cohfs.sh
 	sh tests/regress.sh
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
@@ -195,6 +196,8 @@ check-cc3tab:
 # libcoh wants a 32-bit gcc a plain host may not have; coff2elf/mkfix/lout2cpm/
 # loutid/loutdis are K&R-clean so an MWC compiler can build them too.
 #
+#   cohfs           makes, reads and writes COHERENT filesystems in a disk
+#                   image; host-run only, since the machine has its own mkfs
 #   coff2elf/mkfix  COFF32 -> ELF32, the x86-target host-link bridge
 #   lout2cpm        l.out -> CP/M-8000 x.out (commodore-900-cpm compiles its
 #                   own copy of the source rather than consuming this one)
@@ -206,7 +209,7 @@ TOOLCC  = cc -std=gnu89 -g -w
 M32     = gcc -m32
 
 tools: $(TOOLBIN)/coff2elf $(TOOLBIN)/mkfix $(TOOLBIN)/lout2cpm $(TOOLBIN)/loutid \
-	$(TOOLBIN)/loutdis
+	$(TOOLBIN)/loutdis $(TOOLBIN)/cohfs
 
 $(TOOLBIN)/coff2elf: tools/coff2elf/coff2elf.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
@@ -215,6 +218,8 @@ $(TOOLBIN)/mkfix: tools/coff2elf/mkfix.c | $(TOOLBIN)
 $(TOOLBIN)/lout2cpm: tools/lout2cpm/lout2cpm.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
 $(TOOLBIN)/loutid: tools/loutid/loutid.c | $(TOOLBIN)
+	$(TOOLCC) -o $@ $<
+$(TOOLBIN)/cohfs: tools/cohfs/cohfs.c | $(TOOLBIN)
 	$(TOOLCC) -o $@ $<
 $(TOOLBIN)/loutdis: tools/loutdis/loutdis.c tools/loutdis/z8kdis.c \
 		tools/loutdis/z8ktab.h | $(TOOLBIN)
