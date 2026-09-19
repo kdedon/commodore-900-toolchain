@@ -1747,6 +1747,28 @@ chkdis 'int f(o) long o; { return (*(char *)(0x3a000000L + o) & 0xff); }' 'addl 
 chkdis 'f(off,ch) int off; int ch; { long o; o = (long)off; *(char *)(0x00002000L + o) = ch; }' 'ldb rr[0-9]+\(8192\), rl[0-9]+' yes
 chkdis 'f(off,ch) int off; int ch; { long o; o = (long)off; *(char *)(0x00002000L + o) = ch; }' 'addl' no
 
+# ---- the ADDRESS of `readonly' (SPURE) data ------------------------------------------
+# cc2's dataseg[] writes .shrd into the DATA image, so addressing SPURE through the CODE
+# space names other memory entirely.  Subscripting hides that (the base folds into the
+# reference); it shows only through a POINTER, where `sum(st, 8)' sums foreign bytes and
+# the `cp < &st[8]' form makes ld reject the object with "bad relocation address".
+# VREADONLY (bit 25) is not in the suite's default variant, so it is added for this block
+# alone -- it only makes the keyword recognized; it says nothing about addressing.
+SPVAR=$VAR
+spb=$(printf '%02x' $(( 0x$(printf '%s' "$VAR" | cut -c7-8) | 0x02 )))
+VAR=$(printf '%s%s%s' "$(printf '%s' "$VAR" | cut -c1-6)" "$spb" \
+		      "$(printf '%s' "$VAR" | cut -c9-)")
+chkf 'static readonly char st[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+int sum(p, n) char *p; int n; { int s; s = 0; while (--n >= 0) s += *p++; return s; }
+int f(x,y) int x; int y; { return sum(st, 8); }' 0 0 36
+chkf 'static readonly char st[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
+int f(x,y) int x; int y; { char *cp; int s; s = 0;
+	for (cp = st; cp < &st[8]; cp++) s += *cp; return s; }' 0 0 36
+# One readonly object reached BOTH ways in the same function.
+chkf 'static readonly int tb[4] = { 10, 20, 30, 40 };
+int f(x,y) int x; int y; { int *p; p = tb; return tb[1] + p[2] + (int)(&tb[3] - tb); }' 0 0 53
+VAR=$SPVAR
+
 # ------------------------------------------------- ICE 5149, and the pressure that found it
 # store() spills an unaddressable subtree to a stack temp and enqueues an assignment whose
 # right side is THAT SAME subtree; when the subtree still cannot be addressed the next round

@@ -381,12 +381,13 @@ SYM	**gidpp;
 		*gidpp  = tp->t_sp;
 	lidgid:
 		*offsp += tp->t_offs;
-		/* Code-space symbols get the code-space flag (vs data space). */
+		/* Code-space symbols get the code-space flag (vs data space).
+		 * `readonly' data is emitted into the data image (.shrd), so
+		 * SPURE is addressed like any other datum. */
 		seg = tp->t_seg;
 		if (seg == SCODE || seg == SLINK
 		|| (isvariant(VLARGE)
-		   && ((seg == SPURE && notvariant(VRAM))
-		    || (seg == SSTRN && isvariant(VROM))))) {
+		   && (seg == SSTRN && isvariant(VROM)))) {
 			*modep &= ~A_PREFX;
 			*modep |=  A_CS;
 		}

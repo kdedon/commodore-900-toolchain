@@ -1095,7 +1095,7 @@ locinit()
 	locdef(".shrd", L_SHRD);
 	locdef(".prvd", L_PRVD);
 	locdef(".bssd", L_BSSD);
-	locdef(".strn", L_PRVD);
+	locdef(".strn", L_SHRD);
 	locdef(".symt",	L_DEBUG);
 	nloc = NLSEG;
 }

@@ -6,7 +6,7 @@
  * Statuses from wait (low byte)
  * Z8002
  */
-char *signame[] ={
+readonly char *signame[] ={
 	"",
 	"Hangup",
 	"Interrupt",

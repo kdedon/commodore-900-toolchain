@@ -614,7 +614,7 @@ TREE		*ptp;
 		   && (tp->t_seg==SANY||tp->t_seg==SDATA||tp->t_seg==SBSS))) {  /* static array/ptr base: defer to address node, X-mode if dereffed */
 			seg = tp->t_seg;
 			if (seg==SANY || seg==SDATA || seg==SBSS
-			|| (seg==SPURE && isvariant(VRAM))
+			|| seg==SPURE		/* readonly data is data-addressed */
 			|| (seg==SSTRN && notvariant(VROM))) {
 				pool(tp);
 				tp1=leftnode(STAR, tp, tp->t_type, tp->t_size);
@@ -1554,8 +1554,7 @@ TREE **tpp;
 	if (!ispoint(gp->t_type))
 		return (0);
 	seg = gp->t_seg;
-	if (seg != SANY && seg != SDATA && seg != SBSS
-	 && !(seg == SPURE && isvariant(VRAM))
+	if (seg != SANY && seg != SDATA && seg != SBSS && seg != SPURE
 	 && !(seg == SSTRN && notvariant(VROM)))
 		return (0);
 	pool(gp);

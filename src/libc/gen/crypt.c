@@ -25,7 +25,7 @@
 /*
  * Table of Initial permutation of each 64 bit entity.
  */
-static	char	IP[NIB] = {
+static	readonly char	IP[NIB] = {
 	57, 49, 41, 33, 25, 17, 9, 1,
 	59, 51, 43, 35, 27, 19, 11, 3,
 	61, 53, 45, 37, 29, 21, 13, 5,
@@ -39,7 +39,7 @@ static	char	IP[NIB] = {
 /*
  * Inverted intial permutation ( IP -1)
  */
-static	char	IP1[NIB] = {
+static	readonly char	IP1[NIB] = {
 	39, 7, 47, 15, 55, 23, 63, 31,
 	38, 6, 46, 14, 54, 22, 62, 30,
 	37, 5, 45, 13, 53, 21, 61, 29,
@@ -68,7 +68,7 @@ static	char	E[NOKB] = {
  * A saved copy of the E-table for
  * crypt to perturb.
  */
-static	char	saveE[NOKB] = {
+static	readonly char	saveE[NOKB] = {
 	31, 0, 1, 2, 3, 4,
 	3, 4, 5, 6, 7, 8,
 	7, 8, 9, 10, 11, 12,
@@ -83,7 +83,7 @@ static	char	saveE[NOKB] = {
  * Permutation of 32-bits onto 32 bits
  * known as "P"
  */
-static	char	P[NIB/2] = {
+static	readonly char	P[NIB/2] = {
 	15, 6, 19, 20,
 	28, 11, 27, 16,
 	0, 14, 22, 25,
@@ -99,7 +99,7 @@ static	char	P[NIB/2] = {
  * (S1, S2, S3, S4, ..., S8)
  * Each turns a 6-bit quantity into a four bit number.
  */
-static	char	Sboxes[NSBOX][4][16] = {
+static	readonly char	Sboxes[NSBOX][4][16] = {
 	/* S1 */
 		14, 4, 13, 1, 2, 15, 11, 8, 3, 10, 6, 12, 5, 9, 0, 7,
 		0, 15, 7, 4, 14, 2, 13, 1, 10, 6, 12, 11, 9, 5, 3, 8,
@@ -147,7 +147,7 @@ static	char	Sboxes[NSBOX][4][16] = {
  * PC-1 is used for first iteration of KS
  * and PC-2 is used therafter.
  */
-static	char	PC1[NUKB] = {
+static	readonly char	PC1[NUKB] = {
 	56, 48, 40, 32, 24, 16, 8,
 	0, 57, 49, 41, 33, 25, 17,
 	9, 1, 58, 50, 42, 34, 26,
@@ -159,7 +159,7 @@ static	char	PC1[NUKB] = {
 	20, 12, 4, 27, 19, 11, 3,
 };
 
-static	char	PC2[NOKB] = {
+static	readonly char	PC2[NOKB] = {
 	13, 16, 10, 23, 0, 4,
 	2, 27, 14, 5, 20, 9,
 	22, 18, 11, 3, 25, 7,
@@ -173,7 +173,7 @@ static	char	PC2[NOKB] = {
 /*
  * Left shift table
  */
-static	char	shifts[NITER] = {
+static	readonly char	shifts[NITER] = {
 	1, 1, 2, 2, 2, 2, 2, 2,
 	1, 2, 2, 2, 2, 2, 2, 1,
 };
@@ -183,7 +183,7 @@ static	char	shifts[NITER] = {
  * smaller than ascii character set
  * ([a-zA-Z0-9./]).
  */
-static	char	maptab[NSCSET] = {
+static	readonly char	maptab[NSCSET] = {
 	'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
 	'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p',
 	'q', 'r', 's', 't', 'u', 'v', 'w', 'x',

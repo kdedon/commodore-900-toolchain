@@ -393,8 +393,19 @@ register ldh_t	*ldhp;
 
 	addr = ldhp->l_flag&LF_KER ? drvbase[ldhp->l_machine] : base;
 	addr = setbase(&sega[L_SHRI], ldhp, addr);
-	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==LF_SHR)
+	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==LF_SHR) {
 		addr = setbase(&sega[L_SHRD], ldhp, addr);
+		/*
+		 * `-n' without `-i' puts SHRD in the text segment, and exec
+		 * maps the two as one.  setbase() checks each segment on its
+		 * own, so their sum has to be checked here: past 64Kb the
+		 * 16-bit offsets would wrap inside the segment.
+		 */
+		if (segoff && !lmodel
+		 && addr-sega[L_SHRI].vbase > segmax[ldhp->l_machine])
+			fatal("text plus shared data larger than %DKb",
+				segmax[ldhp->l_machine]/1024);
+	}
 	if (ldhp->l_flag&LF_SHR)
 		addr = newpage(addr);
 	addr = setbase(&sega[L_PRVI], ldhp, addr);

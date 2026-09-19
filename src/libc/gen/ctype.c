@@ -13,7 +13,7 @@
 
 #include <ctype.h>
 
-unsigned char	_ctype[_CTYPEN] = {
+readonly unsigned char	_ctype[_CTYPEN] = {
 	/* -128 to -2: no classification */
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0, 0,

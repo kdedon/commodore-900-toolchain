@@ -104,17 +104,19 @@ echo "== table length =="
 sed 's|unsigned char\t_ctype\[_CTYPEN\]|unsigned char probe[]|' \
 	"$H/src/libc/gen/ctype.c" > "$T/probe.c"
 cat >> "$T/probe.c" <<'EOF'
-#include <stdio.h>
-int main(void){ printf("initialiser elements = %zu, _CTYPEN = %d, %s\n",
-	sizeof(probe), _CTYPEN,
+int printf(const char *, ...);
+int main(void){ printf("initialiser elements = %d, _CTYPEN = %d, %s\n",
+	(int)sizeof(probe), _CTYPEN,
 	sizeof(probe)==_CTYPEN ? "match" : "MISMATCH"); 
 	return sizeof(probe)!=_CTYPEN; }
 EOF
-gcc -w -I"$H/src/include" -o "$T/probe" "$T/probe.c" || exit 2
+# `readonly' is this compiler's const; gcc lacks it.
+
+gcc -std=gnu89 -w -Dreadonly= -I"$H/src/include" -o "$T/probe" "$T/probe.c" || exit 2
 "$T/probe" || rc=1
 
 echo "== host =="
-gcc -w -DEOFVAL=-1 -I"$H/src/include" -o "$T/hostt" "$T/t.c" "$H/src/libc/gen/ctype.c" || exit 2
+gcc -std=gnu89 -w -DEOFVAL=-1 -Dreadonly= -I"$H/src/include" -o "$T/hostt" "$T/t.c" "$H/src/libc/gen/ctype.c" || exit 2
 "$T/hostt" || rc=1
 
 N2="${N2:-$(sh "$H/host/runner.sh" 2>/dev/null)}"

@@ -6,7 +6,7 @@
  * System error messages
  */
 
-char	*sys_errlist[] = {
+readonly char	*sys_errlist[] = {
 	"",
 	"not the super user",
 	"no such file or directory",

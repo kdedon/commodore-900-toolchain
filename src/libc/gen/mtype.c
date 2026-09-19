@@ -15,7 +15,7 @@
 
 #define	NTYPE	(sizeof types/sizeof types[0])
 
-static	struct	types {
+static	readonly struct	types {
 	int	m_type;
 	char	*m_name;
 }	types[] = {

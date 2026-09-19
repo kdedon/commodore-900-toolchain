@@ -9,7 +9,7 @@
 #include <errno.h>
 
 #ifdef	COHERENT
-static char *_errors[] = {
+static readonly char *_errors[] = {
 	"Illegal error number",			/* 0		*/
 	"Not super user",			/* EPERM	*/
 	"No such file or directory",		/* ENOENT	*/

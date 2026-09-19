@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: MIT
  */
 /*
- * Coherent l.out object writer (Z8001): a 48-byte native header, then the text (SHRI), data (PRVD),
+ * Coherent l.out object writer (Z8001): a 48-byte native header, then the text (SHRI), data (SHRD, PRVD),
  * symbol-table and relocation sections.  Words are big-endian (Z8000 byte order).
  *
  * The MI owns the location counter (dot/dotseg) and the symbol hash (hash2); this
@@ -18,7 +18,7 @@
 #include "cc2.h"
 #endif
 
-/* l.out relocation encoding (as-ld).  L_SHRI/L_PRVD: see cc2mch.h. */
+/* l.out relocation encoding (as-ld).  L_SHRI/L_SHRD/L_PRVD: see cc2mch.h. */
 #define	LR_SYM	7		/* LR_SEG = symbol-based relocation	*/
 #define	LR_BYTE	0		/* LR_OP = relocate a single byte	*/
 #define	LR_WORD	040		/* LR_OP = relocate a 16-bit offset word	*/
@@ -29,7 +29,7 @@
 /* A deferred fixup: the word at obuf[seg][off] references symbol sp (+ addend).  At
  * outdone() -- once every symbol's address/segment is known -- the word is patched and
  * a relocation recorded: a defined function -> its text offset + L_SHRI; defined data ->
- * textSize + its data offset + addend + L_PRVD; an undefined external -> addend + a
+ * textSize + its data offset + addend + L_SHRD/L_PRVD; an undefined external -> addend + a
  * symbol-based relocation.*/
 #define	NFIX	4096		/* growth ceiling: keeps the array within one 64K segment */
 struct ofix { short seg; long off; SYM *sp; long addend; };
@@ -58,15 +58,18 @@ struct osym { SYM *sp; short typ; unsigned long addr; };
 static struct jfix { long off; }	*jfixv;
 static int		njfix, jfixcap;
 
-/* the non-code segments, in object data-image order: links, pure data, strings, general
- * data (all initialized -> PRVD, real file bytes), then reserved bss (-> BSSD, a size only,
- * no file bytes; the loader zero-fills it contiguously after PRVD).  SBSS holds uninitialized
- * globals and struct-return buffers; it MUST be last so the flat address space stays
- * text|PRVD|BSSD.  A far-pointer pool literal (SLINK), a string (SSTRN) or an SBSS reservation
- * that these omit would otherwise be silently dropped. */
-static short	dataseg[] = { SLINK, SPURE, SSTRN, SDATA, SBSS };
+/* the non-code segments, in object data-image order: pure (readonly) data and strings
+ * (-> SHRD, which a -n link maps read-only and shares), then links and general data (-> PRVD),
+ * all initialized, real file bytes; then reserved bss (-> BSSD, a size only, no file bytes;
+ * the loader zero-fills it contiguously after PRVD).  SBSS holds uninitialized globals and
+ * struct-return buffers; it MUST be last so the flat address space stays text|SHRD|PRVD|BSSD,
+ * the order ld bases an input object's segments in.  A far-pointer pool literal (SLINK), a
+ * string (SSTRN) or an SBSS reservation that these omit would otherwise be silently dropped. */
+static short	dataseg[] = { SPURE, SSTRN, SLINK, SDATA, SBSS };
 #define	NDSEG	5
-#define	NPSEG	4		/* dataseg[0..NPSEG-1] are the PRVD (file-resident) segments */
+#define	NSSEG	2		/* dataseg[0..NSSEG-1] are the SHRD segments */
+#define	NPSEG	4		/* dataseg[NSSEG..NPSEG-1] are the PRVD (file-resident) segments */
+#define	ISSHRD(s)	((s) == SPURE || (s) == SSTRN)
 
 /* per-segment output byte buffers, indexed by segment number (SCODE..). */
 static unsigned char	*obuf[NSEG];
@@ -316,7 +319,7 @@ outdone()
 	register SYM	*sp;
 	register int	i, j;
 	int		pass, nsym, nr, nsymcap, sssym;
-	long		textsize, datasize, bsssize, symsize, relsize;
+	long		textsize, shrdsize, datasize, bsssize, symsize, relsize;
 	long		segbase[NSEG];
 	struct osym	*syms;
 	struct relrec	*recs;
@@ -330,20 +333,23 @@ outdone()
 	textsize = olen[SCODE];
 	for (i = 0; i < NSEG; ++i)
 		segbase[i] = 0;
-	/* Lay the data segments contiguously in the flat per-object address space (PRVD then
-	 * BSSD), so symbol/relocation addresses are text|PRVD|BSSD offsets.  datasize is the
-	 * file-resident PRVD size (initialized segments only); bsssize is the reserved BSSD
-	 * tail, which occupies NO file bytes -- ld/the loader zero-fills it. */
-	datasize = 0;
+	/* Lay the data segments contiguously in the flat per-object address space (SHRD, PRVD,
+	 * then BSSD), so symbol/relocation addresses are text|SHRD|PRVD|BSSD offsets.  shrdsize and
+	 * datasize are the file-resident SHRD and PRVD sizes (initialized segments only); bsssize
+	 * is the reserved BSSD tail, which occupies NO file bytes -- ld/the loader zero-fills it. */
+	shrdsize = datasize = 0;
 	for (i = 0; i < NPSEG; ++i) {
-		segbase[dataseg[i]] = datasize;
+		segbase[dataseg[i]] = shrdsize + datasize;
 		/* Word-align each segment's size: the Z8000 masks the low address bit on
 		 * word/long access, so an odd-size byte segment (e.g. an odd-length string in
 		 * SSTRN) would misalign the following word/long data (SDATA) -- and an odd total
-		 * PRVD shifts the NEXT linked object's data (its far pointers read one byte off). */
-		datasize += (seg[dataseg[i]].s_dot + 1) & ~1;
+		 * SHRD or PRVD shifts the data after it (its far pointers read one byte off). */
+		if (i < NSSEG)
+			shrdsize += (seg[dataseg[i]].s_dot + 1) & ~1;
+		else
+			datasize += (seg[dataseg[i]].s_dot + 1) & ~1;
 	}
-	segbase[SBSS] = datasize;		/* bss immediately follows PRVD in the image */
+	segbase[SBSS] = shrdsize + datasize;	/* bss immediately follows PRVD in the image */
 	bsssize = (seg[SBSS].s_dot + 1) & ~1;	/* keep the next object's data word-aligned */
 
 	/* Size the symbol and relocation arrays exactly: one entry per defined global,
@@ -372,10 +378,12 @@ outdone()
 			syms[nsym].sp = sp;
 			/* encode the defining segment in the type so ld resolves a CROSS-object
 			 * reference into the right output segment: code -> SHRI (bare L_GLOBAL),
-			 * initialized data -> L_PRVD, bss -> L_BSSD.  (Tagging data as SHRI placed a
-			 * cross-TU data symbol -- e.g. libc's _stdout -- inside the text region.) */
+			 * strings and readonly data -> L_SHRD, other initialized data ->
+			 * L_PRVD, bss -> L_BSSD.  (Tagging data as SHRI placed a cross-TU
+			 * data symbol -- e.g. libc's _stdout -- inside the text region.) */
 			syms[nsym].typ = (sp->s_seg == SCODE) ? L_GLOBAL
-				: (sp->s_seg == SBSS) ? (L_GLOBAL|L_BSSD) : (L_GLOBAL|L_PRVD);
+				: (sp->s_seg == SBSS) ? (L_GLOBAL|L_BSSD)
+				: ISSHRD(sp->s_seg) ? (L_GLOBAL|L_SHRD) : (L_GLOBAL|L_PRVD);
 			syms[nsym].addr = (sp->s_seg == SCODE)
 				? sp->s_value : textsize + segbase[sp->s_seg] + sp->s_value;
 			++nsym;
@@ -430,7 +438,8 @@ outdone()
 		} else if ((fs->s_flag&S_DEF) != 0) {		/* defined data (any non-code segment) */
 			val = textsize + segbase[fs->s_seg] + fs->s_value + fixv[i].addend;
 			recs[nr].sym = 0;
-			recs[nr].code = (fs->s_seg == SBSS) ? L_BSSD : L_PRVD;
+			recs[nr].code = (fs->s_seg == SBSS) ? L_BSSD
+				: ISSHRD(fs->s_seg) ? L_SHRD : L_PRVD;
 		} else {				/* undefined external */
 			val = fixv[i].addend;
 			recs[nr].sym = 1;
@@ -476,7 +485,8 @@ outdone()
 	/* header (48 bytes): magic, flag LF_32, machine z8001, tbase, 9 section sizes, entry */
 	leput(0407); leput(0x10); leput(4); leput(48);
 	canput((unsigned long)textsize);	/* ss[0] SHRI */
-	canput(0L); canput(0L); canput(0L);	/* ss[1..3] */
+	canput(0L); canput(0L);			/* ss[1..2] PRVI BSSI */
+	canput((unsigned long)shrdsize);	/* ss[3] SHRD (strings, readonly data) */
 	canput((unsigned long)datasize);	/* ss[4] PRVD (file-resident data) */
 	canput((unsigned long)bsssize);		/* ss[5] BSSD (reserved, no file bytes) */
 	canput(0L);				/* ss[6] DEBUG */
@@ -486,7 +496,7 @@ outdone()
 
 	for (i = 0; i < olen[SCODE]; ++i)	/* text */
 		putc(obuf[SCODE][i], ofp);
-	for (j = 0; j < NPSEG; ++j) {		/* PRVD image: each segment's bytes, then zero-pad */
+	for (j = 0; j < NPSEG; ++j) {		/* SHRD, then PRVD: each segment's bytes, then zero-pad */
 		register int	ds;
 		ds = dataseg[j];
 		for (i = 0; i < olen[ds]; ++i)

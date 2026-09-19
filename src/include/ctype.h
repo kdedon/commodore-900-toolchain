@@ -48,7 +48,7 @@ extern	int	_toupper(/* int c */);
  * ASCII indices: 129==NUL, ..., 256==DEL, 257==0x80, ..., 384==0xFF.
  */
 #define	_CTYPEN	385			/* Table size			*/
-extern	unsigned char _ctype[_CTYPEN];	/* Type table			*/
+extern	readonly unsigned char _ctype[_CTYPEN];	/* Type table			*/
 #define	_U	0x01			/* Upper case alphabetic	*/
 #define	_L	0x02			/* Lower case alphabetic	*/
 #define	_A	(_U|_L)			/* Alphabetic			*/

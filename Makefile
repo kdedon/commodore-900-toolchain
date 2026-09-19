@@ -95,6 +95,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/ld-commons.sh
 	sh tests/multiseg-text.sh
 	sh tests/regclob.sh
+	sh tests/ctype.sh
 	sh tests/blkmove-variant.sh
 	sh tests/lssaddr-variant.sh
 	sh tests/asbytes.sh

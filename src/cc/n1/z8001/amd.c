@@ -117,11 +117,11 @@ TREE		*ptp;
 				case SLINK:
 					flag |= T_ACS;
 					break;
-				case SPURE:
-					if (isvariant(VRAM))
-						flag |= T_ADS;
-					else
-						flag |= T_ACS;
+				case SPURE:	/* cc2 puts `readonly' data in the
+						 * data image (.shrd), so its address
+						 * is a data-space one whatever VRAM
+						 * says. */
+					flag |= T_ADS;
 					break;
 				case SSTRN:
 					if (notvariant(VROM))
@@ -153,7 +153,6 @@ TREE		*ptp;
 		|| (ptp != NULL && ptp->t_op == CALL && tp == ptp->t_lp)
 		|| seg == SCODE
 		|| seg == SLINK
-		|| (seg == SPURE && notvariant(VRAM))
 		|| ((ptp == NULL || ptp->t_op != ADDR)	/* a static DEREF is directly DA-addressable
 					 * (return g / g=x), whatever its type: a pointer-typed
 					 * GID names a pointer OBJECT, which loads and stores like
@@ -161,7 +160,7 @@ TREE		*ptp;
 					 * ADDR(GID) -- an address VALUE -- and that keeps the
 					 * pooled/LDA path. */
 		    && (seg == SANY || seg == SDATA || seg == SBSS
-		     || (seg == SPURE && isvariant(VRAM))
+		     || seg == SPURE
 		     || (seg == SSTRN && notvariant(VROM)))))
 			flag |= T_DIR;
 #endif

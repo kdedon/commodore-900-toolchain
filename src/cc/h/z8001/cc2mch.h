@@ -69,6 +69,7 @@ typedef	long		SIGNEDADDRESS;		/* the within-segment offset at emit	*/
  * writer (outcoh.c).
  */
 #define	L_SHRI	0		/* text (shared instruction) segment	*/
+#define	L_SHRD	3		/* shared data: strings, readonly data	*/
 #define	L_PRVD	4		/* private data segment			*/
 #define	L_BSSD	5		/* private bss (uninitialized data)	*/
 
