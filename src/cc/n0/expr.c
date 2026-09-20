@@ -495,9 +495,11 @@ conversion:
 		break;
 
 	case STAR:
-		if ((dp = lp->t_dp) != NULL && dp->d_type == D_PTR)
+		if ((dp = lp->t_dp) != NULL && dp->d_type == D_PTR) {
+			if (dp->d_bound == D_VOIDP)
+				cerror("indirection through pointer to void");
 			gt.t_dp = dp->d_dp;
-		else
+		} else
 			cerror("indirection through non pointer");
 		gt.t_type = lp->t_type;
 		gt.t_ip = lp->t_ip;
@@ -949,6 +951,10 @@ register TREE	*tp;
 	dp = tp->t_dp;
 	if (dp == NULL || dp->d_type != D_PTR)
 		return 1;
+	if (dp->d_bound == D_VOIDP) {
+		cwarn("arithmetic on pointer to void, scaled by 1");
+		return 1;
+	}
 	tp->t_dp = dp->d_dp;
 	n = tsize(tp);
 	tp->t_dp = dp;

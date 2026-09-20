@@ -1830,6 +1830,50 @@ f(i, pp) int i; char **pp;
 chkdis 'long evalint(); f(i) int i; { register char *as, *s1, *s2; register int i1;
 	i1 = i; if (0 < (i1 -= evalint(as))) return (1); return (0); }' 'ldl rr2, rr0' no
 
+# ------------------------------------------------- void *
+# `void *' is `char *' with its pointer dim marked: it converts to and from any
+# object pointer with no cast, and is still not an object -- a dereference is an
+# error and arithmetic warns and scales by 1.  The mark sits on the dim next to
+# the base type, so `void **' is a pointer to a void pointer and only the inner
+# star is refused.  The diagnostic cases are the refusals AND the shapes that
+# must stay quiet: a mark that leaked onto an ordinary `char *' would pass every
+# value assertion here and reject the library.
+chkdiag() { # "<full source>" <stderr-regex> yes|no
+  printf '%s\n' "$1" > "$RG".c
+  d=$("$O/cc0-z8001" $VAR "$RG".c "$RG".z0 2>&1 >/dev/null)
+  if printf '%s\n' "$d" | grep -qE "$2"; then got=yes; else got=no; fi
+  if [ "$got" = "$3" ]; then pass=$((pass+1));
+  else echo "  FAIL(diag) [$1] $2 present=$got want=$3"; fail=$((fail+1)); fi
+}
+# both directions, no cast
+chkf 'int v; int f(x,y) int x; int y; { void *p; int *q; p = &v; q = p; *q = x + y; return v; }' 3 4 7
+chkf 'char b[4]; int f(x,y) int x; int y; { void *p; char *c; p = b; c = p; *c = x; b[1] = y;
+	return *c + b[1]; }' 20 22 42
+# a function returning void *, its result used as an int * with no cast
+chkf 'int v; void *g(p) int *p; { return p; }
+int f(x,y) int x; int y; { int *q; q = g(&v); *q = x * y; return v; }' 6 7 42
+# the malloc idiom: void * into a struct pointer, unwritten by the caller
+chkf 'struct S { int a; int b; }; char pool[8]; void *myalloc(n) int n; { return pool; }
+int f(x,y) int x; int y; { struct S *s; s = myalloc(4); s->a = x; s->b = y; return s->a + s->b; }' 40 2 42
+# a pointer, four bytes -- NULL is spelled `(void *)0' in outside headers, and as
+# an int it would be pushed as two and every argument behind it misread
+chkf 'int g(p,n) char *p; int n; { return p == 0 ? n : 0; }
+int f(x,y) int x; int y; { return g((void *)0, x + y); }' 40 2 42
+chkf 'int f(x,y) int x; int y; { void *p; return sizeof p; }' 0 0 4
+# the refusals
+chkdiag 'void *p; int f() { return *p; }' 'indirection through pointer to void' yes
+chkdiag 'void *p; int f() { return p[0]; }' 'indirection through pointer to void' yes
+chkdiag 'char *p; int f() { return *(void *)p; }' 'indirection through pointer to void' yes
+chkdiag 'void **pp; int f() { return **pp; }' 'indirection through pointer to void' yes
+chkdiag 'void *p; int f() { p = p + 1; return 0; }' 'arithmetic on pointer to void' yes
+chkdiag 'void *p; int f() { p++; return 0; }' 'arithmetic on pointer to void' yes
+chkdiag 'void v; int f() { return 0; }' 'illegal use of .void. type' yes
+# and what must stay quiet
+chkdiag 'char *p; int f() { return *p + p[1]; }' 'void' no
+chkdiag 'void *a; void *b; int f() { return a == b || a != 0; }' 'void' no
+chkdiag 'void **pp; int f() { char *q; q = *pp; return 0; }' 'void' no
+chkdiag 'void g2(); int f() { g2(); return 0; }' 'void' no
+
 # Every assertion in this file runs in every checkout, so the totals are the whole
 # story and the summary line says only what happened.  There was a skip counter
 # here, carried on the SAME line as the totals because a transcript is read by its

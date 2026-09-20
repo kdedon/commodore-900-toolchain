@@ -25,7 +25,7 @@
 # with a space.
 
 patch: expr-func-decay-null
-file: n0/expr.c 8cdc02f3467077e684366faa433c6fa9d0877754317ef617b37ce0463558f98d
+file: n0/expr.c d94b0c5adc920af4fd1b0a4d43fdf221961c91dd7f87395107afbea42d6f276b
 fix: `d_dp != NULL` guard before `d_dp->d_type == D_FUNC`
 why: NULL deref on every `arr[i]` decay; survivable only because Coherent mapped page 0
 
@@ -71,7 +71,7 @@ fix: the SUB->ADD constant canonicalization keeps the node's own type (donor sta
 why: the stamp writes junk signedness over the C type (`u - 1` labeled signed, `p - c` labeled non-pointer); the Z8001 MD selects signed-vs-unsigned divide/shift by node type, and the MD `fixaddtype` now preserves node signedness through reassociation (FUZZ-5), so the stamp must not lie. Donor i386 relied on the re-derive repairing it each pass
 
 patch: cast-signedness-keep
-file: n0/expr.c 8cdc02f3467077e684366faa433c6fa9d0877754317ef617b37ce0463558f98d
+file: n0/expr.c d94b0c5adc920af4fd1b0a4d43fdf221961c91dd7f87395107afbea42d6f276b
 fix: LPAREN cast: don't collapse a bit-compatible cast that CHANGES signedness onto a DIV/REM/SHR/ASHR/ADIV/AREM node -- keep the CAST node
 why: the collapse retypes the op in place, making `(int)(u/d) >> k` and `(int)((u/d) >> k)` the same tree with opposite correct shifts (FUZZ-20); the surviving node is the only disambiguator. Same guard the `n0/stat.c` return-coerce row already carries; cc1 selects the kept convert at zero cost (leaves.t same-kind identity)
 
@@ -83,7 +83,7 @@ why: the native putc fast path returns the stored CHAR (`*_cp++ = c`), so byte 0
 patch: struct-member-align
 file: n0/z8001/bind.c
 file: h/z8001/mch.h
-file: h/cc0.h 93b4cc7d267d87a5f181e16a03ebb447b1ef99547ebb6fd1510058e058a3b9b3
+file: h/cc0.h 963636d684b778e6e169d66e6fffb79663032f5cccabd5b118f6a506a0ddfa19
 fix: word-align structure members: `fieldalign()` rounds a normal member up to its natural alignment (1 for a byte object, 2 for any wider type/pointer) via new `memalign()`; new `salign()` gives the struct itself the alignment of its widest member; `saligntype()` macro -> `salign()`; `extern int salign()` declared
 why: the donor i8086 template packs members to byte offsets, which the i8086 tolerates (unaligned word/dword access); the Z8000 does NOT -- a word/long/far-pointer read at an odd address returns the wrong bytes. getty's `struct stable` put `char *s_lmsg` at odd offset 5, so `LDL 5(Rn)` loaded a garbage far pointer -> strlen SIGSEGV (the login-prompt blocker). Aligning is a hardware requirement, so the original MWC Z8001 compiler must do the same. Codegen cost: field access is still one load and array indexing still one MULT/scale -- only the displacement/size *immediate* changes, so no instruction-count change; the sole effect is a few padding bytes in mixed sub-word/word structs, which the original ABI also carries. Efficiency parity vs the original is an OPEN follow-up, to be A-B'd against the original HD-extracted binaries by disassembly (NOT a self-comparison). All difftest generators (struct/bitfield/2darr/strptr/torture) still match gcc
 
@@ -152,14 +152,14 @@ fix: `#if Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` ins
 why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if Z8001`, so no other target sees them
 
 patch: char-parameter-address
-file: n0/ddecl.c dd779a5a26222ae6dc922444d2aeb2df5cca99d7c1156b7d679c4982983433cd
-file: h/cc0.h 93b4cc7d267d87a5f181e16a03ebb447b1ef99547ebb6fd1510058e058a3b9b3
+file: n0/ddecl.c 5714b2dc7ccef4ed19df296f5c215fc975d23fcb7df0bb52ff7274b12e55322a
+file: h/cc0.h 963636d684b778e6e169d66e6fffb79663032f5cccabd5b118f6a506a0ddfa19
 file: n0/z8001/bind.c
 fix: a parameter declared `char'/`unsigned char' KEEPS that type instead of being retyped to `int': `declare()`'s C_ARG arm asks the machine layer's new `subwordparm()` first, and skips `fixtype()` when it answers yes (`extern int subwordparm()` declared in cc0.h). The machine layer then binds such a parameter at the LOW-ORDER byte of its word slot -- `bindargs()` gives it `offset+1` and still advances by 2, so every later parameter keeps its address
 why: THE ONE FRONT-END EDIT MADE ON PURPOSE, owner-decided (TASK #321), because no machine layer can express the fix: after `fixtype()` retypes the parameter to `int` the fact that it was a byte object is GONE, and `&c` can only name the whole word. K&R promotes a char ARGUMENT to int at the call, so the parameter does occupy a word (unchanged: callers still push one, and the ABI is untouched) -- but the parameter is still a one-byte object, and on this BIG-ENDIAN machine the caller's byte is the second byte of that word. The donor handed out the word's own address, which is the low-order byte only because the i8086 it descends from is little-endian; here it named the HIGH byte, zero for every ASCII character, so `write(fd,&c,1)` inside `f(c) char c;` wrote a NUL -- libcurses `waddch` drew NULs while the cursor advanced, and kermit could not send a character (#324). `subwordparm()` answers from `mysizes[]`, so a machine whose char is a word gets the donor's promotion unchanged, and short/float are unaffected (a short IS a word; float is promoted to double by both sides). Reading the parameter's value now takes a byte load plus the extend the declared type asks for, where the promoted word allowed one word load; that is the price of the object having an address at all, and it is also what K&R says the object is -- `f(c) char c; c = 300;` now truncates, and a caller passing 200 into a signed `char' parameter reads -56 back, both of which every conforming compiler does (the differential oracle, gcc, agrees on all 18 generators). Code that wants the wider value must say `int' or `unsigned char', as it must anywhere else. Measured cost: over the 315 objects of this compiler's own self-host build, the ONLY two that change are the two files edited here; over 108 COHERENT userland commands the total is +76 bytes, 0.014%, in exactly the five objects that have a byte parameter -- and `units.o' gets SMALLER, because a byte compare no longer widens first. A `register` byte parameter is not given a register, exactly as a `register char' auto is not (`grabreg()` takes word types only), so it stays addressable and correct. Six value assertions through cc0->cc1->cc2->ld->run cover both byte types, both directions and the second parameter's placement (tests/regress.sh, promoted from expected-fail); the byte-identity fixpoint cannot see this class at all, since a compiler reading the wrong byte agrees with itself about it
 
 patch: function-redeclared-after-definition
-file: n0/ddecl.c dd779a5a26222ae6dc922444d2aeb2df5cca99d7c1156b7d679c4982983433cd
+file: n0/ddecl.c 5714b2dc7ccef4ed19df296f5c215fc975d23fcb7df0bb52ff7274b12e55322a
 fix: `declare()' restores a demoted C_GREF to the symbol's OLD class for data only. A function declared again, after it was defined earlier in the same file, keeps C_GREF and so reads as the declaration it is
 why: `int f();' at file scope is demoted C_GDEF -> C_GREF a few lines above, exactly so `xdef()' will not take it for a definition. The redeclaration arm then handed the old class back, and where the old class was C_GDEF -- the function was DEFINED in this file -- `xdef()' saw a definition with no body and said "compound statement required", after which the parser was lost for the rest of the file. The declaration is legal C that every other compiler takes, and the host build takes it too, so nothing in the tree could see the difference until a unity build put a definition and a later declaration of the same function in one translation unit: src/ld/all.c, which is how the machine's own linker is compiled, and which stopped compiling. Restoring the old class is right for DATA, where `int x; ... extern int x;' must leave x defined; for a function there is nothing to preserve, since the definition has already been emitted under its own label and the class only says whether this DECLARATOR defines it. Nothing that compiled before can change: the case this reaches was a hard error, so no object in the tree was built through it -- and none is, measured: libc-z8001's 215 objects are byte-identical across the edit, and of the 490 in the compiler's own self-host build the only one that changes is `ddecl.o', whose source this is
 
@@ -253,3 +253,36 @@ why: the table is target memory, high byte first -- so the driver reads the
 why: same file the same way whichever machine it was compiled for.  `-lc' and
 why: every other undotted name take the archive they always took: the 122
 why: userland programs and the libc objects come out byte-identical
+
+patch: void-pointer
+file: n0/ddecl.c 5714b2dc7ccef4ed19df296f5c215fc975d23fcb7df0bb52ff7274b12e55322a
+file: n0/gdecl.c aa62e25dee3606cf4ed4c6b898c65dd0958266083bc8e69f38472e6c7de21b0b
+file: n0/expr.c d94b0c5adc920af4fd1b0a4d43fdf221961c91dd7f87395107afbea42d6f276b
+file: h/cc0.h 963636d684b778e6e169d66e6fffb79663032f5cccabd5b118f6a506a0ddfa19
+fix: `void *' is `char *'.  A new `isvoidptr()' (n0/ddecl.c) answers whether a
+fix: `void' declarator chain ends in a pointer -- the last dim is the one next
+fix: to the base type -- and `declare()' and `cast()' take T_CHAR when it does.
+fix: isvoidptr() also stamps that D_PTR's `d_bound', unread on a pointer, with
+fix: the new `D_VOIDP' (h/cc0.h): `build()' refuses a dereference through a
+fix: stamped pointer and `psize()' warns and scales arithmetic by 1 (n0/expr.c).
+why: char * is this machine's typeless object pointer -- it is what the tree's
+why: own headers spell NULL as, and what every K&R routine that hands back
+why: storage returns -- so mapping `void *' onto it needs no conversion, no
+why: representation and no cast in either direction, and the passes below cc0
+why: never learn a new type.  The alternative, carrying T_VOID through a
+why: pointer, would put a type with no size into the IR that cc1 and cc2 size
+why: everything by.  It is a pointer that matters natively: a pointer here is a
+why: 4-byte seg:offset, so the `((void *)0)' that outside headers define NULL
+why: as must be a POINTER constant.  As an int it is pushed as two bytes and
+why: the callee reads a garbage pointer and every argument behind it moves --
+why: this project's most recurring bug class, and it costs the boot.  The stamp
+why: is what `char *' cannot say by itself: a void pointer addresses no object,
+why: so `*p' is an error and `p + 1' has no size to scale by.  Arithmetic warns
+why: rather than errors and scales by 1, which is what the outside code that
+why: wants `void *' at all already means by it; a dereference has no such
+why: reading and is refused.  Nothing that compiled before changes: d_bound is
+why: meaningless on a D_PTR and only a `void' declarator ever stamps one, so an
+why: ordinary pointer takes the path it took, and `void' as a function return
+why: or a plain object is refused exactly as before.  The mapping is Michal
+why: Pleban's, from his own build of this compiler; the stamp and the two
+why: refusals are ours.

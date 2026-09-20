@@ -228,6 +228,13 @@ typedef	struct	dim {
 #define D_VOLATILE 5			/* volatile modifier	*/
 
 /*
+ * `void *' is `char *' whose D_PTR carries this where an array dim
+ * carries its bound: it points at no object, so a dereference through
+ * it is refused and arithmetic through it warns.
+ */
+#define D_VOIDP	((sizeof_t)1)		/* d_bound: pointer to void	*/
+
+/*
  * An INFO structure keeps track of structure elements,
  * union elements and enumeration constants.
  * It is pointed to by the INFO links of symbols and expressions.

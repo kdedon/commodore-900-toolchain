@@ -71,6 +71,8 @@ unsigned long	x2;
 	 * reader allows anything that exhibits correct
 	 * syntax through.
 	 */
+	if (t == T_VOID && isvoidptr(ndp))
+		t = T_CHAR;
 	if (c!=C_TYPE && t==T_VOID && !isfunction(ndp)) {
 		cerror("illegal use of \"void\" type");
 		t = T_INT;
@@ -280,6 +282,25 @@ isfunction(dp) register DIM *dp;
 	for (n = 0; dp!=NULL; dp = dp->d_dp)
 		n = (dp->d_type == D_FUNC);
 	return n;
+}
+
+/*
+ * Examine a "DIM" chain of a `void' declarator to see if it describes
+ * a pointer, and mark that pointer if it does.  The chain runs
+ * outermost first, so the last dim is the one next to the base type:
+ * a pointer there is a pointer to void however many dims precede it,
+ * while a function returning void ends in D_FUNC.
+ */
+isvoidptr(dp) register DIM *dp;
+{
+	if (dp == NULL)
+		return 0;
+	while (dp->d_dp != NULL)
+		dp = dp->d_dp;
+	if (dp->d_type != D_PTR)
+		return 0;
+	dp->d_bound = D_VOIDP;
+	return 1;
 }
 
 /*

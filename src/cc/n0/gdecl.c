@@ -567,6 +567,8 @@ cast()
 		t = T_INT;
 	}
 	dp = cast1(dp);
+	if (t == T_VOID && isvoidptr(dp))
+		t = T_CHAR;
 	if (t==T_VOID && dp!=NULL && !isfunction(dp)) {
 		cerror("illegal use of void type in cast");
 		t = T_INT;
