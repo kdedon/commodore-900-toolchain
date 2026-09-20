@@ -26,10 +26,20 @@
 #define NUSEG	4
 #else
 #ifdef Z8001
-/* Eight: this machine's segment set has named slots for the shared and private
- * halves of a shared library (0.7.3's numbering, which sys/z8001/h/proc.h and
- * every preserved MD source already assume). */
-#define NUSEG	8
+/* Six named slots, plus NSLIBSEG for the loader.
+ *
+ * A dynamically loaded library takes two hardware segments, a shared one and
+ * a per-process private copy, and seven pairs fit in the hardware segments
+ * 18..31 the MMU leaves.  Both halves live in p_segp because fork, exit,
+ * exec, swap-out and compaction walk p_segp and nothing else: a segment
+ * recorded elsewhere is copied at fork without a reference and freed twice at
+ * exit.
+ *
+ * Each slot costs 4 bytes in PROC, 16 in the u-area and one entry in the
+ * core-dump header (struct xec segs[NUSEG+1]). */
+#define	NSLIB	7		/* libraries one process may map	*/
+#define	NSLIBSEG (2*NSLIB)	/* two hardware segments each		*/
+#define NUSEG	(6+NSLIBSEG)
 #else
 #define NUSEG	6
 #endif
@@ -98,13 +108,14 @@ typedef struct proc {
 #ifdef Z8001
 #define SIUSERP	0			/* User area segment */
 #define SISTACK	1			/* Stack segment */
-#define	SISSLIB	2			/* Shared part of shared library */
-#define	SIPSLIB	3			/* Private part of shared library */
-#define	SISTEXT	4			/* Shared text segment */
-#define SIPTEXT	5			/* Private text segment */
-#define SISDATA	6			/* Shared data segment */
-#define SIPDATA	7			/* Private data segment */
-#define SIAUXIL	8			/* Auxiliary segment */
+#define	SISTEXT	2			/* Shared text segment */
+#define SIPTEXT	3			/* Private text segment */
+#define SISDATA	4			/* Shared data segment */
+#define SIPDATA	5			/* Private data segment */
+/* NSLIB pairs: SISLIB+2*i shared, SISLIB+2*i+1 the process's private copy.
+ * Both are inside NUSEG, so every p_segp walker already handles them. */
+#define	SISLIB	6			/* First library slot */
+#define SIAUXIL	(6+NSLIBSEG)		/* Auxiliary segment */
 #else
 #define SIUSERP	0			/* User area segment */
 #define SISTACK	1			/* Stack segment */

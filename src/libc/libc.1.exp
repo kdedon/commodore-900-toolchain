@@ -1,0 +1,301 @@
+# libc.1 -- the exported ABI of the shared C library.
+#
+# One linker name per line, trailing `_' included; order is irrelevant.
+# Adding a name is always allowed.  Removing, renaming or changing the
+# meaning of one breaks installed clients: that needs libc.2.
+#
+# Left out:
+#  * libc's internal state (_mhdr_, _fnclst_, sigtable, __a_*): an export
+#    can never be withdrawn.
+#  * errno_ and SS: absolutes, identical in every process.
+#  * etext_, edata_, end_: defined per program by the linker.
+#  * _prof.o refers to etext_; strrchr.o duplicates strchr.c's strrchr_;
+#    _finish.o is the no-stdio stub, so clients get finit.c's _finish_.
+#
+# _slinit_ is not C: crt0sl.s calls it with this program's envp and break.
+_canl_
+_canw_
+_doprnt_
+_dtefg_
+_dtoa_
+_exit_
+_fgetb_
+_fgetc_
+_fgeteof_
+_fginit_
+_finish_
+_fopen_
+_fpinit_
+_fpseek_
+_fputb_
+_fputc_
+_fputt_
+_slinit_
+_stropen_
+abort_
+abs_
+access_
+acct_
+alarm2_
+alarm_
+asctime_
+atof_
+atoi_
+atol_
+bpt_
+brk_
+calloc_
+chdir_
+chmod_
+chown_
+chroot_
+close_
+closelog_
+creat_
+crypt_
+ctime_
+ctol_
+dfpack
+diflt
+dladd
+dlcmp
+dldiv
+dlflt
+dlmul
+dlsub
+dradd
+drcmp
+drdiv
+drmul
+drsub
+duflt
+dup2_
+dup_
+dvflt
+ecvt_
+encrypt_
+endgrent_
+endpwent_
+execl_
+execle_
+execlp_
+execv_
+execve_
+execvp_
+exit_
+fclose_
+fcntl_
+fcvt_
+fdopen_
+fdpack
+fflush_
+fgetc_
+fgets_
+fgetw_
+finit_
+fopen_
+fork_
+fprintf_
+fputc_
+fputs_
+fputw_
+fread_
+free_
+freopen_
+frexp_
+fscanf_
+fseek_
+fstat_
+ftell_
+ftime_
+ftok_
+fwrite_
+gcvt_
+getc_
+getchar_
+getcwd_
+getegid_
+getenv_
+geteuid_
+getgid_
+getgrent_
+getgrgid_
+getgrnam_
+getlogin_
+getopt_
+getpass_
+getpid_
+getpw_
+getpwent_
+getpwnam_
+getpwuid_
+gets_
+getuid_
+getw_
+getwd_
+gmtime_
+halt_
+ifix
+index_
+ioctl_
+isatty_
+kill_
+l3tol_
+ldexp_
+lfix
+link_
+localtime_
+lock_
+longjmp_
+lseek_
+ltoc_
+ltol3_
+malloc_
+memchr_
+memcmp_
+memcpy_
+memmove_
+memok_
+memset_
+mkdir_
+mkfifo_
+mknod_
+mktemp_
+modf_
+modfs_
+monitor_
+mount_
+mpx_
+mtype_
+nice_
+nlist_
+notify_
+notmem_
+open_
+openlog_
+path_
+pause_
+pclose_
+perror_
+pipe_
+pnmatch_
+poll_
+popen_
+printf_
+profil_
+ptrace_
+putc_
+putchar_
+putenv_
+puts_
+putw_
+qsort_
+raise_
+rand_
+read_
+realloc_
+reboot_
+rewind_
+rindex_
+rmdir_
+sbrk_
+scanf_
+select_
+setbuf_
+setgid_
+setgrent_
+setjmp_
+setkey_
+setlogmask_
+setpgrp_
+setpwent_
+settz_
+setuid_
+shellsort_
+signal_
+sleep_
+sload_
+sprintf_
+srand_
+sscanf_
+stat_
+stime_
+strcasecmp_
+strcat_
+strchr_
+strcmp_
+strcpy_
+strcspn_
+strdup_
+streq_
+strerror_
+strlen_
+strncat_
+strncmp_
+strncpy_
+strpbrk_
+strrchr_
+strspn_
+strstr_
+strtok_
+strtol_
+strtoul_
+suload_
+swab_
+sync_
+syslog_
+system_
+tcflow_
+tcflush_
+tempnam_
+time_
+times_
+tmpnam_
+tolower_
+toupper_
+ttyname_
+ttyslot_
+ufix
+ulimit_
+umask_
+umount_
+uname_
+ungetc_
+unique_
+unlink_
+usleep_
+utime_
+vfix
+vfprintf_
+vprintf_
+vsnprintf_
+vsprintf_
+vsyslog_
+wait_
+write_
+
+# ---- data exports ----------------------------------------------------------
+#
+# The second word must match the object, or slgen refuses the library.
+# Bare names above are functions.
+#
+#	data	per-process object in the private segment
+#	shrd	`readonly' table in the shared segment, one copy system-wide
+#
+# Clients reach functions through stubs and objects through slots, so a
+# table losing `readonly' silently becomes per-process: keep this column.
+_ctype_		shrd
+signame_	shrd
+sys_errlist_	shrd
+_fp_		data
+_stderr_	data
+_stdin_		data
+_stdout_	data
+environ_	data
+optarg_		data
+opterr_		data
+optind_		data
+optopt_		data
+sys_nerr_	data
+timezone_	data
+tzname_		data

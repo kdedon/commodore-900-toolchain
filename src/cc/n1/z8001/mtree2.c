@@ -55,6 +55,20 @@ doautos()
  * is two immediate word stores whose SEGMENT word carries no relocation, so a segmented
  * link leaves it seg 0 and an indirect call misfires.
  */
+/*
+ * May a datum in segment `seg' be named by a direct segmented address?  SDATA
+ * and SBSS are this file's own definitions and always may.  SANY is what an
+ * identifier keeps while nothing here has placed it -- an extern -- and under
+ * VPIC it may not: its address is unknown until load, so it is reached
+ * through a far-pointer slot in the pool below, filled by the linker when the
+ * symbol proves local and by the kernel at exec when it comes from a library.
+ */
+static
+isdadirect(seg)
+{
+	return (seg==SANY && notvariant(VPIC)) || seg==SDATA || seg==SBSS;
+}
+
 static
 isstatbase(g)
 register TREE *g;
@@ -608,10 +622,9 @@ TREE		*ptp;
 		&& (op==LID || op==GID)
 		&& (ptp==NULL || ptp->t_op!=CALL || tp!=ptp->t_lp)
 		&& isvariant(VLARGE)
-		&& !((ptp==NULL || ptp->t_op!=ADDR)
-		   && (tp->t_seg==SANY||tp->t_seg==SDATA||tp->t_seg==SBSS))  /* static datum: DA-direct */
-		&& !(ptp!=NULL && ptp->t_op==ADDR
-		   && (tp->t_seg==SANY||tp->t_seg==SDATA||tp->t_seg==SBSS))) {  /* static array/ptr base: defer to address node, X-mode if dereffed */
+		&& !isdadirect(tp->t_seg)) {	/* a datum this file places: DA-direct,
+						 * or deferred to the address node and
+						 * X-mode indexed if it is dereffed */
 			seg = tp->t_seg;
 			if (seg==SANY || seg==SDATA || seg==SBSS
 			|| seg==SPURE		/* readonly data is data-addressed */

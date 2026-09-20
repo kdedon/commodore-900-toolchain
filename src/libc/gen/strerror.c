@@ -66,7 +66,8 @@ static readonly char *_errors[] = {
 	"Not connected",			/* ENOTCONN	*/
 	"Already connected",			/* EISCONN	*/
 	"Write on a shut-down connection",	/* ESHUTDOWN	*/
-	"No such connection"			/* ENOCONN	*/
+	"No such connection",			/* ENOCONN	*/
+	"Cannot bind a shared library"		/* ENOSLIB	*/
 };
 #endif
 
@@ -79,7 +80,7 @@ char *strerror(errnum) int errnum;
 {
 
 #ifdef	COHERENT
-	if (errnum < 0 || errnum > sizeof(_errors)/sizeof(char *))
+	if (errnum < 0 || errnum >= sizeof(_errors)/sizeof(char *))
 		errnum = 0;
 	return _errors[errnum];
 #endif

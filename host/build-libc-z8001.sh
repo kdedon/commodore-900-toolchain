@@ -21,8 +21,11 @@ OSL="$COHERENT_OS"			# the COHERENT 3.2 OS tree (headers + libc + csu)
 O="$BUILD/z8001"
 AS="$BUILD/as-z8001"
 LDDIR="$BUILD/ld"
-PUB="$BUILD/libc-z8001"			# what ccz, build-env.sh and the tests read
-OUT=$(stagedir libc-z8001)		# staging; renamed onto PUB once the archive is written
+# $LIBCNAME names the output under $BUILD, so build-libc1.sh can build the
+# same sources -VPIC as `libc-z8001-pic'.
+LIBCNAME="${LIBCNAME:-libc-z8001}"
+PUB="$BUILD/$LIBCNAME"			# what ccz, build-env.sh and the tests read
+OUT=$(stagedir "$LIBCNAME")		# staging; renamed onto PUB once the archive is written
 VAR="${VAR:-800000020800}"		# 800000000800 | VREADONLY(bit25)
 INC="-I$OSL/include -I$OSL/include/sys"
 trap 'rm -rf "$OUT"' EXIT INT TERM
@@ -97,7 +100,7 @@ done
 
 # ---- archive (all compiled + assembled members except crt0, which stays standalone) ----
 "$OUT/mkarz" "$OUT/libc-z8001.a" "$OUT"/obj/*.o
-echo "libc-z8001: crt0.o + libc-z8001.a  ($nas asm, $ncc C objects, $(stat -c%s "$OUT/libc-z8001.a") B)"
+echo "$LIBCNAME: crt0.o + libc-z8001.a  ($nas asm, $ncc C objects, $(stat -c%s "$OUT/libc-z8001.a") B)"
 if [ -n "$skip" ]; then
 	echo "libc-z8001: THESE SOURCES DID NOT COMPILE:$skip" >&2
 	echo "  (host/buildlog.sh holds each one's diagnostics)" >&2
@@ -159,9 +162,9 @@ for b in $KOBJ; do
 	rm -f "$OUT/kobj/$b.z0" "$OUT/kobj/$b.z1" "$OUT/kobj/$b.scr" "$OUT/kobj/$b.kv"
 	cp "$OUT/obj/$b.o" "$OUT/kobj/$b.o"
 done
-echo "libc-z8001: kobj/ =$(for b in $KOBJ; do printf ' %s.o' "$b"; done)  (model-neutral: identical under cc2 $KVAR / as -g)"
+echo "$LIBCNAME: kobj/ =$(for b in $KOBJ; do printf ' %s.o' "$b"; done)  (model-neutral: identical under cc2 $KVAR / as -g)"
 
-publish_dir libc-z8001
+publish_dir "$LIBCNAME"
 trap - EXIT INT TERM			# $OUT is published now
 
 # ---- smoke: a real program that pulls from the archive ----

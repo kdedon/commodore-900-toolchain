@@ -1,7 +1,8 @@
 # Commodore 900 (Z8001) cross-toolchain.
 # The normal host build is self-contained; optional targets name their inputs.
 #
-#   make            cc0/cc1/cc2/cc3-z8001 + as-z8001 + ld-z8001 + tabgen -> host/build
+#   make            cc0/cc1/cc2/cc3-z8001 + as-z8001 + ld-z8001 + slgen + tabgen
+#                   -> host/build
 #   make check      the regression suite + the table gates (implies all)
 #   make check-isa  the opcode inventory vs MWC's own assembler table
 #   make check-mi   every MI divergence from the donor is justified
@@ -26,7 +27,7 @@
 
 SHELL = /bin/sh
 .DELETE_ON_ERROR:
-.PHONY: all cc as ld check check-isa check-cc3tab check-mi check-shims check-sources \
+.PHONY: all cc as ld slgen libc1 check check-isa check-cc3tab check-mi check-shims check-sources \
 	check-paths \
 	mi-baseline mi-table \
 	check-selfhost check-native check-tools check-libc \
@@ -41,11 +42,11 @@ SHELL = /bin/sh
 B ?= $(if $(C900_TC_BUILD),$(C900_TC_BUILD),host/build)
 export C900_TC_BUILD := $(abspath $(B))
 
-all: cc as ld
+all: cc as ld slgen
 
 help:
 	@printf '%s\n' \
-	  'make                 build the compiler, assembler, and linker' \
+	  'make                 build the compiler, assembler, linker and slgen' \
 	  'make check           run the regression suite' \
 	  'make check-selfhost  verify the compiler fixed point' \
 	  'make check-native    compare native assembler/linker output' \
@@ -67,6 +68,15 @@ as:
 ld: as
 	sh host/build-ld.sh
 
+# slgen builds a shared library out of ordinary objects: it reserves the export
+# table, runs as and ld, and turns ld's relocation records into the segment
+# fixup list (src/include/shlib.h).  Self-contained host C, reading and writing
+# l.out by byte offset, so it needs none of the donor shims.
+slgen: $(B)/slgen
+$(B)/slgen: src/slgen/slgen.c
+	@mkdir -p $(B)
+	$(TOOLCC) -o $@ $<
+
 # The table gates run here rather than as a side target somebody remembers:
 # generated/opcode.h is machine-generated and its numbers are the ROW NUMBERS of
 # tables kept by hand, so a half-landed regeneration makes cc2 emit the wrong
@@ -86,7 +96,21 @@ ld: as
 #
 # tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
 # build the case.
-check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc \
+#
+# tests/shlib-format.sh builds a toy shared library with slgen and reads it back
+# against src/include/shlib.h, the header the kernel's loader compiles against.
+#
+# tests/shlib-abi.sh holds libc.1's export table to src/libc/libc.1.exp, which
+# is the ABI: additions only.  It needs libc1, which is why `check' builds the
+# real shared C library.
+#
+# tests/shlib-data.sh covers the data import: the compiler's -VPIC slot for an
+# extern datum, slgen's SE_DATA export, and ld binding one to the other.
+#
+# tests/shlib-client.sh covers the other half, ld linking a program AGAINST a
+# library: a stub and a zeroed slot per import, plus the LI_LIB/LI_IMP records
+# exec binds them with.
+check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/cohfs
 	sh tests/cohfs.sh
 	sh tests/regress.sh
@@ -100,6 +124,11 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/lssaddr-variant.sh
 	sh tests/asbytes.sh
 	sh tests/as-locptr.sh
+	sh tests/shlib-format.sh
+	sh tests/shlib-client.sh
+	sh tests/shlib-data.sh
+	sh tests/shlib-abi.sh
+	sh tests/cc-pic.sh
 	sh tests/float-e2e.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
@@ -291,6 +320,12 @@ env-mwc1985:
 # is reported as "DID NOT COMPILE", and without ld the script refuses outright.
 libc: cc ld
 	sh host/build-libc-z8001.sh
+# libc.1, the SHARED C library: libc's own members plus csu/slrt.s through
+# slgen.  Built here rather than in the userland repository because the
+# toolchain owns every input, and because src/libc/libc.1.exp, the checked-in
+# ABI, belongs beside the source it is derived from.
+libc1: libc slgen
+	sh host/build-libc1.sh
 # Both are required by host/release-pack.sh.
 libm:
 	sh host/build-libm-z8001.sh

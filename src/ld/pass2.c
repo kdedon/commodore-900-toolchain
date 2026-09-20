@@ -25,6 +25,7 @@ mod_t	*mp;
 	int	opcode, relseg;
 	int	segn;
 	int	symadd;
+	int	dimp;
 	uaddr_t	addr, bias, field;
 	unsigned int	symno;
 	FILE	*ifp, *irfp, *ofp, *orfp;
@@ -81,6 +82,8 @@ mod_t	*mp;
 			putbyte(getbyte(ifp, isgp), ofp, osgp);
 		bias = 0;
 		symadd = 0;
+		dimp = 0;
+		sp = NULL;
 		switch (relseg = opcode&LR_SEG) {
 		case L_SYM:
 			symno = getsymno(irfp, irsp);
@@ -97,6 +100,7 @@ mod_t	*mp;
 			} else {
 				bias = sp->s.ls_addr;
 				symadd = 1;
+				dimp = sp->sldata;
 				if (orfp!=NULL) {
 					putbyte(sp->s.ls_type&LR_SEG
 						|opcode&~LR_SEG,
@@ -123,6 +127,17 @@ mod_t	*mp;
 			break;
 		default:
 			goto BadCode;
+		}
+		/*
+		 * A library's DATA export has no address until exec, so only a
+		 * 4-byte far pointer in private data can name one; shared text
+		 * cannot be patched per client.
+		 */
+		if (dimp && ((opcode&LR_OP) != LR_LONG || (opcode&LR_PCR) != 0
+			  || segn != L_PRVD)) {
+			mperr(mp, "%.*s: a shared library's data can only be reached through a far pointer in private data (compile with -VPIC)",
+				NCPLN, sp->s.ls_id);
+			dimp = 0;
 		}
 		if (opcode&LR_PCR)
 			bias += isgp->vbase - osgp->vbase;
@@ -188,6 +203,15 @@ mod_t	*mp;
 					| ((bias+field)&0xFFFFL);
 			else
 				bias += field;
+			/*
+			 * A DATA import's slot keeps the addend (`a[1]') in its
+			 * low word; exec adds the export's offset.  Segment 0
+			 * until bound, so an unbound slot traps.
+			 */
+			if (dimp) {
+				sldslot(sp, ptov(osgp->vbase));
+				bias = field & 0xFFFFL;
+			}
 			putlong((long)ptov(bias), ofp, osgp);
 			break;
 		}

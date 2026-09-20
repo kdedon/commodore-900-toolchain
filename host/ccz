@@ -17,6 +17,11 @@
 #     -noshare   separated I/D, text NOT shared (ld -i): same layout, one
 #                l_flag bit less, a private text copy per process
 #     -nostdlib  link without crt0 + libc (freestanding)
+#     -slibc     link against shared libc.1 (crt0sl.o + libc.1, no archive)
+#     -lNAME     shared library libNAME, NAME versioned (-lc.1 = -slibc);
+#                importers first; $C900_LIBPATH searched first
+#     -VPIC      extern data through slots, for a -c object to be linked
+#                against a shared library (implied when compiling and linking)
 #   FILE may be .c, .s, or .o (objects pass straight to the link).
 #
 # Prereq: build-z8001.sh, build-cc2-z8001.sh, build-as.sh, build-ld.sh, build-libc-z8001.sh.
@@ -34,12 +39,14 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 if [ -x "$HERE/cc0-z8001" ] && [ -d "$HERE/../lib" ]; then
 	O="$HERE"; AS="$HERE/as-z8001"; LD="$HERE/ld-z8001"
 	LIBC=$(cd "$HERE/../lib" && pwd)
+	LIBC1="$LIBC"
 	OS=$(cd "$HERE/.." && pwd)		# $OS/include, $OS/include/sys below
 	OS="$OS/usr"
 else
 	. "$HERE/publish.sh"			# $BUILD
 	O="$BUILD/z8001"; AS="$BUILD/as-z8001"; LD="$BUILD/ld-z8001"
 	LIBC="$BUILD/libc-z8001"
+	LIBC1="$BUILD/libc1"
 	. "$HERE/coherent-os.sh"; OS="$COHERENT_OS"	# see coherent-os.sh
 fi
 # Records the sources compiled when $C900_BUILD_LOG is set, and what each
@@ -55,7 +62,7 @@ fi
 VAR="${CCZ_VAR:-800000020800}"			# includes VREADONLY (ctype.h's `readonly')
 # base unset -> ld uses its Coherent userbase (segment 3), producing a real multi-segment
 # C900 binary (CODE seg 3 / DATA in its segment / STACK seg 0).  -R BASE forces a flat link.
-incs=""; defs=""; out=""; compileonly=0; base=""; nostdlib=0; strip=0; sep=""; large=""; files=""
+incs=""; defs=""; out=""; compileonly=0; base=""; nostdlib=0; strip=0; sep=""; large=""; files=""; slibc=0; pic=0; lnames=""; slibs=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-c) compileonly=1;;
@@ -80,12 +87,50 @@ while [ $# -gt 0 ]; do
 	# code while the comment above it advertised it.
 	-noshare) sep="-i";;	# separated I/D, text NOT shared
 	-L) large="-L";;		# large model: text/data may span multiple 64K segments
+	# No archive behind libc.1: an unexported symbol must fail the link,
+	# not pull a private copy of libc's state into the client.
+	-slibc) slibc=1;;
+	# NAME carries its major version: -lc.1 is libc.1.  Archives are named
+	# by path, since theirs carry the machine name (libm-z8001.a).
+	-l*) lnames="$lnames ${1#-l}";;
+	-VPIC) pic=1;;
 	-s) strip=1;;
 	-*) echo "ccz: unknown option $1" >&2; exit 2;;
 	*) files="$files $1";;
 	esac
 	shift
 done
+# A shared library: l.out magic, LF_SLIB (0x40 of byte 2), and the `SL' export
+# table opening the shared segment after the 48-byte header.
+isdynlib() {
+	[ -f "$1" ] || return 1
+	[ "$(od -A n -t x1 -j 0 -N 2 "$1" | tr -d ' ')" = 0701 ] || return 1
+	[ $(( 0x$(od -A n -t x1 -j 2 -N 1 "$1" | tr -d ' ') & 0x40 )) -ne 0 ] ||
+		return 1
+	[ "$(od -A n -t x1 -j 48 -N 2 "$1" | tr -d ' ')" = 534c ]
+}
+# Kept in command order: an importer precedes the library it imports from.
+for lname in $lnames; do
+	case "$lname" in
+	*.*) ;;
+	*) echo "ccz: -l$lname: an archive is named by its path here; -l takes a versioned library, as in -lc.1" >&2; exit 2;;
+	esac
+	slib=""
+	IFS=: ; for d in ${C900_LIBPATH:-} "$LIBC1" "$LIBC"; do
+		[ -n "$d" ] && [ -f "$d/lib$lname" ] && { slib="$d/lib$lname"; break; }
+	done; unset IFS
+	[ -n "$slib" ] || { echo "ccz: no lib$lname in ${C900_LIBPATH:+$C900_LIBPATH:}$LIBC1 or $LIBC" >&2; exit 1; }
+	isdynlib "$slib" ||
+		{ echo "ccz: $slib is not a shared library with an export table" >&2; exit 1; }
+	slibs="$slibs $slib"
+	slibc=1
+done
+[ "$slibc" = 0 ] || slibs="${slibs:-$LIBC1/libc.1}"
+# Library data has no address until the kernel places it, so a client reaches
+# extern data through slots in its own data.  ld fills slots for local symbols.
+if [ "$pic" = 1 ] || { [ "$slibc" = 1 ] && [ "$compileonly" = 0 ]; }; then
+	VAR="${CCZ_VAR:-800000020808}"
+fi
 [ -n "$files" ] || { echo "ccz: no input files" >&2; exit 2; }
 [ -x "$O/cc0-z8001" ] || { echo "ccz: toolchain not built (run build-z8001.sh + build-cc2-z8001.sh)" >&2; exit 1; }
 
@@ -140,8 +185,15 @@ sflag=""; [ "$strip" = 1 ] && sflag="-s"		# -s: strip the symbol table (delivera
 if [ "$nostdlib" = 1 ]; then
 	"$LD" $sep $large $sflag $Rflag -o "$a" $objs
 else
+	if [ "$slibc" = 1 ]; then
+		for l in $slibs; do
+			[ -f "$l" ] || { echo "ccz: $l not built (run build-libc1.sh)" >&2; exit 1; }
+		done
+		"$LD" $sep $large $sflag $Rflag -o "$a" "$LIBC1/crt0sl.o" $objs $slibs
+	else
 	[ -f "$LIBC/crt0.o" ] || { echo "ccz: libc not built (run build-libc-z8001.sh)" >&2; exit 1; }
 	"$LD" $sep $large $sflag $Rflag -o "$a" "$LIBC/crt0.o" $objs "$LIBC/libc-z8001.a"
+	fi
 fi
 # -s: also drop the trailing REL section.  The kernel exec loader (sys/coh/exec.c) uses
 # only the first NXSEG=6 sections (code/data/bss) and never reads SYM(7) or REL(8); ld's

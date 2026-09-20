@@ -24,14 +24,13 @@
 #define	VALIGN	(VMBASE+4)	/* word-align the stack (Z8000 wants even SP)	*/
 #define	VBUSLOCK (VMBASE+5)	/* emit bus-lock (Z8003/4) for atomic sequences	*/
 #define	VXSTAT	(VMBASE+6)	/* output static external items			*/
-#define	VRAM	(VMBASE+7)	/* place pure/const data in the data space (RAM).
-				 * SPURE is data-addressed unconditionally, since
-				 * cc2 writes .shrd into the data image, so all
-				 * this bit still reaches is poolseg(): a pooled
-				 * DCON goes to SDATA rather than SLINK. */
+#define	VRAM	(VMBASE+7)	/* pooled DCONs go to SDATA, not SLINK */
 #define	VTPA	(VMBASE+8)	/* CP/M-8000 transient program: frame/auto
 				 * addresses carry the TPA segment (0x32)
 				 * instead of Coherent's flat-model segment 0
 				 * or the kernel's system stack (VKERN, 0x3F) */
+#define	VPIC	(VMBASE+9)	/* reach extern data not defined here through
+				 * a 4-byte far-pointer slot in the literal
+				 * pool, bound at exec */
 
 /* end of h/z8001/varmch.h */

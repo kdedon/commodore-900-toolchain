@@ -89,6 +89,7 @@
 #include <errno.h>
 #include "mch.h"
 #include "host.h"
+#include "nout.h"
 #include "ops.h"
 #include "stream.h"
 #undef NONE
@@ -255,6 +256,9 @@ struct option {			/* option table */
 	{ 0,	CCOPT,	"V8087",	V8087	},
 	{ 0,	CCOPT,	"VNDP",		VNDP	},
 	{ 0,	CCOPT,	"VRAM",		VRAM	},
+#if	Z8001
+	{ 0,	CCOPT,	"VPIC",		VPIC	},
+#endif
 	{ 0,	CCOPT,	"VOMF",		VOMF	},
 	{ 0,	CCOPT,	"V80186",	V80186	},
 	{ 0,	CCOPT,	"V80287",	V80287	},
@@ -352,6 +356,9 @@ int	ndotm;
 int 	ndoto;
 int	ndots;
 int	partial;			/* Partial link specified */
+#if	Z8001
+int	dynlink;			/* Link names a dynamic shared library */
+#endif
 
 #define	aflag	((ccvariant&FLAG_a)!=0)
 #define	cflag	((ccvariant&FLAG_c)!=0)
@@ -701,7 +708,7 @@ main(argc, argv) int argc; char *argv[];
 	 fprintf(stderr, "Copyright 1984-1987, Mark Williams Co., Chicago\n");
 	}
 #endif
-	resolve();
+	resolve(argc, argv);
 	compile(argc, argv);
 	if (nload==0 && runld(argc, argv)==0) {
 		if (Kflag==0 && nldob==1 && newo[0]!=0)
@@ -723,7 +730,9 @@ main(argc, argv) int argc; char *argv[];
  * Resolve remaining ambiguities.
  * Initialize variant arguments and files.
  */
-resolve()
+resolve(argc, argv)
+int argc;
+char *argv[];
 {
 	register int i;
 
@@ -836,6 +845,24 @@ resolve()
 		setvariant(VCPP);
 	if (VeryVflag && Vflag)
 		printf("quit pass is %s\n", pass[qpass].p_pln);
+#if	Z8001
+	/*
+	 * Shared-library data has no address until exec, so a client reaches it
+	 * through slots (-VPIC).  A bare -c compile must name -VPIC itself.
+	 */
+	slscan(argc, argv);
+	if (dynlink && qpass >= LD && ndotc != 0)
+		setvariant(VPIC);
+	/*
+	 * environ_ and the break live in the library, so its start-off
+	 * hands them over rather than defining them.
+	 */
+	if (dynlink) {
+		strcpy(cmdb, pass[CRT].p_mch);
+		strcat(cmdb, "crt0sl.o");
+		strcpy(pass[CRT].p_pln, cmdb);
+	}
+#endif
 	makvariant(vstr);
 	if (ndotm != 0 && notvariant(VCPP) && notvariant(VCPPE)) {
 		setvariant(VCPP);
@@ -1349,6 +1376,13 @@ char *argv[];
 		p1 = makelib(LIB, *cp++ = p1, "vdi");
 	}
 #endif
+	/*
+	 * No libc.a behind a shared libc: it would silently give the client
+	 * a private copy of libc's state.
+	 */
+#if	Z8001
+	if (!dynlink)
+#endif
 	p1 = makelib(LIB, *cp++ = p1, "c");
 #if	_I386
 	if (Kflag == 0 && nldob == 1 && newo[0] != 0) {
@@ -1786,10 +1820,78 @@ char *lp;
 #else
 	strcpy(cp, pass[pn].p_pln);
 	strcat(cp, lp);
+#if	Z8001
+	/*
+	 * A `.' names a shared library's major version: -lc.1 is libc.1,
+	 * with no archive suffix.
+	 */
+	if (strchr(lp, '.') != NULL) {
+		register char *pn2;
+
+		if ((pn2 = path(pass[pn].p_dir, cp, R_OK)) != NULL) {
+			strcpy(cp, pn2);
+			return cp + strlen(cp) + 1;
+		}
+	}
+#endif
 	strcat(cp, ".a");
 	return ccpath(cp, pass[pn].p_dir, cp, R_OK);
 #endif
 }
+
+#if	Z8001
+/*
+ * A shared library: an l.out with LF_SLIB whose shared segment, right after
+ * the header, opens with the <shlib.h> export table.  Read bytewise so it
+ * works on any host.
+ */
+#define	SLPROBE	52		/* header, table magic and version */
+#define	SLHDR	48		/* sizeof (struct ldheader) on file */
+
+isdynlib(name)
+char *name;
+{
+	FILE *fp;
+	char b[SLPROBE];
+	int n;
+
+	if ((fp = fopen(name, "r")) == NULL)
+		return (0);
+	n = fread(b, 1, SLPROBE, fp);
+	fclose(fp);
+	return (n == SLPROBE
+	     && ((b[0]&0377) | (b[1]&0377)<<8) == L_MAGIC
+	     && (((b[2]&0377) | (b[3]&0377)<<8) & LF_SLIB) != 0
+	     && (b[SLHDR]&0377) == 'S' && (b[SLHDR+1]&0377) == 'L');
+}
+
+/*
+ * Set dynlink if any library argument, resolved as runld() will, is shared.
+ */
+slscan(argc, argv)
+int argc;
+char *argv[];
+{
+	static char lib[NCMDB/4];
+	register char *p;
+	register int i;
+
+	for (i=1; i<argc; ++i) {
+		if ((argf[i]&CCLIB)!=0) {
+			p = argv[i];
+			while (*p++ != 'l')
+				;
+			makelib(LIB, lib, p);
+			p = lib;
+		} else if ((argf[i]&(LDLIB|LDARG))!=0)
+			p = argv[i];
+		else
+			continue;
+		if (isdynlib(p))
+			dynlink = 1;
+	}
+}
+#endif
 
 makeft(op, ip, ft)
 char *op, *ip, *ft;
@@ -1887,6 +1989,11 @@ usage(flag) register int flag;
 		"\t-VNOOPT\t\tNo optimization\n"
 		"\t-VNOWARN\tNo warning messages\n"
 		"\t-VPEEP\t\tPeephole optimization (default)\n"
+#if	Z8001
+		"\t-VPIC\t\tAddress every extern datum through a slot, so a\n"
+		"\t\t\tshared library's data can be bound at exec.  Implied\n"
+		"\t\t\tby a command that compiles and links against one\n"
+#endif
 		"\t-VPROF\t\tProfile: generate code to profile function calls\n"
 		"\t-VPSTR\t\tPure strings (default)\n"
 		"\t-VQUIET\t\tNo messages, same as -Q\n"

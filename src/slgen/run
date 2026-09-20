@@ -1,9 +1,0 @@
-: slgen -- the shared-library jump-table generator.
-: Two passes.
-: The run-time glue lives in csu/: slrt.s library-side, crt0sl.s client-side.
-
-cc -n -o slgen slgen.c
-as -o slrt.o ../../csu/slrt.s
-as -o crt0sl.o ../../csu/crt0sl.s
-: mv slgen /bin
-: mv slrt.o crt0sl.o /lib

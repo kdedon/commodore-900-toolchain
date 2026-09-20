@@ -160,13 +160,14 @@ char	*fname, mname[];
 		moderr(fname, mname, "not 32-bit load module");
 		return (0);
 	}
-	if ((ldh.l_flag & LF_SLIB) != 0) {
-		oldh.l_flag |= LF_SLREF;
-		if (watch)
-			modmsg(fname, mname, "shared library adding");
-		rdsymbol(fname);
-		return (0);
-	}
+	/*
+	 * Nothing of a shared library is loaded: its export table is
+	 * authoritative -- the l.out symbol table also names statics, and
+	 * internals no client may call -- and what the client references
+	 * becomes stubs and slots.
+	 */
+	if ((ldh.l_flag & LF_SLIB) != 0)
+		return (slread(fp, offs, fname, mname, &ldh));
 	if (ldh.l_flag&LF_SEP) {
 		moderr(fname, mname, "cannot load separated I/D");
 		return (0);
@@ -355,6 +356,7 @@ mod_t	*mp;
 	symtable[h] = sp;
 	sp->s = *lsp;	/* struct assign */
 	sp->mod = mp;
+	sp->sldata = 0;
 	/*
 	 * note reference to internal symbol
 	 */

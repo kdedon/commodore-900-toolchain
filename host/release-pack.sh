@@ -194,6 +194,10 @@ cp "$HERE/buildlog.sh" "$A/bin/"	# ccz sources it from beside itself; inert unse
 cp "$HERE"/include/*.h "$A/include/"
 cp -r "$HERE/include/sys" "$A/include/"
 cp -r "$COHERENT_OS/include" "$A/usr/include"
+# shlib.h is the one target header the toolchain owns: the format slgen
+# writes and the kernel loader reads.  Overlaid on the OS headers.
+cp "$ROOT/src/include/shlib.h" "$A/usr/include/shlib.h"
+cp "$BUILD/slgen" "$A/bin/"		# makes a library out of ordinary objects
 cp "$BUILD/libc-z8001/crt0.o" "$BUILD/libc-z8001/libc-z8001.a" "$A/lib/"
 # lib/kobj: the five libc objects the KERNEL links by name (build-libc-z8001.sh
 # says which and proves they are model-neutral).  They ride in every archive that

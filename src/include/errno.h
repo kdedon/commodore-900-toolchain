@@ -92,6 +92,14 @@
 #define	ESHUTDOWN	51	/* Write on a shut-down connection */
 #define	ENOCONN		52	/* No such connection */
 
+/*
+ * exec could not bind a dynamic shared library the image names: missing, not
+ * a library, short of a symbol the client imports, or no room for another.
+ * The program itself is intact, so neither ENOEXEC (which sends sh off to
+ * read the binary as a script) nor EBADFMT fits.
+ */
+#define	ENOSLIB		53	/* Cannot bind a shared library */
+
 
 #ifndef KERNEL
 /*

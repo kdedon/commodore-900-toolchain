@@ -24,6 +24,8 @@ OUT=$(stagedir ld)
 trap 'rm -rf "$OUT"' EXIT INT TERM
 for f in $(srcman_list ld "$LD"); do cp "$LD/$f" "$OUT"/; done
 cp "$LD"/*.h "$OUT"/
+# shlib.c must see the same shlib.h the kernel loader does.
+cp "$HERE/../src/include/shlib.h" "$OUT"/
 # headers from host/include (vendored verbatim); ar.h includes <sys/dir.h>
 for h in canon.h mtype.h ar.h; do
   cp "$HERE/include/$h" "$OUT"/
@@ -68,7 +70,7 @@ EOF
 sed -i 's/^FILE\t\*setoutput();/static FILE *setoutput();/' "$OUT/main.c"
 # MWC printf %D = 32-bit decimal (pre-%ld); glibc printf mis-consumes it and
 # faults on the following %s (seen in the -L lfixup path).  Args are longs.
-sed -i 's/%D/%ld/g' "$OUT/pass1.c" "$OUT/pass2.c" "$OUT/main.c"
+sed -i 's/%D/%ld/g' "$OUT/pass1.c" "$OUT/pass2.c" "$OUT/main.c" "$OUT/shlib.c"
 
 # baked-fix drift guards: the source of record must carry the genuine fixes
 grep -q "all NCPLN chars matched" "$OUT/pass1.c" || { echo "src/ld pass1.c: eq() 16-char fix MISSING"; exit 1; }

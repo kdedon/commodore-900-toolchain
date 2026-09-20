@@ -59,7 +59,8 @@ readonly char	*sys_errlist[] = {
 	"not connected",
 	"already connected",
 	"write on a shut-down connection",
-	"no such connection"
+	"no such connection",
+	"cannot bind a shared library"
 };
 
 int	sys_nerr = sizeof (sys_errlist)/sizeof (sys_errlist[0]);

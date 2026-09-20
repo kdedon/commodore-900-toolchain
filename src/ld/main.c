@@ -6,6 +6,7 @@ static	flag_t	memld;			/* do in-memory load */
 static	flag_t	dcomm;			/* Define commons even if reloc out */
 static	flag_t	nosym;			/* Don't output symbol table */
 static	flag_t	reloc;			/* Output relocation info */
+static	flag_t	slreloc;		/* -S: this -r link builds a library */
 static	flag_t	lmodel;			/* Large model mode */
 static	flag_t	segoff;			/* Segment + offset format LR_LONG */
 static	uaddr_t	base;			/* Relocation base of output */
@@ -34,6 +35,12 @@ char	*argv[];
 	scanargs(argc, argv);
 	if (machine == 0)
 		fatal("no input found");
+	/*
+	 * The import set is final: give each import its stub at the end of the
+	 * shared text and its slot at the end of the private data, before any
+	 * size below is turned into an address.
+	 */
+	slalloc();
 	/*
 	 * all modules have been read
 	 * resolve meanings of various flags
@@ -66,6 +73,7 @@ char	*argv[];
 	else
 		base = userbase[machine];
 	baseall(oseg, &oldh);
+	slbind();		/* stub and slot offsets become addresses */
 
 	/*
 	 * Give each common its final BSSD-relative offset, padding one that
@@ -146,6 +154,7 @@ char	*argv[];
 			fseek(outputf[i], sgp->daddr, 0);
 		}
 	}
+	sldivert();		/* a library's L_REL waits for L_SYM's size */
 	/*
 	 * define internal symbols which have been referenced
 	 */
@@ -211,6 +220,15 @@ char	*argv[];
 	 */
 	for (mp = modhead; mp!=NULL; mp=mp->next)
 		loadmod(mp);
+	slemit();		/* the stubs and the zeroed slots */
+	/*
+	 * LI_LIB/LI_IMP, after every ordinary symbol so that no relocation's
+	 * symbol number moves, and after pass 2, which is what finds the
+	 * far-pointer cells a DATA import is bound through.
+	 */
+	if (!nosym)
+		slsyms();
+	slrelout();		/* ... and is written at the offset it gives */
 	/*
 	 * All over but the flushing
 	 */
@@ -256,7 +274,6 @@ int ac;
 register char *av[];
 {
 	register int i;
-	register char *lp;
 
 	if (ac <= 1)
 		usage("no args");
@@ -290,17 +307,7 @@ register char *av[];
 				rdsymbol("/coherent");
 			continue;
 		case 'l':
-			lp = malloc(strlen(av[i])+16);
-			sprintf(lp, "/lib/lib%s.a", &av[i][2]);
-			if (rdfile(lp))
-				;
-			else {
-				sprintf(lp, "/usr/lib/lib%s.a", &av[i][2]);
-				if (rdfile(lp))
-					;
-				else
-					fatal("can't open lib%s.a", &av[i][2]);
-			}
+			slsearch(&av[i][2]);
 			continue;
 		case 'L':
 			lmodel++;
@@ -325,6 +332,9 @@ register char *av[];
 				usage("Bad -b option");
 			else
 				cbase = av[i];
+			continue;
+		case 'S':
+			slreloc++;
 			continue;
 		case 's':
 			nosym++;

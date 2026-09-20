@@ -52,6 +52,7 @@ typedef	struct	sym_t	{	/* symbol descriptor */
 	struct	sym_t	*next;	/* chained together */
 	struct	ldsym	s;	/* id and value */
 	struct	mod_t	*mod;	/* pass 1; defining module */
+	int	sldata;		/* a shared library's DATA export */
 	unsigned int	symno;	/* pass 2; symbol number */
 } sym_t;			/* above 2 items could be united */
 
@@ -208,5 +209,8 @@ void	loadmod(), putstruc(), putword(), putlohi(), puthilo(), putbyte();
 void	putlong();
 unsigned short	getword(), getlohi(), gethilo();
 unsigned long getlong(), getaddr();
+int	rdfile(), slread();
+void	slalloc(), slbind(), slsyms(), slemit(), slsearch(), sldslot();
+void	sldivert(), slrelout();
 void	message(), fatal(), usage(), filemsg(), modmsg(), mpmsg(), spmsg();
 void	filerr(), moderr(), mperr(), sperr();

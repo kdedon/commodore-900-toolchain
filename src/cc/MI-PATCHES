@@ -147,7 +147,7 @@ fix: `rallo()` keeps one register that can address: when an allocation would tak
 why: the reserve is decided entirely by the machine register table's `r_lvalue` -- the set of kinds a register can be dereferenced through -- so it is machine-independent code reading a machine-dependent fact, and on a machine where every register can address (the donor's i386) `hold` is never set and the function returns exactly what the donor returned. On the Z8001 that set is small and exhaustible: a value in the last addressable register cannot be undone, the selector then spills, and the spilled assignment wants the address it could not form -- ICE 5149, which the original 1985 compiler fails on too. Measured over 1017 sources (798 compiling), the reserve fires so rarely that exactly two objects move, awk5.o 1915 -> 1910 instructions and the kernel's bio.o 1523 -> 1521, both FEWER, and the 13 sources shared with the 1985 compiler are unchanged -- so it costs nothing against the efficiency baseline
 
 patch: driver-z8001-model
-file: coh/cc.c 62bbf2f82d13cde35904482b5d002dcd6ac28a9342e2a6f959d31995a2fbfe13
+file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
 fix: `#if Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` instead of `V80186`, and the model-selection block chooses `VLARGE` unless `-VSMALL` was asked for, in place of the Intel OMF rules
 why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if Z8001`, so no other target sees them
 
@@ -196,7 +196,7 @@ why: throughout (upstream's own kernel tree), and a compiler that miscompiles
 why: them quietly is worse than one that refuses them.  Found by Michal Pleban
 
 patch: driver-eflag-preprocess-only
-file: coh/cc.c 62bbf2f82d13cde35904482b5d002dcd6ac28a9342e2a6f959d31995a2fbfe13
+file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
 fix: `if (Eflag) setvariant(VCPP);' moved out of `#if TEMPBUF' to the head of resolve()
 why: TEMPBUF is defined nowhere in this tree -- it guards a COH386 malloc
 why: efficiency hack -- so on the C900 driver that line never ran and -E did
@@ -205,3 +205,46 @@ why: clear and chooses qpass = LD, so `cc -E' preprocesses, compiles,
 why: assembles and LINKS instead of stopping after the preprocessor.  Whether
 why: a build buffers its temporary files has nothing to do with what -E means.
 why: Found by Michal Pleban
+
+patch: driver-vpic-option
+file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
+file: h/z8001/varmch.h
+file: n1/z8001/mtree2.c
+fix: a `#if Z8001' row for `-VPIC' in the option table, beside the other model
+fix: flags, and its usage text under the same guard
+why: the variant word is the ONLY channel from the driver to the passes, so a
+why: machine-dependent variant bit that no driver row sets can be reached only
+why: by spelling the hex word out by hand -- which is what the build scripts and
+why: the gate would then have to do, putting the bit's number in three places
+why: instead of one.  The bit itself (VPIC, VMBASE+9) and everything that reads
+why: it are in the machine layer; this row is the four characters the MI table
+why: needs to name it, guarded like the model rows the same table already
+why: carries for this target.  On the C900 it selects the segmented machine's
+why: only way to reference a shared library's data: an extern datum is addressed
+why: through a 4-byte far pointer in the private data, which ld fills when the
+why: symbol proves local and exec fills when it comes from a library.  No other
+why: target defines VPIC, and with the bit clear the compiler emits what it
+why: emitted before -- 121 userland programs and 215 libc objects byte-identical
+
+patch: driver-implied-vpic
+file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
+fix: the driver reads each library on the link line, and where one is a shared
+fix: library with an export table it links the shared start-off, drops the
+fix: archive behind the library, and -- when the same command compiled the
+fix: source -- sets VPIC itself; `-lNAME' with a `.' in NAME resolves to
+fix: libNAME, as ld resolves it
+why: the flag is not a taste: a client of such a library that lacks it cannot
+why: be linked at all, and ld refuses it by name.  Who can know it is wanted is
+why: the question, and the answer is the same as -fPIC's elsewhere -- a command
+why: that both compiles and links knows what it is linking against before the
+why: first pass runs, and a `-c' compile does not, so it is left alone and
+why: static stays the default.  The library is recognised from the file, not
+why: from its name: an l.out with LF_SLIB whose shared segment opens with the
+why: `SL' export table of <shlib.h>.  A fixed-address library carries the flag
+why: and no table, reaches its entries through an index, and wants none of
+why: this, so it is not recognised and nothing is implied for it.  The probe
+why: reads the header a byte at a time -- canonical shorts are low byte first,
+why: the table is target memory, high byte first -- so the driver reads the
+why: same file the same way whichever machine it was compiled for.  `-lc' and
+why: every other undotted name take the archive they always took: the 122
+why: userland programs and the libc objects come out byte-identical
