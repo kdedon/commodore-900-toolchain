@@ -111,6 +111,11 @@ $(B)/slgen: src/slgen/slgen.c
 # library: a stub and a zeroed slot per import, plus the LI_LIB/LI_IMP records
 # exec binds them with.
 #
+# tests/fixed-mode.sh is the other style: `slgen -F base' builds a library at
+# addresses settled when it was built, with an index jump table at the head of
+# its shared segment, and `ld -F' links a client of one -- absolutes, direct
+# CALLs, no stub, no slot, no import record.
+#
 # tests/native-ld.sh builds src/ld/all.c FOR the machine and makes that linker
 # link a C program against libc under the emulator.  The unity build is the only
 # thing that puts the whole linker through the 1985 front end at once: a
@@ -134,6 +139,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/shlib-client.sh
 	sh tests/shlib-data.sh
 	sh tests/shlib-abi.sh
+	sh tests/fixed-mode.sh
 	sh tests/cc-pic.sh
 	sh tests/native-ld.sh
 	sh tests/float-e2e.sh

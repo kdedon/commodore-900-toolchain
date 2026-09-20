@@ -3,36 +3,21 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 /*
- * The client half of the dynamic shared-library format; see <shlib.h>.
+ * Client side of dynamic shared libraries; see <shlib.h>.
  *
- * A shared library on the command line behaves like an archive: it comes after
- * the objects and satisfies references still outstanding when it is read.
- * Nothing of the library is loaded.  For each symbol it satisfies ld builds
+ * A shared library acts like an archive, satisfying references outstanding
+ * when it is read.  For each symbol it satisfies, ld builds a stub in shared
+ * text and a 4-byte slot in private data that exec fills with a far pointer:
  *
- *	a STUB in the client's shared text, named for the symbol, so the call
- *	sites the compiler already emitted keep working:
+ *	foo_:	ldl  rr2,_imp_foo_	54 02  8S 00  oo oo
+ *		jp   (rr2)		1E 28
  *
- *		foo_:	ldl  rr2,_imp_foo_	54 02  8S 00  oo oo
- *			jp   (rr2)		1E 28
- *
- *	a 4-byte SLOT in the client's private data, zero in the file, which the
- *	kernel fills at exec with a far pointer to the library's own entry.
- *
- * The stub's address field is the SL (instruction long-address) form, so it
- * carries 0x80|segment; the slot it names holds the register/memory form, with
- * bit 7 of the segment byte clear.
- *
- * What the kernel needs to fill the slots goes into L_SYM as LI_LIB / LI_IMP
- * records, and LF_SLREF says they are there; `ld -s' therefore cannot strip a
- * client that has imports.
- *
- * Stubs and slots are appended after every input module's contribution to their
- * segment -- stubs at the end of L_SHRI, slots at the end of L_PRVD -- so no
- * module's symbol offsets or relocation biases move.  A slot's address thus
- * depends on how much private data the client itself has.
+ * The stub's address has 0x80|segment (SL form); the slot has bit 7 clear.
+ * Stubs go at the end of L_SHRI and slots at the end of L_PRVD, so no module's
+ * offsets move.  LI_LIB/LI_IMP records in L_SYM tell exec what to fill, so
+ * `ld -s' cannot strip a client with imports.
  */
 
-/* Modes ORMODE and the l.out types come from data.h, which all.c includes. */
 #include <shlib.h>
 
 #define	SL_STUBLEN	8		/* ldl rr2,slot / jp (rr2)	*/
@@ -70,11 +55,13 @@ static	int	slnlib;			/* libraries that supplied one */
 static	FILE	*slrelf;		/* L_REL, diverted (sldivert below) */
 static	char	slrelnm[SL_PATHLEN];
 
+static void	slfixslot();
+
 char	*malloc(), *realloc(), *getenv();
 
 /*
- * A short from the file in target memory order: the shared-library tables are
- * memory images, not canonical l.out fields.
+ * A short in target memory order: the library tables are memory images, not
+ * canonical l.out fields.
  */
 static unsigned int
 slgw(fp)
@@ -88,8 +75,7 @@ FILE	*fp;
 }
 
 /*
- * The last component of a path: the client records the name the run-time
- * loader searches for, never the path ld happened to find the library at.
+ * Last path component: the client records the name exec searches for.
  */
 static char *
 slbase(p)
@@ -101,6 +87,97 @@ char	*p;
 		if (*s=='/' || *s=='\\')
 			b = s+1;
 	return (b);
+}
+
+/*
+ * `ld -F': a fixed-address library's addresses are known at link time, so its
+ * symbols are read as absolutes, as `-k' reads a kernel's.  No stubs or slots;
+ * LF_SLREF alone tells exec the library must be resident.  Only outstanding
+ * references are taken, as from an archive.
+ */
+int
+slfixread(fp, offs, fname, mname, ldhp)
+FILE	*fp;
+fsize_t	offs;
+char	*fname, mname[];
+ldh_t	*ldhp;
+{
+	sym_t	*sp;
+	lds_t	lds;
+	unsigned int	i;
+	int	got = 0;
+
+	if (mname[0] != '\0')
+		fatal("%s: module %.*s: a shared library cannot be linked out of an archive",
+			fname, DIRSIZ, mname);
+	if (machine == 0)
+		fatal("%s: a shared library must follow the objects that reference it",
+			fname);
+	if (ldhp->l_machine != machine)
+		fatal("%s: inconsistent machine", fname);
+	/*
+	 * A dynamic library bound as fixed would resolve every name to its
+	 * link address: a silently wrong program.
+	 */
+	if (fseek(fp, offs+(fsize_t)ldhp->l_tbase, 0) == 0
+	 && slgw(fp) == SL_MAGIC)
+		fatal("%s: this is a dynamic shared library (export table magic 0x%x); link it without -F",
+			fname, SL_MAGIC);
+
+	if (fseek(fp, offs+(fsize_t)sizeof(ldh_t)+symoff(ldhp), 0) != 0)
+		fatal("%s: cannot seek to the symbol table", fname);
+	for (i = ldhp->l_ssize[L_SYM]/sizeof lds; i; i--) {
+		if (fread((char *)&lds, sizeof lds, 1, fp) != 1)
+			fatal("%s: bad symbol segment", fname);
+		canshort(lds.ls_type);
+		canlong(lds.ls_addr);
+		if ((lds.ls_type&L_GLOBAL) == 0
+		 || lds.ls_type == (L_GLOBAL|L_REF)
+		 || (sp=symref(&lds)) == NULL)
+			continue;
+		sp->s.ls_type = L_GLOBAL|L_ABS;
+		sp->s.ls_addr = vtop(lds.ls_addr);
+		nundef--;
+		got++;
+		if (watch)
+			modmsg(fname, mname, "fixed import %.*s at 0x%lx",
+				NCPLN, lds.ls_id, (long)lds.ls_addr);
+	}
+	if (got != 0) {
+		oldh.l_flag |= LF_SLREF;
+		slfixslot(fname, ldhp);
+	}
+	return (got != 0);
+}
+
+/*
+ * Set the LF_SLREF0 bit for the library's slot; exec attaches its private
+ * half on that bit.  The slot is l_entry's segment less L_SLSEG0.
+ */
+static void
+slfixslot(fname, ldhp)
+char	*fname;
+ldh_t	*ldhp;
+{
+	uaddr_t	entry;
+	int	slot;
+
+	entry = (uaddr_t)ldhp->l_entry;	/* canldh() leaves this one alone */
+	canlong(entry);
+	slot = (int)(entry >> 24) - L_SLSEG0;
+	if (slot >= 0 && slot < NSLREF) {
+		oldh.l_flag |= LF_SLREF0 << slot;
+		if (watch)
+			modmsg(fname, "", "fixed library slot %d", slot);
+		return;
+	}
+	/*
+	 * Outside the slot window there is no bit; a loader using the bits
+	 * refuses such a library anyway.
+	 */
+	if (watch)
+		filemsg(fname, "linked at segment 0x%x, outside the %d slots at 0x%x: no slot bit",
+			(int)(entry >> 24), NSLREF, L_SLSEG0);
 }
 
 /*
@@ -124,9 +201,8 @@ char	*name;
 }
 
 /*
- * Read a shared library's export table and take from it every symbol the
- * client has already referenced.  Called from addmod() in place of loading the
- * module.  Returns nonzero if it satisfied anything.
+ * Take every referenced symbol from a library's export table.  Returns nonzero
+ * if it satisfied anything.
  */
 int
 slread(fp, offs, fname, mname, ldhp)
@@ -148,13 +224,9 @@ ldh_t	*ldhp;
 	int	got = 0, unexp = 0;
 
 	/*
-	 * A library that imports from another is a client too, and is built
-	 * with `ld -n -r -d -S'.  That -r output is a final image -- its header
-	 * is rewritten and the fixup list appended, and nothing links it again
-	 * -- so its stubs and slots already sit at the addresses they will load
-	 * at.  An -r link that will be linked again is not: the slot address
-	 * would have to survive that second link.  -S says which of the two
-	 * this is.
+	 * A library importing from another is built with `ld -n -r -d -S'.  -S
+	 * marks the -r output as final, so its stubs and slots stay put; an -r
+	 * output linked again would move them.
 	 */
 	if (reloc && !slreloc)
 		fatal("%s: cannot link a shared library into a relocatable link (-r) unless -S says the output is a library; format version %d binds imports for a final image only",
@@ -179,7 +251,7 @@ ldh_t	*ldhp;
 	nexp = slgw(fp);
 	expoff = slgw(fp);
 	if (magic != SL_MAGIC)
-		fatal("%s: not a shared library: export table magic is 0x%x, expected 0x%x",
+		fatal("%s: not a dynamic shared library: export table magic is 0x%x, expected 0x%x (a fixed-address library links with -F)",
 			fname, magic, SL_MAGIC);
 	if (vers != SL_VERSION)
 		fatal("%s: export table version %d, this ld writes clients of version %d",
@@ -203,13 +275,9 @@ ldh_t	*ldhp;
 		eflg = slgw(fp);
 		eoff = slgw(fp);
 		/*
-		 * A function's offset is into the shared segment, as is a
-		 * `readonly' table's (SE_DATA|SE_SHRD), which sits past the
-		 * text in L_SHRD; a plain data object's is into the private
-		 * image, PRVI+PRVD and then the zeroed BSSI+BSSD.  ld never
-		 * uses any of them -- the kernel looks the name up again at
-		 * exec -- but one outside its own image says the table is not
-		 * one this ld understands.
+		 * Sanity check only; exec does the lookup.  Functions and
+		 * SE_DATA|SE_SHRD offset into the shared image, plain data
+		 * into the private image (PRVI+PRVD+BSSI+BSSD).
 		 */
 		if (eflg == SE_DATA
 		    ? (fsize_t)eoff >= ldhp->l_ssize[L_PRVI]
@@ -238,10 +306,8 @@ ldh_t	*ldhp;
 			lp->imptail->next = ip;
 		lp->imptail = ip;
 		/*
-		 * Resolved, but with no address until the stubs are laid out:
-		 * hold it as an absolute 0, so that no later archive claims it
-		 * again and a later definition of the same name is reported as
-		 * the redefinition it is.  slalloc() gives it its real value.
+		 * Absolute 0 until slalloc(), so no later archive claims it and
+		 * a later definition is reported as a redefinition.
 		 */
 		sp->s.ls_type = L_GLOBAL|L_ABS;
 		sp->s.ls_addr = 0;
@@ -261,17 +327,10 @@ ldh_t	*ldhp;
 		oldh.l_flag |= LF_SLREF;
 	}
 	/*
-	 * Anything the client still wants that this library defines but does
-	 * not export is a mistake worth naming: the export list is the
-	 * library's contract, and "undefined symbol" would blame the client.
-	 *
-	 * Two exceptions.  etext_/edata_/end_ describe the link they appear in,
-	 * so each link defines its own set.  And the names this library itself
-	 * imports: its symbol table carries each of them -- a function as the
-	 * stub in its shared text, a datum as the absolute zero the import was
-	 * held as -- with an LI_IMP record beside it, and neither is a
-	 * definition it could hand out.  The client gets those from the library
-	 * that does export them, further along its own command line.
+	 * Name each wanted symbol the library defines but does not export;
+	 * "undefined" would blame the client.  Skip etext_/edata_/end_, which
+	 * every link defines, and the library's own imports (LI_IMP), which a
+	 * later library supplies.
 	 */
 	nsimp = 0;
 	simp = NULL;
@@ -315,14 +374,9 @@ ldh_t	*ldhp;
 }
 
 /*
- * Divert the relocation stream, for a library link that imports (-S -r).
- *
- * L_REL is the last section on disk, and its offset was fixed from the sizes as
- * they stood before pass 2.  But a DATA import's LI_IMP records are one per
- * cell, and the cells are not known until pass 2 relocates them, so L_SYM --
- * the section before it -- grows past that offset and over the head of L_REL.
- * The records go to a scratch file here, and slrelout() copies them back at the
- * offset L_SYM's final size gives.
+ * For -S -r with imports, send L_REL to a scratch file.  L_SYM, just before
+ * it, grows in pass 2 by one LI_IMP per DATA import cell, so L_REL's offset is
+ * unknown until slrelout().
  */
 void
 sldivert()
@@ -330,8 +384,7 @@ sldivert()
 	if (!reloc || !slreloc || slnimp == 0 || outputf[L_REL] == NULL)
 		return;
 	/*
-	 * Beside the output: that directory is writable by definition, and a
-	 * name derived from it cannot collide with another link.
+	 * Beside the output: writable, and unique to this link.
 	 */
 	if (strlen(ofname) + 5 > sizeof(slrelnm))
 		fatal("%s: name too long for a scratch relocation file", ofname);
@@ -344,7 +397,7 @@ sldivert()
 }
 
 /*
- * ... and copy it back, once L_SYM's size is final.
+ * Copy L_REL back once L_SYM's size is final.
  */
 void
 slrelout()
@@ -369,9 +422,7 @@ slrelout()
 }
 
 /*
- * Lay the stubs and slots out, once every input has been read and before any
- * base or disk offset is computed, so the two segments they extend are still
- * only sizes.
+ * Lay out stubs and slots, while the segments they extend are still sizes.
  */
 void
 slalloc()
@@ -381,10 +432,6 @@ slalloc()
 
 	if (slnimp == 0)
 		return;
-	/*
-	 * Without the L_SYM records nothing says which library the image needs
-	 * or where its slots are.
-	 */
 	if (nosym)
 		fatal("cannot strip (-s) a program with %d shared-library import%s: the LI_LIB and LI_IMP records in the symbol table are what exec binds them with",
 			slnimp, slnimp==1 ? "" : "s");
@@ -392,13 +439,10 @@ slalloc()
 		oseg[L_SYM].size += sizeof(lds_t);	/* the LI_LIB record */
 		for (ip = lp->imp; ip != NULL; ip = ip->next) {
 			/*
-			 * A DATA import gets no stub and no slot of ld's own.
-			 * The compiler has already put a 4-byte far pointer in
-			 * the private data for every extern datum it addresses
-			 * (-VPIC), and that cell is the slot: pass 2 reports
-			 * each one to sldslot(), which counts the record.  The
-			 * symbol stays the absolute 0 slread() left it as,
-			 * which is what zeroes the cell.
+			 * A DATA import's slots are the far pointers -VPIC
+			 * code already has in private data; pass 2 reports
+			 * each to sldslot().  The symbol's absolute 0 zeroes
+			 * them.
 			 */
 			if (ip->data)
 				continue;
@@ -416,8 +460,7 @@ slalloc()
 }
 
 /*
- * Turn the two offsets into virtual addresses, after baseall() and before pass
- * 2 walks oseg[].vbase forward as it writes.
+ * Offsets to virtual addresses, before pass 2 advances oseg[].vbase.
  */
 void
 slbind()
@@ -435,8 +478,7 @@ slbind()
 }
 
 /*
- * The LI_LIB / LI_IMP records, written into L_SYM after the ordinary symbols so
- * that no relocation's symbol number moves.
+ * Write the LI_LIB and LI_IMP records.
  */
 void
 slsyms()
@@ -468,10 +510,8 @@ slsyms()
 				continue;
 			}
 			/*
-			 * A data import has one record per cell that addresses
-			 * it, and the compiler emits one cell per object file.
-			 * exec writes the same far pointer into each, which is
-			 * what makes every module see one object.
+			 * One record per cell (one per object file); exec
+			 * fills each with the same far pointer.
 			 */
 			for (dp = ip->dsl; dp != NULL; dp = dp->next) {
 				lds.ls_type = LI_IMP;
@@ -486,7 +526,7 @@ slsyms()
 }
 
 /*
- * The stubs and the slots themselves, written after every module's own bytes.
+ * Write the stubs and slots, after every module's own bytes.
  */
 void
 slemit()
@@ -505,14 +545,10 @@ slemit()
 			seg = (unsigned int)((ip->slotva>>24) & 0x7F);
 			off = (unsigned int)(ip->slotva & 0xFFFFL);
 			/*
-			 * In a library the stub's operand names the private
-			 * half and so carries a segment number the loader
-			 * moves.  It needs a relocation record of its own: the
-			 * fixup list is built out of the records, and ld emits
-			 * none for bytes it lays down itself.  The address is
-			 * the operand, two bytes into the stub; the stream
-			 * stays sorted within L_SHRI because the stubs come
-			 * after every module's contribution to it.
+			 * In a library the loader moves the private segment,
+			 * so the stub's operand (2 bytes in) needs its own
+			 * relocation record.  Stubs come last, so L_REL stays
+			 * sorted.
 			 */
 			if (reloc && outputf[L_REL] != NULL) {
 				putbyte(L_PRVD|LR_LONG, outputf[L_REL],
@@ -538,12 +574,8 @@ slemit()
 }
 
 /*
- * Pass 2 found a 4-byte far pointer naming an imported DATA object, at virtual
- * address `va' in the output's private data.  That cell is the slot: remember
- * it for slsyms() and count the record now, while L_SYM's size can still grow.
- *
- * The cell is left zeroed, so a client whose library lost the symbol
- * dereferences segment 0 offset 0, which user descriptors leave inhibited.
+ * Record the far pointer at `va' as a slot for DATA import `sp', and count
+ * its LI_IMP while L_SYM can still grow.
  */
 void
 sldslot(sp, va)
@@ -575,10 +607,8 @@ uaddr_t	va;
 }
 
 /*
- * -l NAME: LIBPATH, then /lib, then /usr/lib -- the order the run-time loader
- * uses -- and inside each directory a shared library in preference to the
- * archive of the same name.  A NAME that already carries a `.' is taken
- * literally (`-ltoy.1' is libtoy.1), which is how a program pins a major.
+ * -lNAME searches LIBPATH, /lib, /usr/lib, as exec does, preferring a shared
+ * library to the archive.  A NAME with a `.' pins a major: `-ltoy.1'.
  */
 static int
 sltry(dir, file)
@@ -597,7 +627,7 @@ char	*dir, *file;
 	fclose(fp);
 	if (watch)
 		filemsg(path, "library");
-	return (rdfile(path));		/* path outlives ld: modules keep it */
+	return (rdfile(path));		/* not freed: modules keep it */
 }
 
 static int

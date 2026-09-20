@@ -57,6 +57,17 @@ struct	ldheader {
 #define LF_DEBUG 0200		/* Include debug segment flag to linker */
 #define LF_FAKE	0400		/* Header is displaced to end of exe or prg */
 
+/*
+ * A fixed-address client sets one bit per library slot it uses; exec attaches
+ * each slot's private data, or fails if the library is not resident.  The bits
+ * reuse LF_DEBUG's and LF_FAKE's values.  Slot i's shared half is hardware
+ * segment L_SLSEG0+i, its private copy segment 1+i.
+ */
+#define	LF_SLREF0 0200		/* References fixed library slot 0 */
+#define	LF_SLREF1 0400		/* References fixed library slot 1 */
+#define	NSLREF	2		/* Slots the bits can name */
+#define	L_SLSEG0 0x34		/* Hardware segment of slot 0's shared half */
+
 #define	LF_286	0		/* dummy mode [386/exec.c]	*/
 #define	LF_386	0x80000000	/* dummy mode [386/exec.c]	*/
 

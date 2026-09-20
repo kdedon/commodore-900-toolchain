@@ -33,7 +33,7 @@ char	*args;
 {
 	fatal("%r\n\
 Usage: ld [-d] [-e entry] [-k[sysnam]] [-i] [-l<name>] [-m] [-n] [-o file]\\\n\
-\t[-R relocbase] [-L] [-r] [-s] [-u symbol] [-X|x] file ...",
+\t[-R relocbase] [-P privbase] [-L] [-r] [-s] [-u symbol] [-X|x] file ...",
 		&args);
 }
 

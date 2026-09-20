@@ -178,6 +178,8 @@ flag_t	noilcl,			/* discard internal symbols `L...' */
 	worder,			/* byte order in word; depends on machine */
 	lorder;			/* Word order in long */
 char	*outbuf;		/* buffer for in-memory load */
+uaddr_t	prvbase;		/* -P: base of the private half */
+flag_t	prvset;			/* -P was given */
 FILE	*outputf[NLSEG];	/* output ptrs (for each segment) */
 
 /* seconds between ranlib update and archive modify times */
@@ -209,7 +211,7 @@ void	loadmod(), putstruc(), putword(), putlohi(), puthilo(), putbyte();
 void	putlong();
 unsigned short	getword(), getlohi(), gethilo();
 unsigned long getlong(), getaddr();
-int	rdfile(), slread();
+int	rdfile(), slread(), slfixread();
 void	slalloc(), slbind(), slsyms(), slemit(), slsearch(), sldslot();
 void	sldivert(), slrelout();
 void	message(), fatal(), usage(), filemsg(), modmsg(), mpmsg(), spmsg();

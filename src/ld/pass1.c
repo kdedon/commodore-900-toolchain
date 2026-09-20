@@ -165,9 +165,14 @@ char	*fname, mname[];
 	 * authoritative -- the l.out symbol table also names statics, and
 	 * internals no client may call -- and what the client references
 	 * becomes stubs and slots.
+	 *
+	 * Under -F it is the fixed-address kind instead: no export table, at
+	 * addresses chosen when it was built, and nothing of the client's is
+	 * built for it.
 	 */
 	if ((ldh.l_flag & LF_SLIB) != 0)
-		return (slread(fp, offs, fname, mname, &ldh));
+		return (slfixed ? slfixread(fp, offs, fname, mname, &ldh)
+				: slread(fp, offs, fname, mname, &ldh));
 	if (ldh.l_flag&LF_SEP) {
 		moderr(fname, mname, "cannot load separated I/D");
 		return (0);

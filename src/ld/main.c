@@ -6,11 +6,13 @@ static	flag_t	memld;			/* do in-memory load */
 static	flag_t	dcomm;			/* Define commons even if reloc out */
 static	flag_t	nosym;			/* Don't output symbol table */
 static	flag_t	reloc;			/* Output relocation info */
+static	flag_t	slfixed;		/* Shared libraries are fixed-address */
 static	flag_t	slreloc;		/* -S: this -r link builds a library */
 static	flag_t	lmodel;			/* Large model mode */
 static	flag_t	segoff;			/* Segment + offset format LR_LONG */
 static	uaddr_t	base;			/* Relocation base of output */
-static	char	*cbase;			/* Set by -b option */
+static	char	*cbase;			/* Set by -R option */
+static	char	*cpbase;		/* Set by -P option */
 static	struct	stat	statbuf;
 
 static	char	*ofname = "l.out";
@@ -72,6 +74,20 @@ char	*argv[];
 		base = drvbase[machine];
 	else
 		base = userbase[machine];
+	/*
+	 * `-P' puts the private half somewhere of its own instead of the
+	 * segment after the shared half.  A loader that maps the two at
+	 * unrelated hardware segments -- the 0.9.2 kernel maps a shared
+	 * library's text at SLS0+slot and its private data at hardware
+	 * segment 1+slot -- cannot be served by one base, and only the link
+	 * can build the private half's own references from the right one.
+	 */
+	if (cpbase != NULL) {
+		if ((oldh.l_flag&(LF_SHR|LF_SEP)) != LF_SHR)
+			fatal("-P places the private half of a `-n' image: use it with -n and without -i");
+		prvbase = lentry(cpbase, "private base");
+		prvset = 1;
+	}
 	baseall(oseg, &oldh);
 	slbind();		/* stub and slot offsets become addresses */
 
@@ -290,6 +306,9 @@ register char *av[];
 		case 'd':
 			dcomm++;
 			continue;
+		case 'F':
+			slfixed++;
+			continue;
 		case 'e':
 			if (++i >= ac)
 				usage("Bad -e option");
@@ -317,6 +336,12 @@ register char *av[];
 			continue;
 		case 'n':
 			oldh.l_flag |= LF_SHR;
+			continue;
+		case 'P':	/* Base of the private half */
+			if (++i >= ac)
+				usage("bad -P option");
+			else
+				cpbase = av[i];
 			continue;
 		case 'o':
 			if (++i >= ac)
@@ -417,7 +442,7 @@ register ldh_t	*ldhp;
 				segmax[ldhp->l_machine]/1024);
 	}
 	if (ldhp->l_flag&LF_SHR)
-		addr = newpage(addr);
+		addr = prvset && ldhp==&oldh ? prvbase : newpage(addr);
 	addr = setbase(&sega[L_PRVI], ldhp, addr);
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==LF_SHR)
 		addr = setbase(&sega[L_PRVD], ldhp, addr);

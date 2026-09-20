@@ -3,46 +3,34 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 /*
- * slgen -- build a Z8001 dynamic shared library.
+ * slgen -- build a Z8001 shared library, in either of the two styles.
  *
  *	slgen [-v] [-k] [-A as] [-L ld] [-T dir] -e exports -o library obj ...
+ *	slgen [-v] [-k] [-A as] [-L ld] [-T dir] -F base [-P privbase] -o library obj ...
  *
- * A library carries an export table sorted by name and a list of the places
- * its own segment numbers appear; both formats are in <shlib.h>, which the
- * kernel compiles against too.  Building one:
+ * -F links at `base' for segments the kernel knows in advance, with an index
+ * jump table at the head of the shared segment; clients CALL absolute
+ * addresses and nothing is bound at exec.
  *
- *   1. Read the export list -- one linker name per line, `#' comments.  A
- *	listed name the library does not define is an error; a global it
- *	defines and the list does not name is a warning.  Two names equal in
- *	their first NCPLN characters are an error, since neither the symbol
- *	table nor the kernel's binary search can tell them apart.
+ * -e builds a dynamic library, in the format of <shlib.h>:
  *
- *   2. Write a stub .s reserving the export table -- SL_HDRLEN plus SL_EXPLEN
- *	per export, zeroes in .shri -- assemble it and link it first, so the
- *	table lands at offset 0 of the shared segment.  The size is known
- *	before the link, so one link is enough and the offsets are filled in
- *	afterwards from the linked symbol table.
+ *   1. Read the export list.  An unknown name, or two names equal in their
+ *	first NCPLN characters, is an error; an unlisted global is a warning.
  *
- *   3. Link `ld -n -r -d': -n for the shared/private segment pair, -r to keep
- *	the relocation records the fixup list is derived from, -d because -r
- *	otherwise leaves commons undefined.  The nominal pair SL_NOMSHR:
- *	SL_NOMPRV is ld's default placement for a program.
+ *   2. Link a zeroed export table first, so it lands at shared offset 0.
+ *	Its size is known up front, so one link suffices.
  *
- *   4. Turn every LR_LONG relocation that is not PC-relative and refers to one
- *	of the library's own six segments into a `struct slfix', checking that
- *	the byte it names really holds the nominal segment.  An unresolved
- *	(L_SYM-based) relocation is an undefined symbol and is refused, since
- *	-r suppresses ld's own report of those.
+ *   3. Link `ld -n -r -d': -r keeps the relocations, -d allocates commons.
  *
- *   5. Write the library: the export table patched into the head of L_SHRI,
- *	the fixup list as L_DEBUG, LF_SLIB set, symbols and relocations kept.
+ *   4. Turn each non-PC-relative LR_LONG relocation into a library segment
+ *	into a fixup.  Unresolved relocations are refused, since -r hides
+ *	them.
  *
- * This is a host program and reads and writes the l.out byte by byte, so no
- * layout or byte order of the machine it is built for reaches the file.  The
- * header, symbols and relocation addresses are PDP-canonical as <canon.h>
- * leaves them: a short low byte first, a long as its high word first with
- * each word low byte first.  The two tables slgen adds are target memory
- * images, big-endian throughout.
+ *   5. Patch in the export table, append the fixups as L_DEBUG, set LF_SLIB.
+ *
+ * The l.out is handled byte by byte, so the host's layout never leaks in.
+ * Header, symbols and relocations are PDP-canonical; the added tables are
+ * big-endian.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -50,12 +38,14 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#ifdef	_WIN32
+#include <process.h>
+#else
 #include <sys/wait.h>
+#endif
 
-/*
- * n.out.h and shlib.h spelled out rather than included: n.out.h is a target
- * header, and every field below is read and written by byte offset anyway.
- */
+/* From the target's n.out.h and shlib.h; fields are accessed by offset. */
 #define	NCPLN		16
 #define	NLSEG		9
 #define	L_MAGIC		0407
@@ -98,6 +88,7 @@
 #define	LDHLEN		48		/* struct ldheader on the target */
 #define	LDSLEN		22		/* struct ldsym on the target	 */
 #define	SEGLEN		0x10000L	/* one Z8001 hardware segment	 */
+#define	JMPLEN		6		/* `jp' long-form DA, -F's stride */
 
 static char	*progname = "slgen";
 static char	*expfile;		/* -e */
@@ -107,6 +98,12 @@ static char	*ldname = "ld-z8001";	/* -L */
 static char	*tmproot;		/* -T */
 static int	vflag;			/* -v */
 static int	kflag;			/* -k: keep the temporaries */
+static int	fixmode;		/* -F: the fixed-address style	*/
+static int	privmode;		/* -P was given			*/
+static long	privbase;		/* -P: base of the private half	*/
+static long	fixbase;		/* -F's argument: the link base	*/
+static long	jtlen;			/* size word + one jump per entry */
+static int	ncentry;		/* code globals counted		  */
 static int	nerror;
 
 static char	tmpdir[1024];
@@ -210,20 +207,32 @@ va_list ap;
 	fputc('\n', stderr);
 }
 
+/* Removed by name: on Windows, system() runs cmd.exe, which has no rm. */
+static char	*tmpname[] = { "exports.s", "exports.o", "linked.out", NULL };
+
+static int
+cleantmp()
+{
+	char name[1100];
+	int i;
+
+	for (i = 0; tmpname[i] != NULL; i++) {
+		sprintf(name, "%s/%s", tmpdir, tmpname[i]);
+		remove(name);
+	}
+	return (rmdir(tmpdir));
+}
+
 static void
 fatal(char *fmt, ...)
 {
 	va_list ap;
-	char cmd[1100];
 
 	va_start(ap, fmt);
 	vmsg("", fmt, ap);
 	va_end(ap);
-	if (!kflag && tmpdir[0] != '\0') {
-		sprintf(cmd, "rm -rf '%s'", tmpdir);
-		if (system(cmd) != 0)
-			;
-	}
+	if (!kflag && tmpdir[0] != '\0')
+		cleantmp();
 	exit(1);
 }
 
@@ -289,19 +298,15 @@ readexports()
 			warn("export %s is longer than %d characters; only the first %d count",
 				s, NCPLN, NCPLN);
 		exps[nexp].e_text = strdup(s);
-		/* NUL-padded to NCPLN, and nothing read past the name */
 		for (i = 0; i < NCPLN && s[i] != '\0'; i++)
 			exps[nexp].e_name[i] = s[i];
 		exps[nexp].e_off = -1;
 		exps[nexp].e_flags = 0;
 		/*
-		 * The optional second word claims what the name is, and
-		 * resolve() refuses the library if the objects disagree.  Bare
-		 * is a function, `data' an object in the private image (one
-		 * copy per client), `shrd' a readonly table in the shared
-		 * segment (one copy).  It is an ABI distinction the names
-		 * themselves cannot carry: a client compiled against a
-		 * function gets a stub, one compiled against an object a slot.
+		 * Optional kind, checked by resolve(): bare for a function,
+		 * `data' for a per-client object, `shrd' for a shared
+		 * readonly table.  Clients call functions through stubs and
+		 * reach objects through slots.
 		 */
 		exps[nexp].e_kind = EK_FUNC;
 		if (k != '\0') {
@@ -341,8 +346,11 @@ static void
 run(argv)
 char **argv;
 {
+#ifndef	_WIN32
 	pid_t pid;
-	int status, i;
+	int status;
+#endif
+	int i;
 
 	if (vflag) {
 		fprintf(stderr, "%s:", progname);
@@ -350,6 +358,11 @@ char **argv;
 			fprintf(stderr, " %s", argv[i]);
 		fputc('\n', stderr);
 	}
+#ifdef	_WIN32
+	/* No fork on Windows.  _spawnvp does not quote: no argument has a space. */
+	if (_spawnvp(_P_WAIT, argv[0], (const char * const *)argv) != 0)
+		fatal("%s failed", argv[0]);
+#else
 	if ((pid = fork()) < 0)
 		fatal("cannot fork");
 	if (pid == 0) {
@@ -361,6 +374,7 @@ char **argv;
 		fatal("wait failed");
 	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
 		fatal("%s failed", argv[0]);
+#endif
 }
 
 static void
@@ -369,18 +383,23 @@ maketmp()
 	char tmpl[1024];
 	char *root;
 
-	root = tmproot != NULL ? tmproot
-		: (getenv("TMPDIR") != NULL ? getenv("TMPDIR") : "/tmp");
+	if ((root = tmproot) == NULL && (root = getenv("TMPDIR")) == NULL)
+#ifdef	_WIN32
+		if ((root = getenv("TEMP")) == NULL)
+#endif
+			root = "/tmp";
 	sprintf(tmpl, "%s/slgenXXXXXX", root);
+#ifdef	_WIN32
+	/* MinGW has no mkdtemp. */
+	if (_mktemp(tmpl) == NULL || mkdir(tmpl) != 0)
+#else
 	if (mkdtemp(tmpl) == NULL)
+#endif
 		fatal("cannot make a temporary directory under %s", root);
 	strcpy(tmpdir, tmpl);
 }
 
-/*
- * The reserved export table, as an assembler module placed first in the link:
- * `.blkb' in .shri leaves the hole the table is written into afterwards.
- */
+/* A zeroed export table, linked first and filled in afterwards. */
 static void
 buildstub(sname, oname)
 char *sname, *oname;
@@ -422,8 +441,7 @@ int objc;
 	av[n++] = "-n";			/* shared segment + private segment */
 	av[n++] = "-r";			/* keep the relocation records	    */
 	av[n++] = "-d";			/* -r would leave commons undefined */
-	av[n++] = "-S";			/* a library MAY import from a library:
-					   this -r output is a final image  */
+	av[n++] = "-S";			/* final image; may import from a library */
 	av[n++] = "-o";
 	av[n++] = lname;
 	av[n++] = stubo;		/* FIRST: the table is at offset 0  */
@@ -476,18 +494,23 @@ char *name;
 	if (o != imglen)
 		fatal("%s: the section sizes do not add up to the file size",
 			name);
-	if (ssize[L_DEBUG] != 0)
+	if (!fixmode && ssize[L_DEBUG] != 0)
 		fatal("%s carries a debug section, where the fixup list goes",
 			name);
-	n = (long)SL_HDRLEN + (long)SL_EXPLEN * nexp;
+	n = fixmode ? jtlen : (long)SL_HDRLEN + (long)SL_EXPLEN * nexp;
 	if (ssize[L_SHRI] < n)
-		fatal("the shared text is smaller than the export table");
+		fatal("the shared text is smaller than the %s", fixmode
+			? "jump table" : "export table");
 	for (o = 0; o < n; o++)
 		if (img[soff[L_SHRI] + o] != 0)
-			fatal("the head of the shared segment is not the reserved export table");
-	if (canl(img + 44) != ((long)SL_NOMSHR << 24))
+			fatal("the head of the shared segment is not the reserved %s",
+				fixmode ? "jump table" : "export table");
+	if (canl(img + 44) != (fixmode ? fixbase : ((long)SL_NOMSHR << 24))) {
+		if (fixmode)
+			fatal("the library was not linked at 0x%08lx", fixbase);
 		fatal("the library was not linked at the nominal pair %d:%d",
 			SL_NOMSHR, SL_NOMPRV);
+	}
 	shrlen = ssize[L_SHRI] + ssize[L_SHRD];
 	prvlen = ssize[L_PRVI] + ssize[L_PRVD];
 	if (shrlen > SEGLEN)
@@ -499,10 +522,8 @@ char *name;
 }
 
 /*
- * Is this a name the library imports from another library?  Its stub is
- * global in the library's own shared text, so it looks just like a definition
- * the export list forgot; the LI_IMP record beside it says otherwise.  ld
- * emits one record per imported symbol, so a linear scan is enough.
+ * An import's stub is global in the shared text, so it looks like an
+ * unlisted definition; its LI_IMP record says otherwise.
  */
 static int
 isimport(name)
@@ -520,10 +541,7 @@ char *name;
 	return (0);
 }
 
-/*
- * Look every export up in the linked symbol table, and say which globals the
- * library defines that the list does not name.
- */
+/* Locate each export, and warn of unlisted globals. */
 static void
 resolve()
 {
@@ -572,14 +590,9 @@ resolve()
 			continue;
 		}
 		/*
-		 * A function's offset is into the shared segment.  A DATA
-		 * object lives in the private image, initialized (L_PRVD) or
-		 * zeroed (L_BSSD), and its offset is into the private segment
-		 * each client copies -- which is what makes it per-process
-		 * state.  A readonly table landed in L_SHRD instead and goes
-		 * out as SE_DATA|SE_SHRD, offset into the shared segment, so
-		 * every client's slot points at the one copy.  Private
-		 * instructions are refused: no client's text can reach them.
+		 * Functions and readonly tables are in the shared segment;
+		 * other data is in the private one, copied per client.
+		 * Private instructions are unreachable from a client.
 		 */
 		if (seg == L_SHRI)
 			exps[mid].e_flags = 0;
@@ -647,11 +660,9 @@ const void *a, *b;
 }
 
 /*
- * The file offset of a byte at loaded offset `off' in the shared (locpriv 0)
- * or private (locpriv 1) segment.  A loaded segment is instructions followed
- * by data, but the file holds the sections in canonical l.out order -- SHRI,
- * PRVI, SHRD, PRVD -- so neither segment's data half is contiguous with its
- * instruction half on disk.
+ * File offset of loaded offset `off' in the shared or private segment.
+ * The file orders sections SHRI, PRVI, SHRD, PRVD, so a segment's halves
+ * are apart on disk.
  */
 static long
 filoff(locpriv, off)
@@ -666,10 +677,8 @@ long off;
 }
 
 /*
- * The fixup list, out of the linker's relocation records.  A record is an
- * opcode byte, a 4-byte address, and, only when its segment field is L_SYM
- * (an unresolved symbol), a symbol number.  The addresses are linear: `ld -n'
- * puts the shared segment at SL_NOMSHR<<16, the private at SL_NOMPRV<<16.
+ * Build the fixup list.  A relocation record is an opcode byte, a 4-byte
+ * linear address and, for L_SYM, a symbol number.
  */
 static void
 scanrel()
@@ -694,7 +703,7 @@ scanrel()
 			fatal("an unresolved relocation is left at %#lx: the library has an undefined symbol",
 				addr);
 		if (seg == L_ABS || seg == L_REF)
-			continue;	/* an absolute; no segment of ours */
+			continue;
 		if (seg > L_BSSD)
 			fatal("bad relocation segment %d at %#lx", seg, addr);
 		if (addr >= shrbase && addr < shrbase + shrlen) {
@@ -731,11 +740,6 @@ scanrel()
 		fprintf(stderr, "%s: %d segment fixups\n", progname, nfix);
 }
 
-/*
- * Write the library: the header with LF_SLIB, the sections as ld left them
- * with the export table patched into the head of L_SHRI, and the fixup list as
- * the L_DEBUG section.
- */
 static void
 writelib()
 {
@@ -792,11 +796,239 @@ writelib()
 			ssize[L_BSSI] + ssize[L_BSSD], nexp, nfix);
 }
 
+/* ------------------------------------------------------------------ */
+/* the fixed-address style: an index jump table at a known address	*/
+
+/* Linker-defined per program, so never exported: end_ is the library's break. */
+static int
+isperprog(id)
+char id[];
+{
+	static char *perprog[] = { "etext_", "edata_", "end_", NULL };
+	char **pp;
+	int n;
+
+	for (pp = perprog; *pp != NULL; pp++) {
+		n = strlen(*pp) + 1;		/* with its NUL */
+		if (n <= NCPLN && memcmp(id, *pp, n) == 0)
+			return (1);
+	}
+	return (0);
+}
+
+/*
+ * Size the jump table from the input objects' code globals, since it is
+ * linked first.  The linked count can differ (promoted commons), so
+ * writefixed() checks for room.
+ */
+static void
+countcode(objc, objv)
+int objc;
+char **objv;
+{
+	FILE *fp;
+	unsigned char hdr[LDHLEN], sym[LDSLEN];
+	long sz[NLSEG], o;
+	int i, j, type;
+
+	ncentry = 0;
+	for (i = 0; i < objc; i++) {
+		if ((fp = fopen(objv[i], "rb")) == NULL)
+			fatal("cannot read %s", objv[i]);
+		if (fread(hdr, 1, LDHLEN, fp) != LDHLEN)
+			fatal("%s is not an l.out", objv[i]);
+		if (canw(hdr) != L_MAGIC)
+			fatal("%s: bad magic number", objv[i]);
+		if (canw(hdr + 4) != M_Z8001)
+			fatal("%s: not a Z8001 object", objv[i]);
+		for (j = 0; j < NLSEG; j++)
+			sz[j] = canl(hdr + 8 + 4 * j);
+		o = LDHLEN;
+		for (j = 0; j < L_SYM; j++)
+			if (j != L_BSSI && j != L_BSSD)
+				o += sz[j];
+		if (fseek(fp, o, SEEK_SET) != 0)
+			fatal("%s: cannot seek to the symbol table", objv[i]);
+		for (o = sz[L_SYM]; o >= LDSLEN; o -= LDSLEN) {
+			if (fread(sym, 1, LDSLEN, fp) != LDSLEN)
+				fatal("%s: bad symbol segment", objv[i]);
+			type = canw(sym + NCPLN);
+			if ((type & L_GLOBAL) == 0 || isperprog((char *)sym))
+				continue;
+			switch (type & ~L_GLOBAL) {
+			case L_SHRI:
+			case L_PRVI:
+			case L_BSSI:
+				ncentry++;
+			}
+		}
+		fclose(fp);
+	}
+	if (ncentry == 0)
+		fatal("no object defines a global function: there is nothing to export");
+	jtlen = 2 + (long)JMPLEN * ncentry;
+}
+
+/* A zeroed jump table, linked first: a length word, then the jumps. */
+static void
+buildjstub(sname, oname)
+char *sname, *oname;
+{
+	FILE *fp;
+	char *av[5];
+
+	if ((fp = fopen(sname, "w")) == NULL)
+		fatal("cannot write %s", sname);
+	fprintf(fp, "/ slgen: the index jump table of this shared library.\n");
+	fprintf(fp, "/ Reserved here so that it lands at offset 0 of the\n");
+	fprintf(fp, "/ shared segment; slgen fills it in after the link.\n");
+	fprintf(fp, "\t.shri\n");
+	fprintf(fp, "_shlib_jumps:\n");
+	fprintf(fp, "\t.blkb\t%ld\n", jtlen);
+	if (fclose(fp) != 0)
+		fatal("cannot write %s", sname);
+	av[0] = asname;
+	av[1] = "-o";
+	av[2] = oname;
+	av[3] = sname;
+	av[4] = NULL;
+	run(av);
+}
+
+static void
+linkfixed(stubo, objc, objv, lname)
+char *stubo, **objv, *lname;
+int objc;
+{
+	char **av, base[32], priv[32];
+	int i, n;
+
+	sprintf(base, "0x%08lx", fixbase);
+	av = (char **)xalloc((long)(objc + 12) * sizeof(char *));
+	n = 0;
+	av[n++] = ldname;
+	av[n++] = "-n";			/* shared segment + private segment */
+	av[n++] = "-R";
+	av[n++] = base;
+	av[n++] = "-e";			/* loaders take the segment from   */
+	av[n++] = base;			/* l_entry			    */
+	if (privmode) {
+		/* Where the loader maps it, not always the next segment. */
+		sprintf(priv, "0x%08lx", privbase);
+		av[n++] = "-P";
+		av[n++] = priv;
+	}
+	av[n++] = "-o";
+	av[n++] = lname;
+	av[n++] = stubo;		/* FIRST: the table is at offset 0  */
+	for (i = 0; i < objc; i++)
+		av[n++] = objv[i];
+	av[n] = NULL;
+	run(av);
+	free(av);
+}
+
+/*
+ * Fill the jump table and move each code global to its slot, so a rebuilt
+ * library keeps the addresses clients linked against.  Data globals keep
+ * their linked addresses.
+ */
+static void
+writefixed()
+{
+	long p, end, addr, jaddr, jfoff, room;
+	int type, seg, ndata = 0;
+
+	if (ssize[L_SYM] == 0)
+		fatal("the link kept no symbol table");
+	putbew(img + soff[L_SHRI], (int)jtlen);
+	jfoff = soff[L_SHRI] + 2;
+	jaddr = fixbase + 2;
+	room = jtlen - 2;
+	end = soff[L_SYM] + ssize[L_SYM];
+	for (p = soff[L_SYM]; p + LDSLEN <= end; p += LDSLEN) {
+		type = canw(img + p + NCPLN);
+		addr = canl(img + p + NCPLN + 2);
+		if (type == (L_GLOBAL | L_REF)) {
+			fprintf(stderr, "%s: undefined symbol %.*s\n",
+				progname, NCPLN, (char *)(img + p));
+			nerror++;
+			continue;
+		}
+		if ((type & L_GLOBAL) == 0)
+			continue;
+		if (isperprog((char *)(img + p))) {
+			canpw(img + p + NCPLN, type & ~L_GLOBAL);
+			continue;
+		}
+		seg = type & ~L_GLOBAL;
+		if (seg != L_SHRI && seg != L_PRVI && seg != L_BSSI) {
+			ndata++;
+			continue;
+		}
+		if ((room -= JMPLEN) < 0)
+			fatal("jump table overflow at %.*s: the link defines more code globals than the objects did (%d slots)",
+				NCPLN, (char *)(img + p), ncentry);
+		/* `jp addr', long-form segmented DA: 5E 08, 0x80|seg, 0, off */
+		img[jfoff + 0] = 0x5E;
+		img[jfoff + 1] = 0x08;
+		img[jfoff + 2] = 0x80 | ((addr >> 24) & 0x7F);
+		img[jfoff + 3] = 0x00;
+		img[jfoff + 4] = (addr >> 8) & 0xFF;
+		img[jfoff + 5] = addr & 0xFF;
+		canpw(img + p + NCPLN, L_SHRI | L_GLOBAL);
+		canpl(img + p + NCPLN + 2, jaddr);
+		jfoff += JMPLEN;
+		jaddr += JMPLEN;
+	}
+	if (nerror != 0)
+		exit(1);
+	canpw(img + 2, canw(img + 2) | LF_SLIB);
+	if (room != 0)
+		warn("the jump table has %ld unused bytes: the passes counted differently",
+			room);
+	if (vflag)
+		fprintf(stderr,
+			"%s: %s: shared %ld B, private %ld B (+%ld bss), %d jump slots, %d data globals\n",
+			progname, outfile, shrlen, prvlen,
+			ssize[L_BSSI] + ssize[L_BSSD], ncentry, ndata);
+}
+
+static void
+writeimg()
+{
+	FILE *fp;
+
+	if ((fp = fopen(outfile, "wb")) == NULL)
+		fatal("cannot create %s", outfile);
+	fwrite(img, 1, (size_t)imglen, fp);
+	if (fclose(fp) != 0)
+		fatal("write error on %s", outfile);
+}
+
+/* A segment base, spelled as ld's -R accepts it. */
+static long
+number(s)
+char *s;
+{
+	char *e;
+	long v;
+
+	v = strtol(s, &e, 0);
+	if (e == s || *e != '\0' || v < 0 || v > 0x7FFFFFFFL)
+		fatal("-F: %s is not an address", s);
+	if ((v & 0x00FFFFFFL) != 0)
+		fatal("-F: 0x%08lx is not the base of a hardware segment", v);
+	return (v);
+}
+
 static void
 usage()
 {
 	fprintf(stderr,
 "Usage: slgen [-v] [-k] [-A as] [-L ld] [-T dir] -e exports -o library obj ...\n");
+	fprintf(stderr,
+"       slgen [-v] [-k] [-A as] [-L ld] [-T dir] -F base [-P privbase] -o library obj ...\n");
 	exit(2);
 }
 
@@ -805,7 +1037,7 @@ main(argc, argv)
 int argc;
 char **argv;
 {
-	char sname[1100], oname[1100], lname[1100], cmd[1200];
+	char sname[1100], oname[1100], lname[1100];
 	int i;
 
 	for (i = 1; i < argc && argv[i][0] == '-' && argv[i][1] != '\0'; i++) {
@@ -835,6 +1067,18 @@ char **argv;
 				usage();
 			tmproot = argv[i];
 			break;
+		case 'F':
+			if (++i >= argc)
+				usage();
+			fixmode++;
+			fixbase = number(argv[i]);
+			break;
+		case 'P':
+			if (++i >= argc)
+				usage();
+			privmode++;
+			privbase = number(argv[i]);
+			break;
 		case 'v':
 			vflag++;
 			break;
@@ -845,27 +1089,42 @@ char **argv;
 			usage();
 		}
 	}
-	if (expfile == NULL || outfile == NULL || i >= argc)
+	if (outfile == NULL || i >= argc)
+		usage();
+	if (privmode && !fixmode)
+		fatal("-P places a fixed-address library's private half: use it with -F");
+	if (privmode && privbase == fixbase)
+		fatal("-P 0x%08lx is the shared half's own base", privbase);
+	if (fixmode && expfile != NULL)
+		fatal("-F and -e are the two styles: the fixed-address library exports every code global and has no export list");
+	if (!fixmode && expfile == NULL)
 		usage();
 
-	readexports();
+	if (!fixmode)
+		readexports();
 	maketmp();
-	sprintf(sname, "%s/exports.s", tmpdir);
-	sprintf(oname, "%s/exports.o", tmpdir);
-	sprintf(lname, "%s/linked.out", tmpdir);
-	buildstub(sname, oname);
-	linklib(oname, argc - i, &argv[i], lname);
-	readimage(lname);
-	resolve();
-	scanrel();
-	writelib();
+	sprintf(sname, "%s/%s", tmpdir, tmpname[0]);
+	sprintf(oname, "%s/%s", tmpdir, tmpname[1]);
+	sprintf(lname, "%s/%s", tmpdir, tmpname[2]);
+	if (fixmode) {
+		countcode(argc - i, &argv[i]);
+		buildjstub(sname, oname);
+		linkfixed(oname, argc - i, &argv[i], lname);
+		readimage(lname);
+		writefixed();
+		writeimg();
+	} else {
+		buildstub(sname, oname);
+		linklib(oname, argc - i, &argv[i], lname);
+		readimage(lname);
+		resolve();
+		scanrel();
+		writelib();
+	}
 	if (kflag)
 		fprintf(stderr, "%s: temporaries kept in %s\n", progname,
 			tmpdir);
-	else {
-		sprintf(cmd, "rm -rf '%s'", tmpdir);
-		if (system(cmd) != 0)
-			warn("cannot remove %s", tmpdir);
-	}
+	else if (cleantmp() != 0)
+		warn("cannot remove %s", tmpdir);
 	return (0);
 }
