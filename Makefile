@@ -110,6 +110,12 @@ $(B)/slgen: src/slgen/slgen.c
 # tests/shlib-client.sh covers the other half, ld linking a program AGAINST a
 # library: a stub and a zeroed slot per import, plus the LI_LIB/LI_IMP records
 # exec binds them with.
+#
+# tests/native-ld.sh builds src/ld/all.c FOR the machine and makes that linker
+# link a C program against libc under the emulator.  The unity build is the only
+# thing that puts the whole linker through the 1985 front end at once: a
+# construct gcc takes and cc0 does not would cost every guest its linker with
+# the suite green.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/cohfs
 	sh tests/cohfs.sh
@@ -129,6 +135,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/shlib-data.sh
 	sh tests/shlib-abi.sh
 	sh tests/cc-pic.sh
+	sh tests/native-ld.sh
 	sh tests/float-e2e.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and

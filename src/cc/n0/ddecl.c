@@ -158,7 +158,12 @@ unsigned long	x2;
 	} else if (isdefn(oc) && isdefn(c)) {
 		if (oc!=C_GREF && c!=C_GREF)
 			++rf;
-		else if (c == C_GREF)
+		/*
+		 * "extern int x;" after "int x;" still defines x, but a
+		 * FUNCTION restored to C_GDEF this way reads as a second
+		 * definition, and xdef() then demands a body for it.
+		 */
+		else if (c==C_GREF && (ndp==NULL || ndp->d_type!=D_FUNC))
 			c = oc;
 	} else if (oc != C_NONE)
 		++rf;
