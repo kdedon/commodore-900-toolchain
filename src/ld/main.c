@@ -38,11 +38,11 @@ char	*argv[];
 	if (machine == 0)
 		fatal("no input found");
 	/*
-	 * The import set is final: give each import its stub at the end of the
-	 * shared text and its slot at the end of the private data, before any
-	 * size below is turned into an address.
+	 * Give each import a stub at the end of shared text and a slot at the
+	 * end of private data, before sizes become addresses.
 	 */
 	slalloc();
+	commfit();		/* every definition holds its common */
 	/*
 	 * all modules have been read
 	 * resolve meanings of various flags
@@ -75,12 +75,8 @@ char	*argv[];
 	else
 		base = userbase[machine];
 	/*
-	 * `-P' puts the private half somewhere of its own instead of the
-	 * segment after the shared half.  A loader that maps the two at
-	 * unrelated hardware segments -- the 0.9.2 kernel maps a shared
-	 * library's text at SLS0+slot and its private data at hardware
-	 * segment 1+slot -- cannot be served by one base, and only the link
-	 * can build the private half's own references from the right one.
+	 * `-P' bases the private half on its own, for a loader that maps the
+	 * shared and private halves at unrelated segments.
 	 */
 	if (cpbase != NULL) {
 		if ((oldh.l_flag&(LF_SHR|LF_SEP)) != LF_SHR)
@@ -236,15 +232,15 @@ char	*argv[];
 	 */
 	for (mp = modhead; mp!=NULL; mp=mp->next)
 		loadmod(mp);
-	slemit();		/* the stubs and the zeroed slots */
+	slemit();		/* stubs and zeroed slots */
 	/*
-	 * LI_LIB/LI_IMP, after every ordinary symbol so that no relocation's
-	 * symbol number moves, and after pass 2, which is what finds the
-	 * far-pointer cells a DATA import is bound through.
+	 * LI_LIB/LI_IMP go after every ordinary symbol, so no relocation's
+	 * symbol number moves, and after pass 2, which finds the far-pointer
+	 * cells a DATA import binds through.
 	 */
 	if (!nosym)
 		slsyms();
-	slrelout();		/* ... and is written at the offset it gives */
+	slrelout();		/* the diverted L_REL, now placeable */
 	/*
 	 * All over but the flushing
 	 */
@@ -431,10 +427,9 @@ register ldh_t	*ldhp;
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==LF_SHR) {
 		addr = setbase(&sega[L_SHRD], ldhp, addr);
 		/*
-		 * `-n' without `-i' puts SHRD in the text segment, and exec
-		 * maps the two as one.  setbase() checks each segment on its
-		 * own, so their sum has to be checked here: past 64Kb the
-		 * 16-bit offsets would wrap inside the segment.
+		 * `-n' without `-i' puts SHRD in the text segment.  setbase()
+		 * checks each alone, so check their sum: past 64Kb the 16-bit
+		 * offsets wrap.
 		 */
 		if (segoff && !lmodel
 		 && addr-sega[L_SHRI].vbase > segmax[ldhp->l_machine])

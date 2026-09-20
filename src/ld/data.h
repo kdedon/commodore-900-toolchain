@@ -53,6 +53,7 @@ typedef	struct	sym_t	{	/* symbol descriptor */
 	struct	ldsym	s;	/* id and value */
 	struct	mod_t	*mod;	/* pass 1; defining module */
 	int	sldata;		/* a shared library's DATA export */
+	uaddr_t	commsize;	/* largest common seen for this name */
 	unsigned int	symno;	/* pass 2; symbol number */
 } sym_t;			/* above 2 items could be united */
 
@@ -204,7 +205,7 @@ void	lfixup1(), lfixup2();
 uaddr_t	setbase(), newpage(), lentry(), seppage();
 uaddr_t ptov(), vtop();
 fsize_t	segoffs();
-void	symredef(), rdsymbol();
+void	symredef(), rdsymbol(), commfit();
 sym_t	*addsym(), *symref();
 fsize_t	symoff();
 void	loadmod(), putstruc(), putword(), putlohi(), puthilo(), putbyte();

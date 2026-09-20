@@ -58,13 +58,12 @@ struct osym { SYM *sp; short typ; unsigned long addr; };
 static struct jfix { long off; }	*jfixv;
 static int		njfix, jfixcap;
 
-/* the non-code segments, in object data-image order: pure (readonly) data and strings
- * (-> SHRD, which a -n link maps read-only and shares), then links and general data (-> PRVD),
- * all initialized, real file bytes; then reserved bss (-> BSSD, a size only, no file bytes;
- * the loader zero-fills it contiguously after PRVD).  SBSS holds uninitialized globals and
- * struct-return buffers; it MUST be last so the flat address space stays text|SHRD|PRVD|BSSD,
- * the order ld bases an input object's segments in.  A far-pointer pool literal (SLINK), a
- * string (SSTRN) or an SBSS reservation that these omit would otherwise be silently dropped. */
+/* the non-code segments, in data-image order:
+ *	SPURE SSTRN	-> SHRD (read-only, shared under -n)
+ *	SLINK SDATA	-> PRVD
+ *	SBSS		-> BSSD (size only; zero-filled after PRVD)
+ * SBSS must be last so the image is text|SHRD|PRVD|BSSD, as ld expects.  A segment
+ * omitted here is silently dropped. */
 static short	dataseg[] = { SPURE, SSTRN, SLINK, SDATA, SBSS };
 #define	NDSEG	5
 #define	NSSEG	2		/* dataseg[0..NSSEG-1] are the SHRD segments */
@@ -333,17 +332,15 @@ outdone()
 	textsize = olen[SCODE];
 	for (i = 0; i < NSEG; ++i)
 		segbase[i] = 0;
-	/* Lay the data segments contiguously in the flat per-object address space (SHRD, PRVD,
-	 * then BSSD), so symbol/relocation addresses are text|SHRD|PRVD|BSSD offsets.  shrdsize and
-	 * datasize are the file-resident SHRD and PRVD sizes (initialized segments only); bsssize
-	 * is the reserved BSSD tail, which occupies NO file bytes -- ld/the loader zero-fills it. */
+	/* Lay the data segments out contiguously, text|SHRD|PRVD|BSSD.  bsssize occupies no
+	 * file bytes. */
 	shrdsize = datasize = 0;
 	for (i = 0; i < NPSEG; ++i) {
 		segbase[dataseg[i]] = shrdsize + datasize;
 		/* Word-align each segment's size: the Z8000 masks the low address bit on
 		 * word/long access, so an odd-size byte segment (e.g. an odd-length string in
 		 * SSTRN) would misalign the following word/long data (SDATA) -- and an odd total
-		 * SHRD or PRVD shifts the data after it (its far pointers read one byte off). */
+		 * SHRD or PRVD shifts the data after it. */
 		if (i < NSSEG)
 			shrdsize += (seg[dataseg[i]].s_dot + 1) & ~1;
 		else
@@ -352,13 +349,13 @@ outdone()
 	segbase[SBSS] = shrdsize + datasize;	/* bss immediately follows PRVD in the image */
 	bsssize = (seg[SBSS].s_dot + 1) & ~1;	/* keep the next object's data word-aligned */
 
-	/* Size the symbol and relocation arrays exactly: one entry per defined global,
-	 * at most one undefined external per fixup, one relocation per fixup and per
-	 * promoted JP target. */
+	/* Size the symbol and relocation arrays exactly: one entry per defined global
+	 * and per common, at most one undefined external per fixup, one relocation per
+	 * fixup and per promoted JP target. */
 	nsymcap = 1;
 	for (i = 0; i < NSHASH; ++i)
 		for (sp = hash2[i]; sp != NULL; sp = sp->s_fp)
-			if ((sp->s_flag&(S_GBL|S_DEF|S_LABNO)) == (S_GBL|S_DEF))
+			if ((sp->s_flag&(S_GBL|S_LABNO)) == S_GBL)
 				++nsymcap;
 	nsymcap += nfix + 1;			/* + SS, if any frame address needs it */
 	syms = (struct osym *)malloc((unsigned)(nsymcap*sizeof(struct osym)));
@@ -378,14 +375,29 @@ outdone()
 			syms[nsym].sp = sp;
 			/* encode the defining segment in the type so ld resolves a CROSS-object
 			 * reference into the right output segment: code -> SHRI (bare L_GLOBAL),
-			 * strings and readonly data -> L_SHRD, other initialized data ->
-			 * L_PRVD, bss -> L_BSSD.  (Tagging data as SHRI placed a cross-TU
+			 * strings and readonly data -> L_SHRD, other data -> L_PRVD,
+			 * bss -> L_BSSD.  (Tagging data as SHRI placed a cross-TU
 			 * data symbol -- e.g. libc's _stdout -- inside the text region.) */
 			syms[nsym].typ = (sp->s_seg == SCODE) ? L_GLOBAL
 				: (sp->s_seg == SBSS) ? (L_GLOBAL|L_BSSD)
 				: ISSHRD(sp->s_seg) ? (L_GLOBAL|L_SHRD) : (L_GLOBAL|L_PRVD);
 			syms[nsym].addr = (sp->s_seg == SCODE)
 				? sp->s_value : textsize + segbase[sp->s_seg] + sp->s_value;
+			++nsym;
+		}
+	/* Commons (tentative definitions: global, undefined, bss, size in s_value) go out
+	 * as undefined externals whose address is the size, for ld to allocate. */
+	for (i = 0; i < NSHASH; ++i)
+		for (sp = hash2[i]; sp != NULL; sp = sp->s_fp) {
+			if ((sp->s_flag&(S_GBL|S_DEF|S_LABNO)) != S_GBL)
+				continue;
+			if (sp->s_seg != SBSS || sp->s_value == 0)
+				continue;
+			if (nsym >= nsymcap)
+				cfatal("outcoh: symbol table overflow");
+			syms[nsym].sp = sp;
+			syms[nsym].typ = L_GLOBAL|L_REF;
+			syms[nsym].addr = sp->s_value;
 			++nsym;
 		}
 	for (i = 0; i < nfix; ++i) {		/* undefined externals referenced by fixups */

@@ -161,14 +161,10 @@ char	*fname, mname[];
 		return (0);
 	}
 	/*
-	 * Nothing of a shared library is loaded: its export table is
-	 * authoritative -- the l.out symbol table also names statics, and
-	 * internals no client may call -- and what the client references
-	 * becomes stubs and slots.
-	 *
-	 * Under -F it is the fixed-address kind instead: no export table, at
-	 * addresses chosen when it was built, and nothing of the client's is
-	 * built for it.
+	 * A shared library is not loaded.  Its export table is authoritative
+	 * (the symbol table also names statics and internals); what the
+	 * client references becomes stubs and slots.  -F reads a
+	 * fixed-address library, which has no export table.
 	 */
 	if ((ldh.l_flag & LF_SLIB) != 0)
 		return (slfixed ? slfixread(fp, offs, fname, mname, &ldh)
@@ -332,19 +328,26 @@ mod_t	*mp;
 					/* common compatible with def */
 					if (sp->s.ls_addr == 0)
 						nundef--;
+					else	/* the common needs no room */
+						commons -= (uaddr_t)sp->s.ls_addr;
 					sp->s.ls_type = lsp->ls_type;
 					sp->s.ls_addr = lsp->ls_addr;
 					sp->mod = mp;
 				}
 			} else if (sp->s.ls_type!=(L_GLOBAL|L_REF)) {
 				/* new ref, old def */
-				if (lsp->ls_addr!=0)
+				if (lsp->ls_addr!=0) {
 					commdef(mp, sp->mod, &sp->s);
+					if ((uaddr_t)lsp->ls_addr > sp->commsize)
+						sp->commsize =
+							(uaddr_t)lsp->ls_addr;
+				}
 			} else if (sp->s.ls_addr < lsp->ls_addr) {
 				/* new ref > old ref */
 				if (sp->s.ls_addr==0)	/* ref becomes comm */
 					nundef--;
 				commons += lsp->ls_addr - sp->s.ls_addr;
+				sp->commsize = (uaddr_t)lsp->ls_addr;
 				sp->s.ls_addr = lsp->ls_addr;
 				sp->mod = mp;
 			}
@@ -362,6 +365,8 @@ mod_t	*mp;
 	sp->s = *lsp;	/* struct assign */
 	sp->mod = mp;
 	sp->sldata = 0;
+	sp->commsize = sp->s.ls_type==(L_GLOBAL|L_REF)
+			? (uaddr_t)sp->s.ls_addr : 0;
 	/*
 	 * note reference to internal symbol
 	 */
@@ -413,6 +418,46 @@ lds_t	*lsp;
 		mperr(cmp, "common %.*s: conflicts with code in file %s: module %.*s",
 			NCPLN, lsp->ls_id, dmp->fname, DIRSIZ, dmp->mname);
 	return (0);
+}
+
+/*
+ * Refuse a definition smaller than a common it satisfies.  Its size is taken
+ * as the room up to the next symbol in its segment, an upper bound, so only a
+ * certain overrun is caught.  Runs after all input is read and before commons
+ * are appended to BSSD.
+ */
+void
+commfit()
+{
+	register sym_t	*sp, *op;
+	int	i, j, seg;
+	uaddr_t	room, d;
+
+	for (i=0; i<NHASH; i++)
+		for (sp=symtable[i]; sp!=NULL; sp=sp->next) {
+			if (sp->commsize==0)
+				continue;
+			seg = sp->s.ls_type&~L_GLOBAL;
+			if (seg!=L_SHRD && seg!=L_PRVD && seg!=L_BSSD
+			 || (fsize_t)sp->s.ls_addr >= oseg[seg].size)
+				continue;
+			room = (uaddr_t)(oseg[seg].size - sp->s.ls_addr);
+			for (j=0; j<NHASH; j++)
+				for (op=symtable[j]; op!=NULL; op=op->next)
+					if ((op->s.ls_type&~L_GLOBAL)==seg
+					 && op->s.ls_addr > sp->s.ls_addr) {
+						d = (uaddr_t)(op->s.ls_addr
+							- sp->s.ls_addr);
+						if (d < room)
+							room = d;
+					}
+			if (room < sp->commsize)
+				sperr(sp,
+				 "common of %lu bytes: definition in file %s holds %lu",
+					(unsigned long)sp->commsize,
+					sp->mod==NULL ? "?" : sp->mod->fname,
+					(unsigned long)room);
+		}
 }
 
 /*

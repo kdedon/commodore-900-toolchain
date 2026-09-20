@@ -97,6 +97,14 @@ $(B)/slgen: src/slgen/slgen.c
 # tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
 # build the case.
 #
+# tests/ld-commsize.sh is the other half of the same merge: a common against a
+# definition of the name, where ld measures the room the definition has and
+# refuses one too small for it.
+#
+# tests/cc-commons.sh is the compiled half: a file-scope `int foo;' with no
+# initialiser under -VCOMM, the driver's own default, through cc0/cc1/cc2 and
+# into a link.  It needs the emulator, since the cases are run.
+#
 # tests/shlib-format.sh builds a toy shared library with slgen and reads it back
 # against src/include/shlib.h, the header the kernel's loader compiles against.
 #
@@ -128,6 +136,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/cc2run.sh
 	sh tests/obj-reloc.sh
 	sh tests/ld-commons.sh
+	sh tests/ld-commsize.sh
+	sh tests/cc-commons.sh
 	sh tests/multiseg-text.sh
 	sh tests/regclob.sh
 	sh tests/ctype.sh
