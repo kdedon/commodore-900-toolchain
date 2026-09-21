@@ -998,6 +998,14 @@ chkf 'int f() { int x; x=200; return (char)x; }' 0 0 -56
 chkf 'int f() { int x; x= -1; return (unsigned char)x; }' 0 0 255
 chkf 'int f() { int x; x=0xABCD; return (unsigned char)x; }' 0 0 205
 chkf 'int f() { long l; l=0x1234; return (char)l; }' 0 0 52
+# A long in a register pair must narrow through a word before a byte store.
+chkf 'int f() { long l; char c; l=0x1234; c=(char)l; return c; }' 0 0 52
+chkf 'int f() { long l; char b[2], *p; l=0x1234; p=b; *p=(char)l; return *p; }' 0 0 52
+# A far pointer wanted as an lvalue in any register must not loop in selection.
+chkfc 'struct B { int c; int (*g)(); }; struct B *fp; int f() { register long i; register long e; register long d; register c; e = (++fp->c > 0 ? (--fp->c, (*fp->g)(fp)) : 0); return (int)(e + i + d + c); }'
+# A far pointer stored through across a call needs a callee-saved pair, so
+# promotion must leave one free for the spill.
+chkfc 'int f(xp,wild) char **xp; int *wild; { int i, x, xc; long y; char *sp; y = zchki(*xp); *wild = chkwld(*xp); *sp = 0; x = (int)y + i + xc; return x; }'
 # Byte-register convention: a byte VALUE lives in the LOW half (RL) of its word register.
 # The byte rvalue LOAD (leaves.t) and byte COMPARE (relop.t CPB) used [R] (= RH for a byte
 # op) while the byte STORE / widen / narrow use [LO R] (= RL).  So `char c = *p' (deref a
@@ -1748,12 +1756,9 @@ chkdis 'f(off,ch) int off; int ch; { long o; o = (long)off; *(char *)(0x00002000
 chkdis 'f(off,ch) int off; int ch; { long o; o = (long)off; *(char *)(0x00002000L + o) = ch; }' 'addl' no
 
 # ---- the ADDRESS of `readonly' (SPURE) data ------------------------------------------
-# cc2's dataseg[] writes .shrd into the DATA image, so addressing SPURE through the CODE
-# space names other memory entirely.  Subscripting hides that (the base folds into the
-# reference); it shows only through a POINTER, where `sum(st, 8)' sums foreign bytes and
-# the `cp < &st[8]' form makes ld reject the object with "bad relocation address".
-# VREADONLY (bit 25) is not in the suite's default variant, so it is added for this block
-# alone -- it only makes the keyword recognized; it says nothing about addressing.
+# .shrd lives in the DATA image, so SPURE must be addressed through data space.
+# Only a pointer shows it; a subscript folds the base.  VREADONLY (bit 25) just
+# enables the keyword.
 SPVAR=$VAR
 spb=$(printf '%02x' $(( 0x$(printf '%s' "$VAR" | cut -c7-8) | 0x02 )))
 VAR=$(printf '%s%s%s' "$(printf '%s' "$VAR" | cut -c1-6)" "$spb" \
@@ -1764,7 +1769,7 @@ int f(x,y) int x; int y; { return sum(st, 8); }' 0 0 36
 chkf 'static readonly char st[8] = { 1, 2, 3, 4, 5, 6, 7, 8 };
 int f(x,y) int x; int y; { char *cp; int s; s = 0;
 	for (cp = st; cp < &st[8]; cp++) s += *cp; return s; }' 0 0 36
-# One readonly object reached BOTH ways in the same function.
+# One readonly object reached both ways in one function.
 chkf 'static readonly int tb[4] = { 10, 20, 30, 40 };
 int f(x,y) int x; int y; { int *p; p = tb; return tb[1] + p[2] + (int)(&tb[3] - tb); }' 0 0 53
 VAR=$SPVAR
@@ -1831,13 +1836,10 @@ chkdis 'long evalint(); f(i) int i; { register char *as, *s1, *s2; register int 
 	i1 = i; if (0 < (i1 -= evalint(as))) return (1); return (0); }' 'ldl rr2, rr0' no
 
 # ------------------------------------------------- void *
-# `void *' is `char *' with its pointer dim marked: it converts to and from any
-# object pointer with no cast, and is still not an object -- a dereference is an
-# error and arithmetic warns and scales by 1.  The mark sits on the dim next to
-# the base type, so `void **' is a pointer to a void pointer and only the inner
-# star is refused.  The diagnostic cases are the refusals AND the shapes that
-# must stay quiet: a mark that leaked onto an ordinary `char *' would pass every
-# value assertion here and reject the library.
+# `void *' is a marked `char *': converts freely, but a dereference is an error
+# and arithmetic warns and scales by 1.  The mark is on the innermost dim, so
+# `void **' dereferences once.  The quiet cases catch a mark leaking onto a
+# plain `char *'.
 chkdiag() { # "<full source>" <stderr-regex> yes|no
   printf '%s\n' "$1" > "$RG".c
   d=$("$O/cc0-z8001" $VAR "$RG".c "$RG".z0 2>&1 >/dev/null)
@@ -1855,8 +1857,8 @@ int f(x,y) int x; int y; { int *q; q = g(&v); *q = x * y; return v; }' 6 7 42
 # the malloc idiom: void * into a struct pointer, unwritten by the caller
 chkf 'struct S { int a; int b; }; char pool[8]; void *myalloc(n) int n; { return pool; }
 int f(x,y) int x; int y; { struct S *s; s = myalloc(4); s->a = x; s->b = y; return s->a + s->b; }' 40 2 42
-# a pointer, four bytes -- NULL is spelled `(void *)0' in outside headers, and as
-# an int it would be pushed as two and every argument behind it misread
+# four bytes, so `(void *)0' pushes as a pointer
+
 chkf 'int g(p,n) char *p; int n; { return p == 0 ? n : 0; }
 int f(x,y) int x; int y; { return g((void *)0, x + y); }' 40 2 42
 chkf 'int f(x,y) int x; int y; { void *p; return sizeof p; }' 0 0 4

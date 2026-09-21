@@ -496,6 +496,7 @@ register SYM	*sp;
 	newseg(SCODE);
 	sp->s_seg = SCODE;
 	xlabel(sp);
+	pfnstart();
 	bput(PROLOG);
 	loadargs();
 	dbdecl(sp);
@@ -508,7 +509,9 @@ register SYM	*sp;
 	else
 		lex();
 	llex = LL_AUTO;
+	toplocal = 1;
 	locals();
+	toplocal = 0;
 	putautos();
 	while (s!=EOF && s!=RBRACE)
 		statement();
@@ -519,6 +522,7 @@ register SYM	*sp;
 	label(cflab);
 	dbstat(RBRACE, line);
 	bput(EPILOG);
+	pfnend();
 	cfsym = NULL;
 }
 

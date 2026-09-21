@@ -56,12 +56,8 @@ doautos()
  * link leaves it seg 0 and an indirect call misfires.
  */
 /*
- * May a datum in segment `seg' be named by a direct segmented address?  SDATA
- * and SBSS are this file's own definitions and always may.  SANY is what an
- * identifier keeps while nothing here has placed it -- an extern -- and under
- * VPIC it may not: its address is unknown until load, so it is reached
- * through a far-pointer slot in the pool below, filled by the linker when the
- * symbol proves local and by the kernel at exec when it comes from a library.
+ * Can a datum in `seg' take a direct segmented address?  Under VPIC an extern
+ * (SANY) cannot: it goes through a far-pointer slot filled by ld or at exec.
  */
 static
 isdadirect(seg)
@@ -314,6 +310,60 @@ register TREE *ptp;
 }
 
 /*
+ * `*(p + k)' through a far pointer, k constant: k can fold into @RRn+disp.
+ */
+static
+foldstar(tp)
+register TREE	*tp;
+{
+	return tp->t_lp != NULL && tp->t_lp->t_op == ADD
+	    && (tp->t_lp->t_rp->t_op == ICON || tp->t_lp->t_rp->t_op == LCON)
+	    && isfarbase(tp->t_lp);
+}
+
+/*
+ * Fold `*(p + k) = c' and load c into a register?  Only when that load costs no
+ * more than the address arithmetic saved: LDK (0 < c <= 15) against an INC, any
+ * load against the ADD a k outside 1..16 needs.  Zero stores as CLR, which has
+ * no displacement form.
+ */
+static
+foldimm(tp, con)
+register TREE	*tp;
+register TREE	*con;
+{
+	register lval_t	k;
+
+	if (con->t_op != ICON || tp->t_size > 2 || con->t_ival == 0)
+		return 0;
+	k = grabnval(tp->t_lp->t_rp);
+	return k != 0 && ((con->t_ival > 0 && con->t_ival <= 15) || k < 0 || k > 16);
+}
+
+/*
+ * Does `ptp' take `tp' through a memory form with @RRn+disp?  Arithmetic,
+ * compare, inc-dec and bit-field operands do not.  A CONVERT/CAST is
+ * retested from itself.
+ */
+static
+foldok(ac, ptp, tp)
+register TREE	*ptp;
+TREE		*tp;
+{
+	if (ac == MFLOW)		/* a truth-test is a direct compare (CP @RR) */
+		return 0;
+	if (ptp == NULL)
+		return 1;
+	return !((ptp->t_op >= ADD && ptp->t_op <= ULT)
+	      || (ptp->t_op >= INCBEF && ptp->t_op <= DECAFT)
+	      || ptp->t_op == FIELD
+	      || (ptp->t_op == ASSIGN && ptp->t_lp == tp
+	       && (ptp->t_rp->t_op == ICON || ptp->t_rp->t_op == LCON)
+	       && !foldimm(tp, ptp->t_rp))
+	      || ptp->t_op == CONVERT || ptp->t_op == CAST);
+}
+
+/*
  * This function performs machine specific tree modifications.
  * It is called from "modtree" after all of the machine
  * independent transformations have been done.
@@ -369,6 +419,7 @@ TREE		*ptp;
 					 * and its bare store stays selectable */
 	 && isbyte(tp->t_type) && !isbyte(tp->t_lp->t_type)
 	 && !isflt(tp->t_lp->t_type)
+	 && !islong(tp->t_lp->t_type)	/* no byte store reads a PAIR */
 	 && ptp != NULL && ptp->t_op == ASSIGN && ptp->t_rp == tp
 	 && ptp->t_lp != NULL && isbyte(ptp->t_lp->t_type)) {
 		lp = tp->t_lp;			/* keep the wider value; the byte store
@@ -477,25 +528,27 @@ TREE		*ptp;
 	 * @RRn+disp exist), saving the materialize ADD.  An unmarked far field stays
 	 * materialized (@RRn disp 0), because those ops have no @RRn+disp memory form.
 	 */
-	if (op == STAR
-	&& tp->t_lp->t_op == ADD
-	&& (tp->t_lp->t_rp->t_op == ICON || tp->t_lp->t_rp->t_op == LCON)
-	&& isfarbase(tp->t_lp)
-	&& ac != MFLOW			/* a truth-test is a direct compare (CP @RR) */
-	&& !(ptp != NULL
-	  && ((ptp->t_op >= ADD && ptp->t_op <= ULT)	/* arith / compare operand */
-	   || (ptp->t_op >= INCBEF && ptp->t_op <= DECAFT)	/* inc/dec lvalue */
-	   || ptp->t_op == FIELD			/* bit-field */
-	   /* store of an IMMEDIATE to this far field: the Z8000 has NO @RRn+disp
-	    * immediate-store, so a folded offset would force a seg-0 X-mode workaround
-	    * (wrong for a nonzero segment).  Leave it materialized (@RRn disp 0) so the
-	    * store uses `LD @RRn,#imm' (segmented via the pair).  A register store, by
-	    * contrast, has the @RRn+disp BA form and folds fine. */
-	   || (ptp->t_op == ASSIGN && ptp->t_lp == tp
-	    && (ptp->t_rp->t_op == ICON || ptp->t_rp->t_op == LCON))
-	   || ptp->t_op == CONVERT || ptp->t_op == CAST)))	/* transparent: real
-				 * consumer is beyond it (e.g. a long field feeding CPL) */
+	if (op == STAR && foldstar(tp) && foldok(ac, ptp, tp)) {
 		tp->t_flag |= T_FOLDOFS;
+		if (ptp != NULL && ptp->t_op == ASSIGN && ptp->t_lp == tp
+		 && ptp->t_rp->t_op == ICON)
+			ptp->t_rp->t_flag |= T_FOLDIMM;
+	}
+	/*
+	 * Selection may pass a memory operand through a CONVERT/CAST, so judge
+	 * the deref under one against the op beyond it.
+	 */
+	if ((op == CONVERT || op == CAST)
+	&& (ptp == NULL || (ptp->t_op != CONVERT && ptp->t_op != CAST))) {
+		for (tp1 = tp->t_lp; tp1 != NULL
+		    && (tp1->t_op == LEAF || tp1->t_op == CONVERT || tp1->t_op == CAST); )
+			tp1 = tp1->t_lp;
+		if (tp1 != NULL && tp1->t_op == STAR && foldstar(tp1)
+		 && (tp1->t_flag & T_FOLDOFS) == 0 && foldok(ac, ptp, tp)) {
+			tp1->t_flag |= T_FOLDOFS;
+			walk(tp1, amd);		/* its addressing flags were computed unfolded */
+		}
+	}
 	/*
 	 * A deref of (a FAR-pointer DEREF + a variable index) -- the double
 	 * indirection `m[i][j]' with `int **m'.  The address is `m[i] + j*scale': a far
@@ -622,9 +675,8 @@ TREE		*ptp;
 		&& (op==LID || op==GID)
 		&& (ptp==NULL || ptp->t_op!=CALL || tp!=ptp->t_lp)
 		&& isvariant(VLARGE)
-		&& !isdadirect(tp->t_seg)) {	/* a datum this file places: DA-direct,
-						 * or deferred to the address node and
-						 * X-mode indexed if it is dereffed */
+		&& !isdadirect(tp->t_seg)) {	/* else DA-direct, or X-mode
+						 * from the address node */
 			seg = tp->t_seg;
 			if (seg==SANY || seg==SDATA || seg==SBSS
 			|| seg==SPURE		/* readonly data is data-addressed */

@@ -235,6 +235,19 @@ register INS	*ip;
 
 	t = &ip->i_af[0];
 	if (t->a_sp != NULL) {			/* CALL fn  (direct, named) */
+		register long	d;
+
+		/* A callee already emitted in this segment within +-4 KB takes
+		 * one-word CALR instead of three-word CALL.  genfunc re-emits
+		 * the function on any branch promotion, so the choice is stable. */
+		if ((t->a_sp->s_flag & S_DEF) != 0 && t->a_sp->s_seg == dotseg
+		 && t->a_value == 0) {
+			d = ((long)dot + 2 - (long)t->a_sp->s_value) >> 1;
+			if (d >= -2048 && d <= 2047) {
+				outw(0xD000 | ((int)d & 07777));
+				return;
+			}
+		}
 		outw(0x5F00);
 		outw(0x8000);
 		outw(0);

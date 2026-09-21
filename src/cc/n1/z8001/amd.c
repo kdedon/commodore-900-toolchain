@@ -117,10 +117,8 @@ TREE		*ptp;
 				case SLINK:
 					flag |= T_ACS;
 					break;
-				case SPURE:	/* cc2 puts `readonly' data in the
-						 * data image (.shrd), so its address
-						 * is a data-space one whatever VRAM
-						 * says. */
+				case SPURE:	/* `readonly' data is in the
+						 * data image (.shrd) */
 					flag |= T_ADS;
 					break;
 				case SSTRN:
@@ -206,9 +204,9 @@ TREE		*ptp;
 		}
 		flag |= T_OFS;
 	}
-	/* Preserve the modoper-set fold marker across amd's flag recompute, so it
-	 * survives every pass and reaches findoffs (which runs before amd in modleaf). */
-	tp->t_flag = flag | (tp->t_flag & T_FOLDOFS);
+	/* Preserve the modoper-set fold markers across amd's flag recompute, so they
+	 * survive every pass and reach findoffs (which runs before amd in modleaf). */
+	tp->t_flag = flag | (tp->t_flag & (T_FOLDOFS|T_FOLDIMM));
 }
 
 /*

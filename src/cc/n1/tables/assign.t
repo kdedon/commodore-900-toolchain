@@ -40,6 +40,27 @@ ASSIGN:
 			[ZCLR]	[LO AL]
 
 /////////
+/ Constant stored to a folded far deref `k(RRn)' (T_FOLDIMM): the Z8000 has
+/ no immediate store with displacement, so it goes through a TEMP.  Must
+/ precede the direct immediate stores.
+/////////
+%	PEFFECT|P_SRT
+	WORD		ANYR	*	ANYR	TEMP
+		ADR|LV		WORD
+		FOLDIMM|TREG|MMX	WORD
+			[ZLD]	[AL],[R]
+%	PEFFECT|P_SRT
+	WORD		ANYR	*	ANYR	TEMP
+		ADR|LV		BYTE
+		FOLDIMM|TREG|MMX	WORD
+			[ZLDB]	[AL],[LO R]
+%	PEFFECT|P_SRT
+	BYTE		ANYR	*	ANYR	TEMP
+		ADR|LV		BYTE
+		FOLDIMM|TREG|MMX	BYTE
+			[ZLDB]	[AL],[LO R]
+
+/////////
 / Direct: at least one operand is a register or immediate, so a single LD does
 / it (no temp). dst(reg)<-src(easy) | dst(mem)<-reg | dst(mem)<-imm.
 /////////

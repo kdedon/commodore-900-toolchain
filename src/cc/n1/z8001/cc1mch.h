@@ -110,6 +110,8 @@ typedef	char	INDEX;		/* Index type				*/
 				 * a LOAD/STORE (not an ALU/compare operand), so findoffs
 				 * FOLDS its constant offset into the BA displacement
 				 * instead of materializing the element address */
+#define	T_FOLDIMM 0x00400000L	/* constant stored into such a deref: no immediate
+				 * store takes a displacement, so assign.t uses a register */
 
 #define	T_NUM	(T_ICN|T_LCN)
 #define	T_CON	(T_NUM|T_ACS|T_ADS)

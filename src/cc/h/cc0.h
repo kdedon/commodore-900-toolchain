@@ -272,6 +272,7 @@ struct symbol {
 	char	s_seg;			/* Segment		*/
 	char	s_class;		/* Class		*/
 	char	s_type;			/* Type			*/
+	char	s_cand;			/* Promotable local	*/
 	DIM	*s_dp;			/* Dimensions		*/
 	INFO	*s_ip;			/* Info			*/
 	char	*s_id;			/* Name string		*/
@@ -603,6 +604,9 @@ extern	FILE	*ofp;		/* Output file			*/
 extern	jmp_buf	death;		/* Fatal errors			*/
 #endif
 /* mch/bind.c */
+extern	int	(*bputhold)();	/* bput() holds, for a rewrite	*/
+extern	int	toplocal;	/* in a function's own decls	*/
+extern	long	pmark();
 extern	int	mysizes[];
 extern	char	mytypes[];
 

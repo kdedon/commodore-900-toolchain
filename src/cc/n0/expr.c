@@ -416,6 +416,8 @@ build(op, lp, rp) int op; TREE *lp; TREE *rp;
 	}
 	if (op == ADDR && lp->t_op == REG)
 		cerror("cannot apply unary '&' to a register variable");
+	if (op == ADDR && lp->t_op == AID)
+		pescape(lp->t_seg);
 	if (op == ADDR && lp->t_op == FIELD)
 		cerror("cannot apply unary '&' to a bit field");
 	if (op == ADDR && lp->t_op == GID && lp->t_seg == SALIEN)
@@ -775,6 +777,7 @@ register SYM	*sp;
 	case C_AUTO:
 		tp->t_op = AID;
 		tp->t_offs = sp->s_value;
+		tp->t_seg = sp->s_cand;
 		break;
 
 	case C_PAUTO:
@@ -797,6 +800,7 @@ register SYM	*sp;
 	case C_GREF:
 	case C_CXT:
 	case C_SEX:
+		psetjmp(sp->s_id);
 		tp->t_op = GID;
 		tp->t_seg = sp->s_seg;
 		tp->t_sp = sp;
@@ -1078,12 +1082,16 @@ tput1(tp)
 register TREE *tp;
 {
 	register int	op;
+	long		off;
 
 	if (tp == NULL) {
 		iput((ival_t) NIL);
 		return;
 	}
 	op = tp->t_op;
+	off = -1L;
+	if (op == AID && tp->t_seg != 0)
+		off = pmark();
 	iput((ival_t) op);
 	bput(tp->t_type);
 	if (tp->t_type == BLK)
@@ -1133,7 +1141,10 @@ register TREE *tp;
 	default:
 		tput1(tp->t_lp);
 		tput1(tp->t_rp);
+		return;
 	}
+	if (off >= 0)
+		psiteid(off, (int)tp->t_seg);
 }
 
 /* end of n0/expr.c */

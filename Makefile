@@ -129,8 +129,18 @@ $(B)/slgen: src/slgen/slgen.c
 # thing that puts the whole linker through the 1985 front end at once: a
 # construct gcc takes and cc0 does not would cost every guest its linker with
 # the suite green.
+#
+# tests/foldofs.sh holds the addressing of a far-pointer field: which consumers
+# take the constant offset in the base-displacement operand and which must have
+# it materialized first.
+#
+# tests/immstore.sh holds which constant stores reach that operand through a
+# register, the Z8000 having no immediate store with a displacement.
+#
+# tests/calr.sh holds which direct calls go PC-relative: a callee cc2 has
+# already laid down in the same segment and within reach, and nothing else.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
-	$(B)/tools/loutid $(B)/tools/cohfs
+	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
 	sh tests/regress.sh
 	sh tests/cc2run.sh
@@ -153,6 +163,10 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/cc-pic.sh
 	sh tests/native-ld.sh
 	sh tests/float-e2e.sh
+	sh tests/foldofs.sh
+	sh tests/immstore.sh
+	sh tests/calr.sh
+	sh tests/regvar.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it

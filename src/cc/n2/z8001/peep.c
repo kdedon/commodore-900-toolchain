@@ -548,6 +548,17 @@ register AFIELD	*o;
 	return (m);
 }
 
+/*
+ * MULTL and DIVL name the quad RQ0 by its first pair, so an operand scan sees a
+ * write of RR0 alone where the instruction reads RR2 and writes R0..R3.  Any
+ * scan that tracks a pair inside the quad has to stop here.
+ */
+static
+quadhit(op, r)
+{
+	return ((op == ZMULTL || op == ZDIVL) && r <= 3);
+}
+
 /* CFG-liveness DFS: is register pair (d,d+1) DEAD from `start' on EVERY reachable path -- no
  * read of a live BYTE before that byte is redefined?  Tracks a per-path 4-bit live mask (the
  * bytes of the pair still holding the copied value); a byte-load that rewrites a half before
@@ -612,7 +623,7 @@ register INS	*start;
 			ddstk[sp] = p->i_fp; ddmsk[sp] = m; ++sp;	/* callee-saved -> preserved */
 			continue;
 		}
-		if (barrierop(op))
+		if (barrierop(op) || quadhit(op, d))
 			return (0);			/* block move: opaque pointer use */
 		if (op == ZEXTS && p->i_naddr == 1 && (p->i_af[0].a_mode&A_AMOD) == A_WR) {
 			/* EXTS RRr sign-extends the low word R(r+1) into the high word Rr: it READS
@@ -694,7 +705,7 @@ register INS	*cp;
 				return (1);
 			return (0);
 		}
-		if ((op == ZMULTL || op == ZDIVL) && d <= 3)
+		if (quadhit(op, d) || quadhit(op, s))
 			return (0);			/* pinned RQ0 quad consumes the copy */
 		w = isbyteop(op);
 		for (opj = 0; opj < p->i_naddr; ++opj) {
@@ -791,7 +802,7 @@ register INS	*p;
 				return (1);		/* caller-saved: clobbered by the call */
 			continue;			/* callee-saved: preserved across */
 		}
-		if (barrierop(op))
+		if (barrierop(op) || quadhit(op, d))
 			return (0);			/* block move: opaque pointer use */
 		w = isbyteop(op);
 		for (opj = 0; opj < p->i_naddr; ++opj) {
@@ -1141,6 +1152,8 @@ copyfwd()
 				break;
 			op = p->i_op;
 			if (barrierop(op) || isbyteop(op))
+				break;
+			if (quadhit(op, d) || quadhit(op, s))
 				break;
 			readsd = writess = writesd = 0;
 			w = isbyteop(op);

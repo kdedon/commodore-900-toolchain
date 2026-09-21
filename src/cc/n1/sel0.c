@@ -189,8 +189,13 @@ register TREE *tp;
 			selfix(tp, c, r);
 		return (1);
 	}
-	/* RVALUE patterns can be fixed up into anything */
-	if (c != MRVALUE && seltree(tp, MRVALUE, ANYR)) {
+	/* RVALUE patterns can be fixed up into anything except an lvalue whose
+	 * register was left to the selector: a fixup leaves the value in a
+	 * register of its own choosing, so the node arrives back here asking
+	 * for the same thing and is fixed up again without end.  Failing
+	 * instead lets the caller try its next pattern. */
+	if (c != MRVALUE && !(c == MLVALUE && !isrealreg(r))
+	 && seltree(tp, MRVALUE, ANYR)) {
 		selfix(tp, c, r);
 		return (1);
 	}

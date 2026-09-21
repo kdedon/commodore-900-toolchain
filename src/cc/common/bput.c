@@ -17,9 +17,16 @@
 
 extern	FILE	*ofp;
 
+/* If set, output is held: cc0 buffers a function to rewrite its autos. */
+int	(*bputhold)();
+
 bput(b)
 int b;
 {
+	if (bputhold != NULL) {
+		(*bputhold)(b);
+		return;
+	}
 #if	0
 	/*
 	 * Some versions VAX and i8086 stdio putc(b, ofp) return EOF (-1)

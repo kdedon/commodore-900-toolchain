@@ -23,7 +23,7 @@ import sys
 T = sys.argv[1]
 for part in range(3):
     lines = []
-    for i in range(part*250, part*250+250):
+    for i in range(part*310, part*310+310):
         lines.append("int fn%d(x) int x; { int a,b,c,d; a=x+%d; b=a*3; c=b-%d; d=c+a*b; return (a^b)+(c&d)+%d; }" % (i,i,i,i))
     open("%s/big%d.c" % (T, part), "w").write("\n".join(lines))
 open("%s/bigm.c" % T, "w").write(
@@ -50,7 +50,7 @@ for fi in range(52):
     w("g%d" % fi, "".join(
         "g%d(a, b) int a, b; { int t; t = a * %d + b; t = t ^ (a << 3);"
         " t = t + (b >> 1); t = t - (a & 0x5A5A); return t | (b + %d); }\n"
-        % (fi * 45 + j, (fi * 45 + j) % 97 + 1, fi * 45 + j) for j in range(45)))
+        % (fi * 56 + j, (fi * 56 + j) % 97 + 1, fi * 56 + j) for j in range(56)))
 w("mid", "fmid(a, b) int a, b; { return (a * 51 + b * 3 ^ b << 2) - (a & 0x0F0F); }\n"
          "callthru(fp, a, b) int (*fp)(); int a, b; { return (*fp)(a, b); }\n")
 w("c1", "extern int t4h2();\nt4h1(a, b) int a, b; { return t4h2(a, b) + 31; }\n")
