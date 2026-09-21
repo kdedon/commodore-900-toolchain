@@ -161,6 +161,12 @@
 #define POS	76		/* Unary plus */
 
 /*
+ * Tree type bit: the node designates volatile storage, so the back end must
+ * keep every access.
+ */
+#define	TVOL	0100		/* Volatile access */
+
+/*
  * Special names for Types, Dims, and Storage classes
  * for use in passing debugger type information between passes.
  */

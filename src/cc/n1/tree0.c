@@ -44,6 +44,10 @@ treeget1()
 	tp = alocnode();
 	tp->t_op = op;
 	tp->t_type = bget();
+	if ((tp->t_type & TVOL) != 0) {
+		tp->t_type &= ~TVOL;
+		tp->t_vol = 1;
+	}
 	tp->t_size = 0;
 	if (tp->t_type == BLK)
 		tp->t_size = iget();

@@ -184,6 +184,7 @@ typedef	struct	tree	{
 	PAT	*t_patp;		/* Pattern */
 	int	t_size;			/* Size */
 	FLAG	t_flag;			/* Flags */
+	int	t_vol;			/* Designates volatile storage */
 	REGNAME	t_treg;			/* Temp reg */
 	REGNAME	t_rreg;			/* Result reg */
 	PREGSET	t_used;			/* Used */

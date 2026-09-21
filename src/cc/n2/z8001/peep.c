@@ -377,15 +377,31 @@ isdword(op)
 	return ((opinfo[op].op_flag & OP_DWORD) != 0);
 }
 
+/* does any operand of ip name volatile storage? */
+static
+volins(ip)
+register INS	*ip;
+{
+	register int	i;
+
+	for (i = 0; i < ip->i_naddr; ++i)
+		if ((ip->i_af[i].a_mode & A_VOL) != 0)
+			return (1);
+	return (0);
+}
+
 /*
  * Does afp name a stable memory location -- a frame slot off(R13) or a global (direct)?
  * Fill *h and return 1; else 0.  Far derefs, non-FP indexes and immediates are not stable.
+ * Nor are volatile operands.
  */
 static
 memkey(afp, h)
 register AFIELD		*afp;
 register struct hold	*h;
 {
+	if ((afp->a_mode & A_VOL) != 0)
+		return (0);
 	switch (afp->a_mode & A_AMOD) {
 	case A_X:
 		if ((afp->a_mode & A_REGM) == 13) {	/* off(R13): a frame slot */
@@ -549,9 +565,8 @@ register AFIELD	*o;
 }
 
 /*
- * MULTL and DIVL name the quad RQ0 by its first pair, so an operand scan sees a
- * write of RR0 alone where the instruction reads RR2 and writes R0..R3.  Any
- * scan that tracks a pair inside the quad has to stop here.
+ * MULTL/DIVL name RQ0 by RR0 but read RR2 and write R0..R3: a scan tracking a
+ * register of the quad must stop.
  */
 static
 quadhit(op, r)
@@ -885,6 +900,7 @@ cpstate()
 			if (pv != &ins && pv->i_type == CODE && pv->i_op == op && pv->i_naddr == 2
 			 && ((pv->i_af[1].a_mode&A_AMOD) == A_WR || (pv->i_af[1].a_mode&A_AMOD) == A_BR)
 			 && (pv->i_af[1].a_mode&A_REGM) == (d->a_mode&A_REGM)
+			 && !volins(ip) && !volins(pv)
 			 && sameaddr(&pv->i_af[0], s)) {
 				ip = deleteins(ip, ip->i_fp);
 				++changes;

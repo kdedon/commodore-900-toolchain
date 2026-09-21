@@ -32,7 +32,7 @@ static	short	cmtab[] = {
  * Read a class and type specification in a declaration.
  * Store the class, type, dimension list pointer and structure info
  * list pointer back through the supplied reference arguments.
- * Set the readonly flag indirectly through the pointer.
+ * Set the readonly, alien and volatile flags indirectly through the pointer.
  * On entry, 's' is the first token of the declaration;
  * on exit, 's' is the first token beyond the declaration.
  */
@@ -171,6 +171,8 @@ int	*rfp;
 				*rfp |= S_RONLY;
 			if (af)
 				*rfp |= S_ALIEN;
+			if (vf)
+				*rfp |= S_VOLAT;
 			return;
 		}
 		lex();

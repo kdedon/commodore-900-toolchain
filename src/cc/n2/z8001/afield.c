@@ -23,7 +23,7 @@ register AFIELD	*afp;
 	register int	mode;
 
 	mode = iget();
-	afp->a_mode = mode & (A_PREFX|A_AMOD|A_REGM);
+	afp->a_mode = mode & (A_VOL|A_PREFX|A_AMOD|A_REGM);
 	afp->a_sp = NULL;
 	afp->a_value = 0;
 	if ((mode&A_AMOD) == A_IMML) {		/* 32-bit immediate: cc1 writes hi then lo */

@@ -228,9 +228,8 @@ typedef	struct	dim {
 #define D_VOLATILE 5			/* volatile modifier	*/
 
 /*
- * `void *' is `char *' whose D_PTR carries this where an array dim
- * carries its bound: it points at no object, so a dereference through
- * it is refused and arithmetic through it warns.
+ * `void *' is `char *' with this in its D_PTR's d_bound: dereference is
+ * refused, arithmetic warns.
  */
 #define D_VOIDP	((sizeof_t)1)		/* d_bound: pointer to void	*/
 
@@ -304,6 +303,7 @@ typedef struct {
 #define	S_TAG	010			/* Tag present			*/
 #define	S_INIT	020			/* Initialized			*/
 #define S_SYMB	040			/* Written to debug table	*/
+#define S_VOLAT	0100			/* Volatile			*/
 
 /* Disjunct symbol table levels */
 #define SL_CPP	-2			/* Cpp tokens			*/
@@ -415,6 +415,7 @@ struct tree
 {
 	short	t_op;			/* Opcode			*/
 	short	t_type;			/* Internal type (T_)		*/
+	short	t_vol;			/* V_ACC or V_TARG		*/
 	DIM	*t_dp;			/* DIM list			*/
 	INFO	*t_ip;			/* INFO if aggregate		*/
 	union	{
@@ -457,6 +458,12 @@ struct tree
 #define	t_seg	t_6.t_5.t_xseg		/* Segment			*/
 #define	t_label	t_6.t_5.t_4.t_xlab	/* Label #			*/
 #define	t_sp	t_6.t_5.t_4.t_xsp	/* Global symbol link		*/
+
+/*
+ * t_vol.  A volatile pointer's target becomes an access only at indirection.
+ */
+#define	V_ACC	1			/* Accesses volatile storage	*/
+#define	V_TARG	2			/* Points at volatile storage	*/
 
 /*
  * Opdope flag bits.

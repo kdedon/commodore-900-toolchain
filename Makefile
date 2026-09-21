@@ -68,10 +68,9 @@ as:
 ld: as
 	sh host/build-ld.sh
 
-# slgen builds a shared library out of ordinary objects: it reserves the export
-# table, runs as and ld, and turns ld's relocation records into the segment
-# fixup list (src/include/shlib.h).  Self-contained host C, reading and writing
-# l.out by byte offset, so it needs none of the donor shims.
+# slgen builds a shared library from objects: reserves the export table, runs
+# as and ld, and turns ld's relocations into the segment fixup list.  Plain
+# host C, so it needs no shims.
 slgen: $(B)/slgen
 $(B)/slgen: src/slgen/slgen.c
 	@mkdir -p $(B)
@@ -97,48 +96,35 @@ $(B)/slgen: src/slgen/slgen.c
 # tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
 # build the case.
 #
-# tests/ld-commsize.sh is the other half of the same merge: a common against a
-# definition of the name, where ld measures the room the definition has and
-# refuses one too small for it.
+# tests/ld-commsize.sh: a common against a definition too small for it.
 #
-# tests/cc-commons.sh is the compiled half: a file-scope `int foo;' with no
-# initialiser under -VCOMM, the driver's own default, through cc0/cc1/cc2 and
-# into a link.  It needs the emulator, since the cases are run.
+# tests/cc-commons.sh: a file-scope `int foo;' under -VCOMM, compiled, linked
+# and run.
 #
-# tests/shlib-format.sh builds a toy shared library with slgen and reads it back
-# against src/include/shlib.h, the header the kernel's loader compiles against.
+# tests/shlib-format.sh: a toy slgen library read back against shlib.h.
 #
-# tests/shlib-abi.sh holds libc.1's export table to src/libc/libc.1.exp, which
-# is the ABI: additions only.  It needs libc1, which is why `check' builds the
-# real shared C library.
+# tests/shlib-abi.sh: libc.1's exports against src/libc/libc.1.exp, which may
+# only grow.  Hence `check' builds libc1.
 #
-# tests/shlib-data.sh covers the data import: the compiler's -VPIC slot for an
-# extern datum, slgen's SE_DATA export, and ld binding one to the other.
+# tests/shlib-data.sh: -VPIC data slots, SE_DATA exports, and ld binding them.
 #
-# tests/shlib-client.sh covers the other half, ld linking a program AGAINST a
-# library: a stub and a zeroed slot per import, plus the LI_LIB/LI_IMP records
-# exec binds them with.
+# tests/shlib-client.sh: ld linking a program against a library -- stubs,
+# slots and the LI_LIB/LI_IMP records exec binds.
 #
-# tests/fixed-mode.sh is the other style: `slgen -F base' builds a library at
-# addresses settled when it was built, with an index jump table at the head of
-# its shared segment, and `ld -F' links a client of one -- absolutes, direct
-# CALLs, no stub, no slot, no import record.
+# tests/fixed-mode.sh: `slgen -F' libraries at fixed addresses and `ld -F'
+# clients calling them directly.
 #
-# tests/native-ld.sh builds src/ld/all.c FOR the machine and makes that linker
-# link a C program against libc under the emulator.  The unity build is the only
-# thing that puts the whole linker through the 1985 front end at once: a
-# construct gcc takes and cc0 does not would cost every guest its linker with
-# the suite green.
+# tests/native-ld.sh: the unity-built linker, compiled for the target, links a
+# program under the emulator.  Only this puts the whole linker through cc0.
 #
-# tests/foldofs.sh holds the addressing of a far-pointer field: which consumers
-# take the constant offset in the base-displacement operand and which must have
-# it materialized first.
+# tests/foldofs.sh: which far-pointer field accesses fold the offset into the
+# displacement.
 #
-# tests/immstore.sh holds which constant stores reach that operand through a
-# register, the Z8000 having no immediate store with a displacement.
+# tests/immstore.sh: constant stores through a displacement go via a register;
+# the Z8000 has no such immediate store.
 #
-# tests/calr.sh holds which direct calls go PC-relative: a callee cc2 has
-# already laid down in the same segment and within reach, and nothing else.
+# tests/calr.sh: only a callee already emitted, same segment and in reach, gets
+# a PC-relative call.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
@@ -167,6 +153,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/immstore.sh
 	sh tests/calr.sh
 	sh tests/regvar.sh
+	sh tests/volatile.sh
+	sh tests/volmem.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it
@@ -357,10 +345,7 @@ env-mwc1985:
 # is reported as "DID NOT COMPILE", and without ld the script refuses outright.
 libc: cc ld
 	sh host/build-libc-z8001.sh
-# libc.1, the SHARED C library: libc's own members plus csu/slrt.s through
-# slgen.  Built here rather than in the userland repository because the
-# toolchain owns every input, and because src/libc/libc.1.exp, the checked-in
-# ABI, belongs beside the source it is derived from.
+# libc.1, the shared C library: libc's members plus csu/slrt.s, through slgen.
 libc1: libc slgen
 	sh host/build-libc1.sh
 # Both are required by host/release-pack.sh.

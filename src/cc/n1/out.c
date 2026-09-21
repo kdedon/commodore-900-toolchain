@@ -261,6 +261,7 @@ register TREE *tp;
 #endif
 	op = tp->t_op;
 	lab0 = lab1 = -1;
+	node.t_vol = 0;
 	false = naddr = opv = nse = npfx = star = 0;
 	mp = patp->p_macro;
 	while ((c = *mp++) != M_END) {

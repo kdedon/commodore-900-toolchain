@@ -199,15 +199,17 @@ typedef uint32_t PREGSET;
 /* ======================================================================== *
  * ADDRESS-MODE ENCODING (compiler-internal a_mode; nibble-packed == i8086) *
  *   bits 15-12 getfield/peephole flags                                     *
- *   bits 11- 8 A_PREFX  -> SEGMENT-present flag (7-bit seg # lives in a     *
+ *   bits  9- 8 A_PREFX  -> SEGMENT-present flag (7-bit seg # lives in a     *
  *                          companion AFIELD member, NOT packed here; the    *
  *                          16-bit offset lives there too, masked by ASMASK) *
+ *   bit     10 A_VOL    -> volatile access                                  *
  *   bits  7- 4 A_AMOD   -> addressing mode                                  *
  *   bits  3- 0 A_REGM   -> register code                                    *
  * ======================================================================== */
 #define A_REGM	0x000F		/* register code */
 #define A_AMOD	0x00F0		/* address mode */
-#define A_PREFX	0x0F00		/* segment selector / prefix */
+#define A_PREFX	0x0300		/* segment selector / prefix */
+#define A_VOL	0x0400		/* volatile access */
 #define A_EA	0x1000		/* peephole: effective address */
 #define A_OFFS	0x2000		/* getfield: offset present */
 #define A_LID	0x4000		/* getfield: local id present */

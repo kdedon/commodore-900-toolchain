@@ -116,6 +116,8 @@ tree(n)
 			adjust(lp, sp->s_type, dp, sp->s_ip);
 			if (!isarray)
 				lp = build(STAR, lp, NULL);
+			if (sp->s_flag & S_VOLAT)
+				volmemb(lp);
 			if (sp->s_width != 0) {
 				fp = talloc();
 				fp->t_op = FIELD;
@@ -758,6 +760,25 @@ TREE *lp, *gtp;
 }
 
 /*
+ * Mark a volatile member access.  A member of a named object folds into that
+ * object's operand, so the object is marked too.
+ */
+volmemb(tp)
+register TREE	*tp;
+{
+	register int	op;
+
+	tp->t_vol = V_ACC;
+	while ((op = tp->t_op) == STAR || op == ADD) {
+		tp = tp->t_lp;
+		if (tp->t_op == ADDR) {
+			tp->t_lp->t_vol = V_ACC;
+			return;
+		}
+	}
+}
+
+/*
  * Given a pointer to its symbol table node,
  * return a pointer to the tree node for an identifier.
  * Enumeration tags get changed into integer constants here.
@@ -815,6 +836,9 @@ register SYM	*sp;
 	tp->t_type = sp->s_type;
 	tp->t_dp   = sp->s_dp;
 	tp->t_ip   = sp->s_ip;
+	if (sp->s_flag & S_VOLAT)
+		tp->t_vol = (sp->s_dp != NULL && sp->s_dp->d_type == D_PTR)
+			  ? V_TARG : V_ACC;
 	return tp;
 }
 
@@ -1062,6 +1086,44 @@ sizeof_t b;
 }
 
 /*
+ * Propagate volatile up from identifiers to every node designating volatile
+ * storage, including an indirection through a pointer to volatile.
+ */
+volprop(tp)
+register TREE *tp;
+{
+	if (tp == NULL)
+		return 0;
+	switch (tp->t_op) {
+
+	case ICON:
+	case LCON:
+	case ZCON:
+	case DCON:
+	case AID:
+	case PID:
+	case LID:
+	case GID:
+	case REG:
+		break;
+
+	case FIELD:
+		tp->t_vol |= volprop(tp->t_lp);
+		break;
+
+	case STAR:
+		if (volprop(tp->t_lp))
+			tp->t_vol = V_ACC;
+		break;
+
+	default:
+		tp->t_vol |= volprop(tp->t_lp) | volprop(tp->t_rp);
+		break;
+	}
+	return tp->t_vol;
+}
+
+/*
  * Output a tree.
  */
 tput(why, lab, tp)
@@ -1069,6 +1131,7 @@ register why;
 register TREE *tp;
 {
 	tp = transform(tp, why, -1);
+	volprop(tp);
 	bput(why);
 	if (why == TEXPR || why == FEXPR)
 		iput((ival_t) lab);
@@ -1093,7 +1156,7 @@ register TREE *tp;
 	if (op == AID && tp->t_seg != 0)
 		off = pmark();
 	iput((ival_t) op);
-	bput(tp->t_type);
+	bput(tp->t_type | (tp->t_vol == V_ACC ? TVOL : 0));
 	if (tp->t_type == BLK)
 		iput((ival_t)tp->t_ip->i_size);
 	switch (op) {

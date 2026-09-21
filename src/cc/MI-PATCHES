@@ -25,7 +25,7 @@
 # with a space.
 
 patch: expr-func-decay-null
-file: n0/expr.c eac89e15dd083fdcf58277a5003e2105ffa7d5f3b26614d01e91e563ed4db3d6
+file: n0/expr.c f22841d162f22e915679fde895dbcf11cfcea375ba28701df928fb725deb8ef4
 fix: `d_dp != NULL` guard before `d_dp->d_type == D_FUNC`
 why: NULL deref on every `arr[i]` decay; survivable only because Coherent mapped page 0
 
@@ -50,13 +50,13 @@ fix: keyword tokens wrapped in `{TOK t; char id[];}` with inline storage
 why: the bare-TOK form relies on link-order adjacency of the id string -- an ABI accident, not a guarantee; the wrapper is layout-identical where the accident held and correct everywhere
 
 patch: relop-long-fold
-file: n1/out.c 2e397f3a029c77d3a812b48a5cf6912d88a95ea525655079a51e8f9479c59e3c
-file: n1/sel0.c 9eff5bc1e0c79f8c46640bbfea54792daf9e0b2e4064e19a13b5e0d527b55adf
+file: n1/out.c 516d8b7c37baf86c44cc8c0c83f3a5471095f5f3b843ac9afbb7ef84fe0a4ca4
+file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
 fix: `!islong(...)` -- a long compare-vs-0 must not fold to a direct operand test
 why: Z8001: no test-long reaches the relop selector; the fold drops the explicit `CPL n,#0`. (Z8001-target edit: this tree builds the Z8001 compiler only. The donor i386 coder needs the fold; the i386 host harness uses pristine donor source.)
 
 patch: subgoal-reg-leaf
-file: n1/out.c 2e397f3a029c77d3a812b48a5cf6912d88a95ea525655079a51e8f9479c59e3c
+file: n1/out.c 516d8b7c37baf86c44cc8c0c83f3a5471095f5f3b843ac9afbb7ef84fe0a4ca4
 fix: subgoal-output sites skip re-materializing an operand already a `REG` leaf
 why: Z8001 far pointers arrive in a register pair as a REG leaf; re-routing one through `outtree` derefs a garbage `t_lp` (FUZZ-13 SIGSEGV)
 
@@ -71,16 +71,16 @@ fix: the SUB->ADD constant canonicalization keeps the node's own type (donor sta
 why: the stamp writes junk signedness over the C type (`u - 1` labeled signed, `p - c` labeled non-pointer); the Z8001 MD selects signed-vs-unsigned divide/shift by node type, and the MD `fixaddtype` now preserves node signedness through reassociation (FUZZ-5), so the stamp must not lie. Donor i386 relied on the re-derive repairing it each pass
 
 patch: cast-signedness-keep
-file: n0/expr.c eac89e15dd083fdcf58277a5003e2105ffa7d5f3b26614d01e91e563ed4db3d6
+file: n0/expr.c f22841d162f22e915679fde895dbcf11cfcea375ba28701df928fb725deb8ef4
 fix: LPAREN cast: don't collapse a bit-compatible cast that CHANGES signedness onto a DIV/REM/SHR/ASHR/ADIV/AREM node -- keep the CAST node
 why: the collapse retypes the op in place, making `(int)(u/d) >> k` and `(int)((u/d) >> k)` the same tree with opposite correct shifts (FUZZ-20); the surviving node is the only disambiguator. Same guard the `n0/stat.c` return-coerce row already carries; cc1 selects the kept convert at zero cost (leaves.t same-kind identity)
 
 patch: local-register-promotion
 file: n0/z8001/bind.c
-file: h/cc0.h d86a3228585677278d2c9512675d16c225aefa8d92330902fd7df73554907f5c
+file: h/cc0.h eae27c0b89ea7fe1996a57d2180dfdb77be40c7cc9b31856dd296f2e6e2f3a9f
 file: n0/cc0.c 6f73014c411ec97405ed0dcc176d73e428c44d74b41207893f175ce003adc2e4
-file: n0/expr.c eac89e15dd083fdcf58277a5003e2105ffa7d5f3b26614d01e91e563ed4db3d6
-file: common/bput.c 5d344da4882b4f65b86542a6ec0722929cfd56b196419a448c436233fbdd4baa
+file: n0/expr.c f22841d162f22e915679fde895dbcf11cfcea375ba28701df928fb725deb8ef4
+file: common/bput.c 327d24410d166f2611e8519b5cb87608f1aa4c9edc51d6824cb20c3ea348583e
 fix: a local the source did not declare `register' is given one where nothing
 fix: outside the function can reach its frame slot.  The decision needs the
 fix: whole body, which a one-pass front end has not read at the declaration, so
@@ -112,14 +112,14 @@ why: candidate rule as shape and as a value, and the byte-identity fixpoint
 why: (86 of 86) is what says the rewrite reproduces itself
 
 patch: bput-eof
-file: common/bput.c 5d344da4882b4f65b86542a6ec0722929cfd56b196419a448c436233fbdd4baa
+file: common/bput.c 327d24410d166f2611e8519b5cb87608f1aa4c9edc51d6824cb20c3ea348583e
 fix: `putc(b, ofp) == EOF && ferror(ofp)` -- EOF alone is not failure
 why: the native putc fast path returns the stored CHAR (`*_cp++ = c`), so byte 0xFF reads back as -1 == EOF; the donor's own `#if 0` comment describes this bug class but its `b &= 0xFF` guard cannot fix the macro's return value. Any IR stream containing an 0xFF byte (every negative ival) aborted "temporary file write error" on the target; the host putc returns an int and never trips it
 
 patch: struct-member-align
 file: n0/z8001/bind.c
 file: h/z8001/mch.h
-file: h/cc0.h d86a3228585677278d2c9512675d16c225aefa8d92330902fd7df73554907f5c
+file: h/cc0.h eae27c0b89ea7fe1996a57d2180dfdb77be40c7cc9b31856dd296f2e6e2f3a9f
 fix: word-align structure members: `fieldalign()` rounds a normal member up to its natural alignment (1 for a byte object, 2 for any wider type/pointer) via new `memalign()`; new `salign()` gives the struct itself the alignment of its widest member; `saligntype()` macro -> `salign()`; `extern int salign()` declared
 why: the donor i8086 template packs members to byte offsets, which the i8086 tolerates (unaligned word/dword access); the Z8000 does NOT -- a word/long/far-pointer read at an odd address returns the wrong bytes. getty's `struct stable` put `char *s_lmsg` at odd offset 5, so `LDL 5(Rn)` loaded a garbage far pointer -> strlen SIGSEGV (the login-prompt blocker). Aligning is a hardware requirement, so the original MWC Z8001 compiler must do the same. Codegen cost: field access is still one load and array indexing still one MULT/scale -- only the displacement/size *immediate* changes, so no instruction-count change; the sole effect is a few padding bytes in mixed sub-word/word structs, which the original ABI also carries. Efficiency parity vs the original is an OPEN follow-up, to be A-B'd against the original HD-extracted binaries by disassembly (NOT a self-comparison). All difftest generators (struct/bitfield/2darr/strptr/torture) still match gcc
 
@@ -171,14 +171,14 @@ fix: new variant code `VKERN` (9)
 why: the kernel model: numeric frame/auto addresses carry the system stack segment (SS = 0x3F) rather than the flat model's segment 0. Variant codes are a shared namespace, so the definition has to live with the others; nothing machine-independent reads it
 
 patch: store-converge
-file: n1/sel0.c 9eff5bc1e0c79f8c46640bbfea54792daf9e0b2e4064e19a13b5e0d527b55adf
+file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
 file: n1/code.c 832bd0b521a714d4f23a1c76d31b7456d68d6546c3944d6aeb96a6fed3d3bd03
-file: h/cc1.h 1e5097c8eb8d0262743ed0877019c8d04fa2b15056079f7e17132ff72a7f9c2e
+file: h/cc1.h 57d0a64c3e45472ec06a85315ca98e9be1d9ef3235f097cc2a12d1a365150d22
 fix: `store()` records the subtree each spill was made for (`storesub[]`, beside the existing `storelist[]`), and a second demand for the same subtree is a `cbotch` naming the operator instead of a silent re-enqueue
 why: `store()` spills a subtree to a stack temp and enqueues `temp = <subtree>`; if selecting that assignment cannot address the subtree either, the donor enqueues it again with the same tree and the same registers, so the list grows without converging and NSTORE decides only how long the loop runs (ICE 5149). One subtree now gets one store. This is a termination guarantee, not a codegen change: no accepted program compiles differently, and the diagnostic lands at the demand rather than as an exhausted table. The native cost is the array itself -- NSTORE is 20 off the i386 arm, so 20 near pointers of BSS in cc1, which has room; the loop it bounds is over at most 20 entries and runs once per store, so it is invisible beside selection
 
 patch: lvalue-fixup-terminate
-file: n1/sel0.c 9eff5bc1e0c79f8c46640bbfea54792daf9e0b2e4064e19a13b5e0d527b55adf
+file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
 fix: `iselect()' does not fall back on an RVALUE pattern plus a fixup when the context is MLVALUE and the register is not a real one
 why: a fixup leaves the value in a register of its own choosing, which is an answer to MRVALUE and not to `an lvalue in any addressing register'; the node it builds arrives back at the same test, matches the same RVALUE pattern and is fixed up again, so selection does not terminate and cc1 dies on its own stack (a far pointer dereferenced as an lvalue -- the donor's i386 can address through every register and never asks). Returning failure instead is what the caller already handles: `seltree()' goes on to its next pattern. The disabled MLVALUE-fixup arm below is the donor's own note that this machine class needs the case; nothing here re-enables it. No accepted program compiles differently -- a fixup that terminated was reached through a real register, which this leaves alone
 
@@ -188,19 +188,19 @@ fix: `rallo()` keeps one register that can address: when an allocation would tak
 why: the reserve is decided entirely by the machine register table's `r_lvalue` -- the set of kinds a register can be dereferenced through -- so it is machine-independent code reading a machine-dependent fact, and on a machine where every register can address (the donor's i386) `hold` is never set and the function returns exactly what the donor returned. On the Z8001 that set is small and exhaustible: a value in the last addressable register cannot be undone, the selector then spills, and the spilled assignment wants the address it could not form -- ICE 5149, which the original 1985 compiler fails on too. Measured over 1017 sources (798 compiling), the reserve fires so rarely that exactly two objects move, awk5.o 1915 -> 1910 instructions and the kernel's bio.o 1523 -> 1521, both FEWER, and the 13 sources shared with the 1985 compiler are unchanged -- so it costs nothing against the efficiency baseline
 
 patch: driver-z8001-model
-file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
+file: coh/cc.c d2f00935d333723568f81c5bbbcef70a68380bbc00156e93cf3a1a8fa9413b19
 fix: `#if Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` instead of `V80186`, and the model-selection block chooses `VLARGE` unless `-VSMALL` was asked for, in place of the Intel OMF rules
 why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if Z8001`, so no other target sees them
 
 patch: char-parameter-address
-file: n0/ddecl.c 5714b2dc7ccef4ed19df296f5c215fc975d23fcb7df0bb52ff7274b12e55322a
-file: h/cc0.h d86a3228585677278d2c9512675d16c225aefa8d92330902fd7df73554907f5c
+file: n0/ddecl.c 00551aca76a678e4a46f9a31ff7737cd1f2b132149b1b2de5abbc614fcc8c6a3
+file: h/cc0.h eae27c0b89ea7fe1996a57d2180dfdb77be40c7cc9b31856dd296f2e6e2f3a9f
 file: n0/z8001/bind.c
 fix: a parameter declared `char'/`unsigned char' KEEPS that type instead of being retyped to `int': `declare()`'s C_ARG arm asks the machine layer's new `subwordparm()` first, and skips `fixtype()` when it answers yes (`extern int subwordparm()` declared in cc0.h). The machine layer then binds such a parameter at the LOW-ORDER byte of its word slot -- `bindargs()` gives it `offset+1` and still advances by 2, so every later parameter keeps its address
 why: A FRONT-END EDIT MADE ON PURPOSE, owner-decided (TASK #321), because no machine layer can express the fix: after `fixtype()` retypes the parameter to `int` the fact that it was a byte object is GONE, and `&c` can only name the whole word. K&R promotes a char ARGUMENT to int at the call, so the parameter does occupy a word (unchanged: callers still push one, and the ABI is untouched) -- but the parameter is still a one-byte object, and on this BIG-ENDIAN machine the caller's byte is the second byte of that word. The donor handed out the word's own address, which is the low-order byte only because the i8086 it descends from is little-endian; here it named the HIGH byte, zero for every ASCII character, so `write(fd,&c,1)` inside `f(c) char c;` wrote a NUL -- libcurses `waddch` drew NULs while the cursor advanced, and kermit could not send a character (#324). `subwordparm()` answers from `mysizes[]`, so a machine whose char is a word gets the donor's promotion unchanged, and short/float are unaffected (a short IS a word; float is promoted to double by both sides). Reading the parameter's value now takes a byte load plus the extend the declared type asks for, where the promoted word allowed one word load; that is the price of the object having an address at all, and it is also what K&R says the object is -- `f(c) char c; c = 300;` now truncates, and a caller passing 200 into a signed `char' parameter reads -56 back, both of which every conforming compiler does (the differential oracle, gcc, agrees on all 18 generators). Code that wants the wider value must say `int' or `unsigned char', as it must anywhere else. Measured cost: over the 315 objects of this compiler's own self-host build, the ONLY two that change are the two files edited here; over 108 COHERENT userland commands the total is +76 bytes, 0.014%, in exactly the five objects that have a byte parameter -- and `units.o' gets SMALLER, because a byte compare no longer widens first. A byte parameter never reaches a register: `grabreg()` takes word types only and the promotion pass offers no parameter at all, so it stays addressable and correct. Six value assertions through cc0->cc1->cc2->ld->run cover both byte types, both directions and the second parameter's placement (tests/regress.sh, promoted from expected-fail); the byte-identity fixpoint cannot see this class at all, since a compiler reading the wrong byte agrees with itself about it
 
 patch: function-redeclared-after-definition
-file: n0/ddecl.c 5714b2dc7ccef4ed19df296f5c215fc975d23fcb7df0bb52ff7274b12e55322a
+file: n0/ddecl.c 00551aca76a678e4a46f9a31ff7737cd1f2b132149b1b2de5abbc614fcc8c6a3
 fix: `declare()' restores a demoted C_GREF to the symbol's OLD class for data only. A function declared again, after it was defined earlier in the same file, keeps C_GREF and so reads as the declaration it is
 why: `int f();' at file scope is demoted C_GDEF -> C_GREF a few lines above, exactly so `xdef()' will not take it for a definition. The redeclaration arm then handed the old class back, and where the old class was C_GDEF -- the function was DEFINED in this file -- `xdef()' saw a definition with no body and said "compound statement required", after which the parser was lost for the rest of the file. The declaration is legal C that every other compiler takes, and the host build takes it too, so nothing in the tree could see the difference until a unity build put a definition and a later declaration of the same function in one translation unit: src/ld/all.c, which is how the machine's own linker is compiled, and which stopped compiling. Restoring the old class is right for DATA, where `int x; ... extern int x;' must leave x defined; for a function there is nothing to preserve, since the definition has already been emitted under its own label and the class only says whether this DECLARATOR defines it. Nothing that compiled before can change: the case this reaches was a hard error, so no object in the tree was built through it -- and none is, measured: libc-z8001's 215 objects are byte-identical across the edit, and of the 490 in the compiler's own self-host build the only one that changes is `ddecl.o', whose source this is
 
@@ -242,7 +242,7 @@ why: throughout (upstream's own kernel tree), and a compiler that miscompiles
 why: them quietly is worse than one that refuses them.  Found by Michal Pleban
 
 patch: driver-eflag-preprocess-only
-file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
+file: coh/cc.c d2f00935d333723568f81c5bbbcef70a68380bbc00156e93cf3a1a8fa9413b19
 fix: `if (Eflag) setvariant(VCPP);' moved out of `#if TEMPBUF' to the head of resolve()
 why: TEMPBUF is defined nowhere in this tree -- it guards a COH386 malloc
 why: efficiency hack -- so on the C900 driver that line never ran and -E did
@@ -253,7 +253,7 @@ why: a build buffers its temporary files has nothing to do with what -E means.
 why: Found by Michal Pleban
 
 patch: driver-vpic-option
-file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
+file: coh/cc.c d2f00935d333723568f81c5bbbcef70a68380bbc00156e93cf3a1a8fa9413b19
 file: h/z8001/varmch.h
 file: n1/z8001/mtree2.c
 fix: a `#if Z8001' row for `-VPIC' in the option table, beside the other model
@@ -273,7 +273,7 @@ why: target defines VPIC, and with the bit clear the compiler emits what it
 why: emitted before -- 121 userland programs and 215 libc objects byte-identical
 
 patch: driver-implied-vpic
-file: coh/cc.c ea6c1d21e9b9f7c7a3cf852cbc97350ac54cc3820295e025aab13fca54ffde79
+file: coh/cc.c d2f00935d333723568f81c5bbbcef70a68380bbc00156e93cf3a1a8fa9413b19
 fix: the driver reads each library on the link line, and where one is a shared
 fix: library with an export table it links the shared start-off, drops the
 fix: archive behind the library, and -- when the same command compiled the
@@ -296,10 +296,10 @@ why: every other undotted name take the archive they always took: the 122
 why: userland programs and the libc objects come out byte-identical
 
 patch: void-pointer
-file: n0/ddecl.c 5714b2dc7ccef4ed19df296f5c215fc975d23fcb7df0bb52ff7274b12e55322a
-file: n0/gdecl.c aa62e25dee3606cf4ed4c6b898c65dd0958266083bc8e69f38472e6c7de21b0b
-file: n0/expr.c eac89e15dd083fdcf58277a5003e2105ffa7d5f3b26614d01e91e563ed4db3d6
-file: h/cc0.h d86a3228585677278d2c9512675d16c225aefa8d92330902fd7df73554907f5c
+file: n0/ddecl.c 00551aca76a678e4a46f9a31ff7737cd1f2b132149b1b2de5abbc614fcc8c6a3
+file: n0/gdecl.c e8d5858b01cd81ec0b3bc97f9e66d9a2503c14c1cb4dbf4d7339a5c5f8212367
+file: n0/expr.c f22841d162f22e915679fde895dbcf11cfcea375ba28701df928fb725deb8ef4
+file: h/cc0.h eae27c0b89ea7fe1996a57d2180dfdb77be40c7cc9b31856dd296f2e6e2f3a9f
 fix: `void *' is `char *'.  A new `isvoidptr()' (n0/ddecl.c) answers whether a
 fix: `void' declarator chain ends in a pointer -- the last dim is the one next
 fix: to the base type -- and `declare()' and `cast()' take T_CHAR when it does.
@@ -327,3 +327,27 @@ why: ordinary pointer takes the path it took, and `void' as a function return
 why: or a plain object is refused exactly as before.  The mapping is Michal
 why: Pleban's, from his own build of this compiler; the stamp and the two
 why: refusals are ours.
+
+patch: volatile-local
+file: h/cc0.h eae27c0b89ea7fe1996a57d2180dfdb77be40c7cc9b31856dd296f2e6e2f3a9f
+file: n0/gcandt.c 0943db99ddbd04db29aad52fcb2409d081832bf25f76511d6df1b4e85dbada83
+file: n0/ddecl.c 00551aca76a678e4a46f9a31ff7737cd1f2b132149b1b2de5abbc614fcc8c6a3
+file: n0/z8001/bind.c
+fix: `gcandt()' returns `volatile' as `S_VOLAT' among the modifier flags it already returns for `readonly' and `alien', so `declare()' records it on the symbol. A qualifier on a parameter is not a redeclaration: the C_ARG placeholder the parameter list leaves behind carries no flags, and that arm already takes any combination. The machine layer then refuses both a register and the promotion offer to any local or parameter carrying the flag
+why: the keyword was parsed and thrown away. While nothing held a local anywhere but its frame slot that cost nothing; now the callee-saved pool is handed out to locals the source never declared `register', and a volatile local would be read from a register that no longer matches the slot -- wrong exactly where the qualifier was asked for, and quietly. Nothing else in the compiler changes: a local without the qualifier is offered as before, and the flag is a new bit in `s_flag'
+
+patch: volatile-memory
+file: h/ops.h 1f8589046ab2c4c05d299bf35a3d8ae371d5d5b8ed0712ae5b50d719c32fcfa8
+file: h/cc0.h eae27c0b89ea7fe1996a57d2180dfdb77be40c7cc9b31856dd296f2e6e2f3a9f
+file: h/cc1.h 57d0a64c3e45472ec06a85315ca98e9be1d9ef3235f097cc2a12d1a365150d22
+file: n0/expr.c f22841d162f22e915679fde895dbcf11cfcea375ba28701df928fb725deb8ef4
+file: n0/gdecl.c e8d5858b01cd81ec0b3bc97f9e66d9a2503c14c1cb4dbf4d7339a5c5f8212367
+file: n1/tree0.c 4e05e7114ccc76adcd5bd3d0f78a1f27cf369fd7368e8933eb672a21ad59ae7d
+file: n1/out.c 516d8b7c37baf86c44cc8c0c83f3a5471095f5f3b843ac9afbb7ef84fe0a4ca4
+file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
+file: h/z8001/mch.h
+file: n1/z8001/gen1.c
+file: n2/z8001/afield.c
+file: n2/z8001/peep.c
+fix: the qualifier rides the tree node from the identifier, the member or the pointer cast that declared it up to the indirection, and out on the tree type byte as `TVOL'; cc1 puts it on the operand it collects as `A_VOL', where the peephole reads it -- a volatile location names no stable value, so it is never tracked in a register, never forwarded, never substituted for, and a store and its reload are never collapsed. The qualifier on a struct member and in a pointer cast is accepted rather than diagnosed as a storage class
+why: this is what a driver writes to say that reading a device register twice means two reads. Nothing carried the qualifier past the front end, so the back end forwarded the second read out of the register still holding the first and the accesses the source ordered did not happen -- wrong exactly where the qualifier was asked for. The member form and the device-register form `*(volatile char *)0xF000' had become hard errors once the front end began returning the flag, so both are taken here. An access without the qualifier is collected and optimized as before

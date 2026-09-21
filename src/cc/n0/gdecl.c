@@ -185,7 +185,7 @@ INFO	**aip;
 				lex();
 			continue;
 		}
-		if (rf != 0 || c != C_NONE)
+		if ((rf & ~S_VOLAT) != 0 || c != C_NONE)
 			cerror("class not allowed in structure body");
 		if (isvariant(VSINU)) {
 		/*
@@ -560,7 +560,7 @@ cast()
 	gcandt(&c, &t, &dp, &ip, &rf);
 	if (c==C_NONE && t==T_NONE && rf==0)
 		return NULL;
-	if (rf != 0 || c != C_NONE)
+	if ((rf & ~S_VOLAT) != 0 || c != C_NONE)
 		cerror("storage class not allowed in cast");
 	if (t == T_NONE) {
 		cerror("type required in cast");
@@ -577,6 +577,8 @@ cast()
 	tp = talloc();
 	tp->t_op = CAST;
 	tp->t_type = t;
+	if ((rf & S_VOLAT) != 0 && dp != NULL && dp->d_type == D_PTR)
+		tp->t_vol = V_TARG;
 	tp->t_dp = dp;
 	tp->t_ip = ip;
 	xdropinfo(t, ip);

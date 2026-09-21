@@ -189,11 +189,8 @@ register TREE *tp;
 			selfix(tp, c, r);
 		return (1);
 	}
-	/* RVALUE patterns can be fixed up into anything except an lvalue whose
-	 * register was left to the selector: a fixup leaves the value in a
-	 * register of its own choosing, so the node arrives back here asking
-	 * for the same thing and is fixed up again without end.  Failing
-	 * instead lets the caller try its next pattern. */
+	/* RVALUE patterns can be fixed up into anything except an lvalue in
+	 * a selector-chosen register: that would recurse without end. */
 	if (c != MRVALUE && !(c == MLVALUE && !isrealreg(r))
 	 && seltree(tp, MRVALUE, ANYR)) {
 		selfix(tp, c, r);
@@ -245,6 +242,7 @@ register TREE *tp;
 	ap = copynode(tp);
 	fixtoptype(tp);
 	rnode.t_op   = REG;
+	rnode.t_vol  = 0;
 	rnode.t_type = tp->t_type;
 	rnode.t_size = tp->t_size;
 	rnode.t_reg  = tp->t_rreg;

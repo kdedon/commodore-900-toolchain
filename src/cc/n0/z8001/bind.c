@@ -180,16 +180,20 @@ register SYM	*sp;
 	register int	c, regno;
 
 	if ((c=sp->s_class) == C_REG) {
-		if ((regno=grabreg(sp)) >= 0) {
+		/* volatile: every read has to come from the frame */
+		if (sp->s_flag & S_VOLAT)
+			sp->s_class = C_AUTO;
+		else if ((regno=grabreg(sp)) >= 0) {
 			sp->s_value = regno;
 			return;
+		} else {
+			sp->s_class = C_AUTO;
+			if (isvariant(VSNREG))
+				cstrict(inbtr, sp->s_id);
 		}
-		sp->s_class = C_AUTO;
-		if (isvariant(VSNREG))
-			cstrict(inbtr, sp->s_id);
 	}
 	if (c==C_AUTO || c==C_REG) {
-		sp->s_cand = pcandable(sp);
+		sp->s_cand = (sp->s_flag&S_VOLAT) ? 0 : pcandable(sp);
 		clofs -= ssize(sp);
 		/*
 		 * Z8000: word and long frame accesses must be EVEN-aligned;
@@ -307,26 +311,18 @@ register SYM	*sp;
 	type = sp->s_type;
 	if (type>=T_SHORT && type<=lastword)
 		return (nextreg());
-	/* A long occupies a pair, as a far pointer does.  A parameter is excluded:
-	 * its frame slot has readers the C text does not show -- the trap frame a
-	 * system call returns through is a parameter list -- and a value held only
-	 * in a register never writes back to one. */
+	/* A long takes a pair.  Not for parameters: a system call's trap frame
+	 * is a parameter list, read from the frame behind the C code's back. */
 	if ((type==T_LONG || type==T_ULONG) && sp->s_class==C_REG)
 		return (nextpair());
 	return (-1);
 }
 
 /*
- * A local the source did not declare `register' can live in one too, as long as
- * nothing outside the function's own code can reach its frame slot.  What
- * settles that -- whether the address is ever taken -- lies at the far end of a
- * body this front end has not read yet, so the function's output is held in a
- * buffer and the automatic-id records in it are rewritten once the body is
- * done.
- *
- * Only a local declared at the top of the function body is offered: an inner
- * block's symbols are freed when the block closes, and a symbol later allocated
- * at the same address would answer to the wrong entry here.
+ * Promote non-`register' locals whose address is never taken.  That is known
+ * only after the body, so the function's output is held and its automatic-id
+ * records rewritten at the end.  Only top-level locals qualify: inner-block
+ * symbols are freed, and their addresses reused, when the block closes.
  */
 typedef struct {
 	ival_t	c_reg;			/* register given, or -1 */
@@ -335,8 +331,8 @@ typedef struct {
 	char	c_escapes;
 } PCAND;
 
-/* Where the buffer holds a record the rewrite may replace: an automatic id, or
- * an allocation record, whose mask has to grow by whatever is handed out. */
+/* A held record the rewrite may replace: an automatic id, or an allocation
+ * record whose mask grows by the registers handed out. */
 typedef struct {
 	long	k_off;
 	int	k_len;
@@ -351,15 +347,15 @@ static PCAND	pcand[NPCAND];
 static int	npcand;
 static PSITE	*psite;
 static int	npsite, npsitemax;
-static int	promask;		/* ... of which these were handed out here */
-static int	proff;			/* nothing is promoted in this function */
+static int	promask;		/* registers promoted to */
+static int	proff;			/* no promotion in this function */
 int	toplocal;			/* reading the function's own declarations */
-static int fnbufon;			/* the buffer is taking bytes */
+static int fnbufon;			/* output is being held */
 static char	*fnbuf;
 static long	fnbufp, fnbufmax;
 
 /*
- * Write out what is held and stop holding.  Nothing is rewritten.
+ * Flush held output unchanged and stop holding.
  */
 static
 pgiveup()
@@ -374,9 +370,6 @@ pgiveup()
 	fnbufp = 0;
 }
 
-/*
- * Take one held byte.
- */
 fnbufput(b)
 {
 	register char	*cp;
@@ -399,9 +392,6 @@ fnbufput(b)
 	fnbuf[fnbufp++] = b;
 }
 
-/*
- * Start holding this function's output.
- */
 pfnstart()
 {
 	npcand = 0;
@@ -414,7 +404,7 @@ pfnstart()
 }
 
 /*
- * Offer a local.  What comes back is what every reference to it carries.
+ * Offer a local; returns the candidate number its references carry, or 0.
  */
 pcandidate(pair)
 {
@@ -431,8 +421,7 @@ pcandidate(pair)
 }
 
 /*
- * Offer a local if a register could hold it at all -- the same types grabreg()
- * takes, since what fits is a property of the machine and not of who asked.
+ * Offer a local of a type grabreg() would take.
  */
 pcandable(sp)
 register SYM	*sp;
@@ -461,8 +450,8 @@ pescape(i)
 }
 
 /*
- * A call that can return twice leaves a register holding what it held when the
- * environment was saved, where the frame slot holds what was last written.
+ * After a setjmp returns twice, registers hold stale values; frame slots
+ * do not.  So nothing is promoted.
  */
 psetjmp(id)
 register char	*id;
@@ -477,7 +466,7 @@ register char	*id;
 }
 
 /*
- * Where the record about to be written begins, or -1.
+ * Offset of the next held record, or -1.
  */
 long
 pmark()
@@ -542,10 +531,9 @@ ival_t	ofs, mask;
 }
 
 /*
- * The body is read.  Hand out what is left of the callee-saved pool, most used
- * first, then write the function out with those references turned into
- * registers.  Nothing is promoted unless an allocation record is held too:
- * that record is where cc1 learns which registers the prolog must save.
+ * Give the free callee-saved registers to the most-used candidates, then write
+ * the function out with their references rewritten.  Needs a held allocation
+ * record: it tells cc1 which registers the prolog saves.
  */
 pfnend()
 {
@@ -566,9 +554,8 @@ pfnend()
 			sawautos = 1;
 	savemask = cmask;
 	wasmask = cmask = fnmask;
-	/* One aligned pair stays free.  A far pointer that must survive a call
-	 * is held in a callee-saved pair; with none left the selector spills
-	 * it, and the spill needs the pair it could not have. */
+	/* Keep one aligned pair free: a far pointer live across a call needs
+	 * a callee-saved pair, and so does its spill. */
 	held = holdpair();
 	while (sawautos) {
 		best = -1;
@@ -711,6 +698,10 @@ loadargs()
 	for (i=0; i<nargs; ++i) {
 		sp = args[i];
 		if (sp->s_class == C_PREG) {
+			if (sp->s_flag & S_VOLAT) {	/* read from the frame */
+				sp->s_class = C_PAUTO;
+				continue;
+			}
 			if ((r=grabreg(sp)) >= 0) {
 				v = sp->s_value;
 				sp->s_class = C_REG;

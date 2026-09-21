@@ -36,7 +36,7 @@ static char xtype[] = {
  * For objects of class 'C_MOE', 'x1' is the enumeration value.
  * For objects of class 'C_MOS' and 'C_MOU',
  * 'x1' is the field width in bits and 'x2' is the long offset in bits.
- * 'ronlyf' passes both 'readonly' and 'alien' modifiers.
+ * 'ronlyf' passes the 'readonly', 'alien' and 'volatile' modifiers.
  */
 SYM *
 declare(sp, c, t, ndp, ip, ronlyf, x1, x2)
@@ -161,15 +161,14 @@ unsigned long	x2;
 		if (oc!=C_GREF && c!=C_GREF)
 			++rf;
 		/*
-		 * "extern int x;" after "int x;" still defines x, but a
-		 * FUNCTION restored to C_GDEF this way reads as a second
-		 * definition, and xdef() then demands a body for it.
+		 * "extern int x;" after "int x;" still defines x, but not
+		 * for a function: xdef() would then demand a second body.
 		 */
 		else if (c==C_GREF && (ndp==NULL || ndp->d_type!=D_FUNC))
 			c = oc;
 	} else if (oc != C_NONE)
 		++rf;
-	if (oc != C_NONE && (sp->s_flag&ronlyf) != ronlyf)
+	if (oc != C_NONE && oc != C_ARG && (sp->s_flag&ronlyf) != ronlyf)
 		++rf;
 	sp->s_class = c;
 	sp->s_type  = t;
@@ -285,11 +284,8 @@ isfunction(dp) register DIM *dp;
 }
 
 /*
- * Examine a "DIM" chain of a `void' declarator to see if it describes
- * a pointer, and mark that pointer if it does.  The chain runs
- * outermost first, so the last dim is the one next to the base type:
- * a pointer there is a pointer to void however many dims precede it,
- * while a function returning void ends in D_FUNC.
+ * If a `void' declarator's DIM chain ends (innermost) in a pointer, mark it
+ * D_VOIDP.
  */
 isvoidptr(dp) register DIM *dp;
 {

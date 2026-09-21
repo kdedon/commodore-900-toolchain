@@ -285,6 +285,8 @@ unsigned char	pfx[];
 	}
 	if ((mode&A_AMOD) == A_IMM || nsef != 0)
 		mode &= ~A_PREFX;
+	if ((mode&A_AMOD) == A_IMM)
+		mode &= ~A_VOL;			/* an address taken, not an access */
 	/*
 	 * A symbol-relative offset is two words, high then low: the full signed
 	 * 32-bit displacement from the symbol (getfield reads it back the same
@@ -333,6 +335,8 @@ SYM	**gidpp;
 
 	while ((op = tp->t_op) == LEAF)
 		tp = tp->t_lp;
+	if (tp->t_vol)
+		*modep |= A_VOL;
 	switch (op) {
 
 	case ADDR:
@@ -382,8 +386,7 @@ SYM	**gidpp;
 	lidgid:
 		*offsp += tp->t_offs;
 		/* Code-space symbols get the code-space flag (vs data space).
-		 * `readonly' data is emitted into the data image (.shrd), so
-		 * SPURE is addressed like any other datum. */
+		 * `readonly' data (SPURE) is in the data image (.shrd). */
 		seg = tp->t_seg;
 		if (seg == SCODE || seg == SLINK
 		|| (isvariant(VLARGE)
