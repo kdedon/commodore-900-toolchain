@@ -3,6 +3,7 @@
 #
 #   sh <dir>/deps-fetch.sh            place every dependency in DEPS
 #   sh <dir>/deps-fetch.sh <name>     just that one
+#   sh <dir>/deps-fetch.sh -tag <name>  print its tag, `latest' resolved
 #
 # This is NOT a way to FIND things.  It is a way to PUT them where the
 # resolvers already look, so the resolver contract is untouched: a named
@@ -177,6 +178,17 @@ fetch_release() {
 	if [ -n "$inner" ]; then mv "$inner" "$4"; rm -rf "$tmp"; else mv "$tmp" "$4"; fi
 	echo "$1: unpacked $3 -> $4"
 }
+
+# CI keys its cache on this; a key of `latest' would never refresh.
+if [ "$only" = -tag ]; then
+	ref=$(awk -v n="${2:-}" '$1 == n { print $4 }' "$deps")
+	[ -n "$ref" ] || { echo "deps-fetch.sh: no \`${2:-}' in DEPS" >&2; exit 2; }
+	[ "$ref" != latest ] || ref=$(awk -v n="$2" '$1 == n { print $3 }' "$deps" |
+	    while read -r url; do latest_tag "$url"; done)
+	[ -n "$ref" ] || { echo "deps-fetch.sh: no published release of $2" >&2; exit 1; }
+	echo "$ref"
+	exit 0
+fi
 
 rc=0
 # DEPS is read on fd 3: git and curl inherit stdin, and a clone that consumed
