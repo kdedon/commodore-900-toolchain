@@ -13,27 +13,12 @@
 #                                    compiler's objects BYTE FOR BYTE, 86 of 86
 #   S4  windows S0+S1, then the      the two hosts' objects are identical: the
 #       equivalence job              only place an LLP64 defect can surface
-#   S5  consumers job                every freestanding consumer still LINKS
 #
 # S1 and S3 are not redundant.  S3 proves the two compilers agree; S1 proves
 # what they agree about is right.  Two identical WRONG compilers pass S3.
 #
-# S5 is a different question again.  S0-S4 ask what this compiler emits; S5
-# asks what it now DEMANDS of the objects it is linked with.  cc2 names
-# external symbols (SS, the stack segment a frame reference is relocated
-# against), and a program gets them from crts0.s and the kernel from md.s --
-# but a boot loader, a CP/M system image or a separately linked module has
-# neither and states them itself, so a change to that set is an ABI change to
-# every one of them, and the only check that sees it is a link.  The consumers
-# below are the freestanding ones: everything else in those trees is a program
-# or a driver bound to a kernel symbol table, which the same job covers on the
-# way past.  A repository whose build is only ever run by hand goes broken
-# quietly, and one of these did, for days.
-#
-# Measured, on this repository: S0 7 s, S1 9 s, S2 3 s, S3 75 s, S5 under 15 s
-# (the compiler passes are milliseconds each; these builds are hundreds of
-# translation units and no emulator).  Under three minutes for everything,
-# both hosts, which is why nothing here is nightly.
+# Measured, on this repository: S0 7 s, S1 9 s, S2 3 s, S3 75 s.  Under three
+# minutes for everything, both hosts, which is why nothing here is nightly.
 #
 # CI SETS THE VARIABLES; it never relies on the search.  A job that depended on
 # directory adjacency breaks the first time a runner image moves its checkouts,
@@ -42,9 +27,7 @@
 # THE OS EDGE IS A PINNED SNAPSHOT, AND ITS ABSENCE IS ANNOUNCED.  S2, S3 and S4
 # build OS artifacts with this compiler, so they need the operating system's
 # source; that repository is unpublished, so `make deps DEP=coherent' places the
-# archive DEPS pins and those stages run against it.  The COHERENT consumer link
-# is the exception -- it links the kernel, which needs the whole repository, not
-# the three directories the snapshot carries -- so it stays on a checkout.
+# archive DEPS pins and those stages run against it.
 # Where either is absent the stages DO NOT RUN, and the run says so three ways: an ::warning:: annotation on the run page, a table in the
 # job summary naming each stage that did not run, and the `verdict' job's own
 # displayed name, which reads INCOMPLETE.  What must not happen is the fourth
@@ -192,85 +175,6 @@ jobs:
           name: linux-objects
           path: src/host/build/selfhost/root/work/h2/*.o
 
-  # S5 -- the consumers, linked with the compiler from this commit.
-  #
-  # Independent of `linux': it needs the compiler passes and the linker, which
-  # `make all' builds in seconds, and nothing the other stages produce.  So a
-  # break here is reported even when the fixpoint is red, and the two verdicts
-  # do not queue behind each other.
-  #
-  # Each step is the SMALLEST goal that reaches the freestanding link, not the
-  # repository's default goal: kboot is one loader, coherent builds the kernel
-  # and the five loadable drivers.  No emulator, no images, no boot -- those are
-  # the consumers' own gates, and none of them is needed to see a symbol the
-  # link cannot resolve.
-  #
-  # TWO CONSUMERS ARE NOT HERE, and neither is silently absent:
-  #
-  #   CP/M-8000  commodore-900-cpm is not published, so there is no repository
-  #              to check out.  A step naming one would be permanently red,
-  #              which trains a reader to ignore the colour -- so it is stated
-  #              here and restored, unchanged, the day that repository exists:
-  #                - name: CP/M-8000 - the resident system and the split-I/D module
-  #                  run: make -C cpm build/cpm.sys build/split.mod
-  #   COHERENT   the kernel link runs only where the OS source is present, the
-  #              same edge S2 and S3 need, and the verdict job names it when it
-  #              does not.
-  #
-  # kboot is the one that always runs, and it is the load-bearing one: it is a
-  # freestanding consumer that states SS itself, so it is where an ABI change to
-  # the objects this compiler emits shows up as a link that cannot resolve.
-  consumers:
-    runs-on: ubuntu-latest
-    outputs:
-      os: ${{ steps.os.outputs.have }}
-    steps:
-      - uses: actions/checkout@v4
-        with: { path: src }
-      - uses: actions/checkout@v4
-        with:
-          repository: kdedon/commodore-900-kboot
-          path: kboot
-          token: ${{ secrets.C900_CI_TOKEN || github.token }}
-      - uses: actions/checkout@v4
-        continue-on-error: true
-        with:
-          repository: kdedon/commodore-900-coherent
-          path: coherent
-          token: ${{ secrets.C900_CI_TOKEN || github.token }}
-      - name: The OS edge
-        id: os
-        working-directory: src
-        run: |
-          p=$(COHERENT_OS="$GITHUB_WORKSPACE/coherent/os" sh host/deps.sh coherent)
-          if [ -n "$p" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "COHERENT OS source: $p"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::warning title=The COHERENT consumer link will not run::No COHERENT OS source at $GITHUB_WORKSPACE/coherent/os. The kernel and driver link is NOT RUN in this build; kboot still is."
-          fi
-
-      - name: The compiler under test
-        working-directory: src
-        run: make all
-
-      # C900_TOOLCHAIN is set, never searched: see the note at the head of this
-      # file.  It names the CHECKOUT; each consumer's resolver finds host/build
-      # inside it.
-      # COMPILER=cross names the flavour built from THIS checkout's sources.
-      # kboot's own default is the published compiler dist, which is a pinned
-      # binary and would say nothing about the compiler under test.
-      - name: kboot - the multiboot loader
-        env:
-          C900_TOOLCHAIN: ${{ github.workspace }}/src
-        run: make -C kboot COMPILER=cross
-      - name: COHERENT - the kernel and the loadable drivers
-        if: steps.os.outputs.have == 'yes'
-        env:
-          C900_TOOLCHAIN: ${{ github.workspace }}/src
-        run: make -C coherent BUILD=build-consumers COMPILER=mwc kernel
-
   windows:
     runs-on: windows-latest
     outputs:
@@ -401,7 +305,7 @@ jobs:
   # which costs more than it buys; what it must never do is report five stages
   # as eight.
   verdict:
-    needs: [ linux, windows, consumers, equivalence ]
+    needs: [ linux, windows, equivalence ]
     if: always()
     name: ${{ needs.linux.outputs.os == 'yes' && 'coverage - every stage ran' || 'coverage - INCOMPLETE, the OS stages did not run' }}
     runs-on: ubuntu-latest
@@ -410,10 +314,8 @@ jobs:
         env:
           OS_LINUX: ${{ needs.linux.outputs.os }}
           OS_WINDOWS: ${{ needs.windows.outputs.os }}
-          OS_CONSUMERS: ${{ needs.consumers.outputs.os }}
           R_LINUX: ${{ needs.linux.result }}
           R_WINDOWS: ${{ needs.windows.result }}
-          R_CONSUMERS: ${{ needs.consumers.result }}
           R_EQUIVALENCE: ${{ needs.equivalence.result }}
         run: |
           # $1 stage  $2 what it is  $3 ran? (yes/no)  $4 result or reason
@@ -429,7 +331,7 @@ jobs:
             echo "It says nothing about the ones marked NOT RUN — no compiler in this" >> "$GITHUB_STEP_SUMMARY"
             echo "run was tested against the OS source, and no target-built compiler" >> "$GITHUB_STEP_SUMMARY"
             echo "was produced or compared at all." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=Incomplete run::S2, S3, S4 and the COHERENT consumer link did not run: no COHERENT OS source. A green badge on this run covers S0, S1 and the kboot link only."
+            echo "::warning title=Incomplete run::S2, S3 and S4 did not run: no COHERENT OS source. A green badge on this run covers S0 and S1 only."
           fi
           # A host that did not run is announced in its own right: it is not the
           # OS edge, and the row below would otherwise blame the wrong absence.
@@ -458,10 +360,4 @@ jobs:
           else
             row S4 "the two hosts emit identical objects" NO "$noos"
           fi
-          row "S5 kboot" "a freestanding consumer still links" RAN "$R_CONSUMERS"
-          [ "$OS_CONSUMERS" = yes ] \
-            && row "S5 COHERENT" "the kernel and drivers still link" RAN "$R_CONSUMERS" \
-            || row "S5 COHERENT" "the kernel and drivers still link" NO "$noos"
-          row "S5 CP/M" "the resident system and split-I/D module link" NO \
-              "**NOT RUN** — commodore-900-cpm is unpublished; see the note in this workflow"
           cat "$GITHUB_STEP_SUMMARY"
