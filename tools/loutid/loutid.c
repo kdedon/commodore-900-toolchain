@@ -52,6 +52,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #define L_MAGIC		0407
 #define AR_MAGIC	0177535		/* include/ar.h ARMAG */
@@ -428,6 +432,9 @@ char **argv;
 	char **files;
 	int quiet, entry, syms, nf, i, bad, wrong;
 
+#ifdef _WIN32
+	_setmode(_fileno(stdout), _O_BINARY);
+#endif
 	quiet = entry = syms = 0;
 	want = 0;
 	nf = 0;

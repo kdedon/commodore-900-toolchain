@@ -24,6 +24,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef _WIN32
+#include <fcntl.h>
+#include <io.h>
+#endif
 
 #include "z8kdis.h"
 
@@ -384,6 +388,9 @@ char **argv;
 	long n, toff, tsize, nwords, total, far, near, lbase, start, end;
 	int i, k, verbose, dohdr, dosyms, seg, nsym, found;
 
+#ifdef _WIN32
+	_setmode(_fileno(stdout), _O_BINARY);
+#endif
 	verbose = dohdr = dosyms = 0;
 	path = fn = 0;
 	for (i = 1; i < argc; i++) {
