@@ -152,13 +152,6 @@ cmp -s "$T/lib5.1" "$T/lib5b.1" && ok "the same library twice, the same bytes" \
 # ------------------------------------------------------------- the refusals
 echo "=== the refusals"
 printf 'toy_add_\n' > "$T/toy.exp"
-if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -F 0x01000000 -e "$T/toy.exp" \
-		-o "$T/bad.1" "$T/toy.o" "$T/ss.o" > "$T/err" 2>&1; then
-	bad "slgen took both styles at once"
-else
-	grep -q 'the two styles' "$T/err" && ok "$(sed -n 1p "$T/err")" \
-		|| bad "refused, but not for the reason expected"
-fi
 if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -F 0x01000200 \
 		-o "$T/bad.1" "$T/toy.o" "$T/ss.o" > "$T/err" 2>&1; then
 	bad "slgen took a base that is not a segment boundary"
@@ -170,7 +163,7 @@ fi
 
 # The two styles, each offered to the other's ld mode.
 printf 'toy_add_\ntoy_bump_\ntoy_end_\n' > "$T/dyn.exp"
-"$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/dyn.exp" -o "$T/libdyn.1" \
+"$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/libdyn.1" \
 	"$T/toy.o" "$T/ss.o" > /dev/null
 if "$LD" -F -n -i -o "$T/bad.out" "$T/cli.o" "$T/ss.o" "$T/libdyn.1" \
 		> "$T/err" 2>&1; then
@@ -197,7 +190,7 @@ int f()
 }
 EOF
 printf 'toy_add_\ntoy_bump_\ntoy_end_\ntoy_count_ data\n' > "$T/dyn2.exp"
-"$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/dyn2.exp" -o "$T/libdyn2.1" \
+"$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/libdyn2.1" \
 	"$T/toy.o" "$T/ss.o" > /dev/null
 cc dcli "$VARP"
 "$LD" -n -i -o "$T/dcli.out" "$T/dcli.o" "$T/ss.o" "$T/libdyn2.1"
@@ -268,7 +261,7 @@ esac
 
 # Flags refused where they mean nothing.
 
-if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/toy.exp" -P 0x01000000 \
+if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -P 0x01000000 \
 		-o "$T/bad.1" "$T/toy.o" "$T/ss.o" > "$T/err" 2>&1; then
 	bad "slgen took -P without -F"
 else

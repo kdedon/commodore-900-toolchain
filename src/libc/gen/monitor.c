@@ -21,8 +21,8 @@
  * a dummy entry on the end which has m_link field NULL.
  */
 static struct m_flst	dummy[];
-struct m_flst		*_fnclst	= dummy;
-struct m_hdr	_mhdr;
+static struct m_flst	*_fnclst	= dummy;
+static struct m_hdr	_mhdr;
 static short		*baddr;		/* buffer address */
 
 

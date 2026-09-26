@@ -15,6 +15,7 @@ fail=0
 
 cat > "$T/toy.c" <<'EOF'
 int toy_count;
+int __toy_state;				/* internal: never exported */
 
 int toy_add(a, b) int a, b;
 {
@@ -24,6 +25,7 @@ int toy_add(a, b) int a, b;
 int toy_bump(k) int k;
 {
 	toy_count = toy_add(toy_count, k);	/* private data + inner call */
+	__toy_state = toy_count;
 	return toy_count;
 }
 
@@ -37,11 +39,23 @@ EOF
 "$O/cc2-z8001" $PEEP "$T/toy.z1" "$T/toy.o" "$T/toy.scr" 0 > /dev/null 2>&1
 # SS relocations are L_ABS and must not become fixups.
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s"
-printf 'toy_name_\ntoy_add_\t# order does not matter: slgen sorts\ntoy_bump_\n' \
+printf 'toy_add_\ntoy_bump_\ntoy_count_\ttoy_count is data\ntoy_name_\n' \
 	> "$T/toy.exp"
 
-"$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/toy.exp" -o "$T/toy.1" \
-	"$T/toy.o" "$T/ss.o"
+"$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/toy.1" "$T/toy.o" "$T/ss.o"
+if python3 - "$T/toy.1" <<'PY'; then
+import sys
+b = open(sys.argv[1], 'rb').read()
+tb = b[6] | b[7] << 8
+be = lambda o: (b[o] << 8) | b[o+1]
+names = [b[tb+16+20*i:tb+16+20*i+16].split(b'\0')[0] for i in range(be(tb+4))]
+sys.exit(0 if b'__toy_state' in names else 1)
+PY
+	echo "  FAIL __toy_state reached the export table"
+	fail=1
+else
+	echo "  PASS a __ name is the library's own: the table leaves it out"
+fi
 python3 "$H/tests/shlib-check.py" "$T/toy.1" "$T/toy.exp" || fail=1
 
 # Negative control: drop the last fixup, keeping counts consistent.  The
@@ -75,23 +89,22 @@ else
 		sed 's/^  FAIL //')"
 fi
 
-# slgen refuses an undefined listed name, and two names equal in 16 characters.
+# Two globals the export table cannot tell apart in 16 characters: the link
+# refuses them before slgen sees the pair.
 
-printf 'toy_add_\ntoy_missing_\n' > "$T/bad.exp"
-if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/bad.exp" -o "$T/bad.1" \
-	"$T/toy.o" "$T/ss.o" > "$T/bad.log" 2>&1; then
-	echo "  FAIL slgen exported a symbol the library does not define"
+cat > "$T/coll.c" <<'EOF'
+int toy_a_very_long_name_one() { return 1; }
+int toy_a_very_long_name_two() { return 2; }
+EOF
+"$O/cc0-z8001" $VAR "$T/coll.c" "$T/coll.z0" > /dev/null 2>&1
+"$O/cc1-z8001" $VAR "$T/coll.z0" "$T/coll.z1" > /dev/null 2>&1
+"$O/cc2-z8001" $PEEP "$T/coll.z1" "$T/coll.o" "$T/coll.scr" 0 > /dev/null 2>&1
+if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/coll.1" \
+	"$T/coll.o" "$T/ss.o" > "$T/coll.log" 2>&1; then
+	echo "  FAIL two globals colliding in 16 characters were exported"
 	fail=1
 else
-	echo "  PASS $(grep -m1 'not defined' "$T/bad.log")"
-fi
-printf 'toy_a_very_long_name_one\ntoy_a_very_long_name_two\n' > "$T/coll.exp"
-if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/coll.exp" -o "$T/coll.1" \
-	"$T/toy.o" "$T/ss.o" > "$T/coll.log" 2>&1; then
-	echo "  FAIL slgen accepted two exports that collide in 16 characters"
-	fail=1
-else
-	echo "  PASS $(grep -m1 'one symbol in' "$T/coll.log")"
+	echo "  PASS refused: $(grep -m1 'redefined' "$T/coll.log" | sed 's/ in file .*//')"
 fi
 
 [ $fail = 0 ] && echo "shlib-format: slgen and the library format agree"

@@ -103,9 +103,6 @@ $(B)/slgen: src/slgen/slgen.c
 #
 # tests/shlib-format.sh: a toy slgen library read back against shlib.h.
 #
-# tests/shlib-abi.sh: libc.1's exports against src/libc/libc.1.exp, which may
-# only grow.  Hence `check' builds libc1.
-#
 # tests/shlib-data.sh: -VPIC data slots, SE_DATA exports, and ld binding them.
 #
 # tests/shlib-client.sh: ld linking a program against a library -- stubs,
@@ -144,7 +141,6 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/shlib-format.sh
 	sh tests/shlib-client.sh
 	sh tests/shlib-data.sh
-	sh tests/shlib-abi.sh
 	sh tests/fixed-mode.sh
 	sh tests/cc-pic.sh
 	sh tests/native-ld.sh

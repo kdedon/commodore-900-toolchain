@@ -5,17 +5,17 @@
 /*
  * slgen -- build a Z8001 shared library, in either of the two styles.
  *
- *	slgen [-v] [-k] [-A as] [-L ld] [-T dir] -e exports -o library obj ...
+ *	slgen [-v] [-k] [-A as] [-L ld] [-T dir] -o library obj ...
  *	slgen [-v] [-k] [-A as] [-L ld] [-T dir] -F base [-P privbase] -o library obj ...
  *
  * -F links at `base' for segments the kernel knows in advance, with an index
  * jump table at the head of the shared segment; clients CALL absolute
  * addresses and nothing is bound at exec.
  *
- * -e builds a dynamic library, in the format of <shlib.h>:
+ * By default it builds a dynamic library, in the format of <shlib.h>:
  *
- *   1. Read the export list.  An unknown name, or two names equal in their
- *	first NCPLN characters, is an error; an unlisted global is a warning.
+ *   1. Scan the objects for the globals they define: those are the exports.
+ *	Two that are equal in their first NCPLN characters are an error.
  *
  *   2. Link a zeroed export table first, so it lands at shared offset 0.
  *	Its size is known up front, so one link suffices.
@@ -91,7 +91,6 @@
 #define	JMPLEN		6		/* `jp' long-form DA, -F's stride */
 
 static char	*progname = "slgen";
-static char	*expfile;		/* -e */
 static char	*outfile;		/* -o */
 static char	*asname = "as-z8001";	/* -A */
 static char	*ldname = "ld-z8001";	/* -L */
@@ -110,19 +109,13 @@ static char	tmpdir[1024];
 
 struct	exp {
 	char	e_name[NCPLN];		/* NUL-padded, as l.out holds it */
-	char	*e_text;		/* as the list spelled it	 */
+	char	*e_text;		/* as the object spelled it	 */
 	long	e_off;			/* offset within its own image	 */
 	int	e_flags;		/* SE_DATA if it is an object	 */
-	int	e_kind;			/* the list's claim: EK_*	 */
 	int	e_found;
 };
 static struct exp *exps;
 static int	nexp;
-
-#define	EK_FUNC	0			/* bare name: a function	*/
-#define	EK_DATA	1			/* `data': an object, per client	*/
-#define	EK_SHRD	2			/* `shrd': a readonly table, one copy */
-static char *kindname[] = { "a function", "data", "shrd" };
 
 struct	fix {
 	unsigned short f_flags;
@@ -140,6 +133,8 @@ static long	shrlen, prvlen;		/* loaded bytes of each segment	*/
 
 static void	fatal(char *, ...);
 static void	warn(char *, ...);
+static int	isimport(char *);
+static int	isperprog(char *);
 
 /* ------------------------------------------------------------------ */
 /* the canonical field forms, byte by byte				*/
@@ -258,7 +253,7 @@ long n;
 }
 
 /* ------------------------------------------------------------------ */
-/* the export list							*/
+/* the exports								*/
 
 static int
 expcmp(a, b)
@@ -268,75 +263,121 @@ const void *a, *b;
 		((const struct exp *)b)->e_name, NCPLN));
 }
 
+/*
+ * A name libc keeps to itself.  Leading `__' says so -- the malloc arena's
+ * __a_* cells and brk's __end_ -- and no exported name is spelled that way.
+ */
+static int
+isinternal(id)
+char id[];
+{
+	return (id[0] == '_' && id[1] == '_');
+}
+
+/*
+ * THE EXPORTS ARE WHAT THE OBJECTS DEFINE: every global, less the names
+ * reserved above, the ones the linker defines per program, and anything in
+ * private text, which a client cannot reach.  A symbol's segment says what
+ * it is -- shared text a function, shared data a readonly table, private or
+ * bss data an object copied per client -- so nothing declares it twice.
+ *
+ * A library among the inputs is there to be imported from, so what IT
+ * exports is not ours.
+ *
+ * Read before the link, because the export table is linked first and its
+ * size fixes where the rest of the library lands.
+ */
 static void
-readexports()
+scanexports(objc, objv)
+int objc;
+char **objv;
 {
 	FILE *fp;
-	char line[512], *s, *t;
-	int i, n, k;
+	unsigned char hdr[LDHLEN], sym[LDSLEN];
+	long sz[NLSEG], o, room;
+	char name[NCPLN + 1];
+	int i, j, k, type, seg, flags;
 
-	if ((fp = fopen(expfile, "r")) == NULL)
-		fatal("cannot read the export list %s", expfile);
-	n = 0;
-	while (fgets(line, sizeof line, fp) != NULL)
-		n++;
-	rewind(fp);
-	exps = (struct exp *)xalloc((long)(n + 1) * sizeof(struct exp));
-	while (fgets(line, sizeof line, fp) != NULL) {
-		if ((s = strchr(line, '#')) != NULL)
-			*s = '\0';
-		for (s = line; *s == ' ' || *s == '\t'; s++)
-			;
-		for (t = s; *t != '\0' && *t != ' ' && *t != '\t'
-		     && *t != '\n' && *t != '\r'; t++)
-			;
-		k = *t;
-		*t = '\0';
-		if (*s == '\0')
-			continue;
-		if ((int)strlen(s) > NCPLN)
-			warn("export %s is longer than %d characters; only the first %d count",
-				s, NCPLN, NCPLN);
-		exps[nexp].e_text = strdup(s);
-		for (i = 0; i < NCPLN && s[i] != '\0'; i++)
-			exps[nexp].e_name[i] = s[i];
-		exps[nexp].e_off = -1;
-		exps[nexp].e_flags = 0;
-		/*
-		 * Optional kind, checked by resolve(): bare for a function,
-		 * `data' for a per-client object, `shrd' for a shared
-		 * readonly table.  Clients call functions through stubs and
-		 * reach objects through slots.
-		 */
-		exps[nexp].e_kind = EK_FUNC;
-		if (k != '\0') {
-			for (s = t + 1; *s == ' ' || *s == '\t'; s++)
-				;
-			for (t = s; *t != '\0' && *t != ' ' && *t != '\t'
-			     && *t != '\n' && *t != '\r'; t++)
-				;
-			*t = '\0';
-			if (strcmp(s, "data") == 0)
-				exps[nexp].e_kind = EK_DATA;
-			else if (strcmp(s, "shrd") == 0)
-				exps[nexp].e_kind = EK_SHRD;
-			else if (*s != '\0')
-				fatal("export %s: `%s' is not a kind (want `data', `shrd', or nothing for a function)",
-					exps[nexp].e_text, s);
-		}
-		nexp++;
+	room = 0;
+	for (i = 0; i < objc; i++) {
+		if ((fp = fopen(objv[i], "rb")) == NULL)
+			fatal("cannot read %s", objv[i]);
+		if (fread(hdr, 1, LDHLEN, fp) == LDHLEN && canw(hdr) == L_MAGIC
+		    && (canw(hdr + 2) & LF_SLIB) == 0)
+			room += canl(hdr + 8 + 4 * L_SYM) / LDSLEN;
+		fclose(fp);
 	}
-	fclose(fp);
+	exps = (struct exp *)xalloc((room + 1) * sizeof(struct exp));
+
+	for (i = 0; i < objc; i++) {
+		if ((fp = fopen(objv[i], "rb")) == NULL)
+			fatal("cannot read %s", objv[i]);
+		if (fread(hdr, 1, LDHLEN, fp) != LDHLEN)
+			fatal("%s is not an l.out", objv[i]);
+		if (canw(hdr) != L_MAGIC)
+			fatal("%s: bad magic number", objv[i]);
+		if (canw(hdr + 4) != M_Z8001)
+			fatal("%s: not a Z8001 object", objv[i]);
+		if (canw(hdr + 2) & LF_SLIB) {
+			fclose(fp);
+			continue;
+		}
+		for (j = 0; j < NLSEG; j++)
+			sz[j] = canl(hdr + 8 + 4 * j);
+		o = LDHLEN;
+		for (j = 0; j < L_SYM; j++)
+			if (j != L_BSSI && j != L_BSSD)
+				o += sz[j];
+		if (fseek(fp, o, SEEK_SET) != 0)
+			fatal("%s: cannot seek to the symbol table", objv[i]);
+		for (o = sz[L_SYM]; o >= LDSLEN; o -= LDSLEN) {
+			if (fread(sym, 1, LDSLEN, fp) != LDSLEN)
+				fatal("%s: bad symbol segment", objv[i]);
+			type = canw(sym + NCPLN);
+			if ((type & L_GLOBAL) == 0 || type == (L_GLOBAL|L_REF))
+				continue;
+			if (isperprog((char *)sym) || isinternal((char *)sym))
+				continue;
+			seg = type & ~L_GLOBAL;
+			if (seg == L_SHRI)
+				flags = 0;
+			else if (seg == L_SHRD)
+				flags = SE_DATA|SE_SHRD;
+			else if (seg == L_PRVD || seg == L_BSSD)
+				flags = SE_DATA;
+			else
+				continue;	/* private text: unreachable */
+			memcpy(exps[nexp].e_name, sym, NCPLN);
+			memcpy(name, sym, NCPLN);
+			name[NCPLN] = '\0';
+			exps[nexp].e_text = strdup(name);
+			exps[nexp].e_off = -1;
+			exps[nexp].e_flags = flags;
+			exps[nexp].e_found = 0;
+			nexp++;
+		}
+		fclose(fp);
+	}
 	if (nexp == 0)
-		fatal("the export list %s names no symbol", expfile);
+		fatal("no object defines a global: there is nothing to export");
 	qsort(exps, (size_t)nexp, sizeof(struct exp), expcmp);
-	for (i = 1; i < nexp; i++)
-		if (memcmp(exps[i - 1].e_name, exps[i].e_name, NCPLN) == 0)
-			fatal("exports %s and %s are one symbol in %d characters",
+	/*
+	 * A common allocated in several objects is one symbol; two different
+	 * names that collide in NCPLN characters are not.
+	 */
+	for (i = 1, k = 1; i < nexp; i++) {
+		if (memcmp(exps[i - 1].e_name, exps[i].e_name, NCPLN) != 0) {
+			exps[k++] = exps[i];
+			continue;
+		}
+		if (strcmp(exps[i - 1].e_text, exps[i].e_text) != 0)
+			fatal("%s and %s are one symbol in %d characters",
 				exps[i - 1].e_text, exps[i].e_text, NCPLN);
+	}
+	nexp = k;
 	if (vflag)
-		fprintf(stderr, "%s: %d exports listed in %s\n", progname,
-			nexp, expfile);
+		fprintf(stderr, "%s: %d export(s) scanned from %d object(s)\n",
+			progname, nexp, objc);
 }
 
 /* ------------------------------------------------------------------ */
@@ -580,12 +621,9 @@ resolve()
 			mid = -1;
 		}
 		if (mid < 0) {
-			if (seg == L_SHRI
-			 && !isimport(name)
-			 && memcmp(name, "etext_\0", 7) != 0
-			 && memcmp(name, "edata_\0", 7) != 0
-			 && memcmp(name, "end_\0", 5) != 0)
-				warn("%.*s is global in the library and the export list does not name it",
+			if (seg == L_SHRI && !isimport(name) && !isinternal(name)
+			 && !isperprog(name))
+				warn("%.*s is global in the library and no input object defined it: a common the link promoted?",
 					NCPLN, name);
 			continue;
 		}
@@ -607,13 +645,6 @@ resolve()
 		    != (exps[mid].e_flags == SE_DATA ? SL_NOMPRV : SL_NOMSHR))
 			fatal("export %s is not in its nominal segment",
 				exps[mid].e_text);
-		if (exps[mid].e_flags != (exps[mid].e_kind == EK_DATA ? SE_DATA
-				: exps[mid].e_kind == EK_SHRD
-				? (SE_DATA|SE_SHRD) : 0))
-			fatal("export %s: the list calls it %s, the library made it %s",
-				exps[mid].e_text, kindname[exps[mid].e_kind],
-				exps[mid].e_flags == 0 ? "a function"
-				: exps[mid].e_flags == SE_DATA ? "data" : "shrd");
 		exps[mid].e_off = addr & 0xFFFFL;
 		exps[mid].e_found = 1;
 	}
@@ -1026,7 +1057,7 @@ static void
 usage()
 {
 	fprintf(stderr,
-"Usage: slgen [-v] [-k] [-A as] [-L ld] [-T dir] -e exports -o library obj ...\n");
+"Usage: slgen [-v] [-k] [-A as] [-L ld] [-T dir] -o library obj ...\n");
 	fprintf(stderr,
 "       slgen [-v] [-k] [-A as] [-L ld] [-T dir] -F base [-P privbase] -o library obj ...\n");
 	exit(2);
@@ -1042,11 +1073,6 @@ char **argv;
 
 	for (i = 1; i < argc && argv[i][0] == '-' && argv[i][1] != '\0'; i++) {
 		switch (argv[i][1]) {
-		case 'e':
-			if (++i >= argc)
-				usage();
-			expfile = argv[i];
-			break;
 		case 'o':
 			if (++i >= argc)
 				usage();
@@ -1095,13 +1121,8 @@ char **argv;
 		fatal("-P places a fixed-address library's private half: use it with -F");
 	if (privmode && privbase == fixbase)
 		fatal("-P 0x%08lx is the shared half's own base", privbase);
-	if (fixmode && expfile != NULL)
-		fatal("-F and -e are the two styles: the fixed-address library exports every code global and has no export list");
-	if (!fixmode && expfile == NULL)
-		usage();
-
 	if (!fixmode)
-		readexports();
+		scanexports(argc - i, &argv[i]);
 	maketmp();
 	sprintf(sname, "%s/%s", tmpdir, tmpname[0]);
 	sprintf(oname, "%s/%s", tmpdir, tmpname[1]);

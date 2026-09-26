@@ -3,7 +3,7 @@
 #
 # libc's members compiled -VPIC, plus csu/slrt.s, through slgen: a shared
 # segment (code, read-only tables, export table at 0) and a private one (data
-# and bss, copied per client).  src/libc/libc.1.exp is the ABI.
+# and bss, copied per client).  The globals the members define are the ABI.
 #
 # Publishes $BUILD/libc1/{libc.1,crt0sl.o}; a client links crt0sl.o in place
 # of crt0.o.
@@ -19,11 +19,10 @@ AS="$BUILD/as-z8001"
 LD="$BUILD/ld-z8001"
 SLGEN="$BUILD/slgen"
 LIBC="$BUILD/libc-z8001-pic"
-EXP="$COHERENT_OS/libc/libc.1.exp"
 verbose=
 [ "${1:-}" = -v ] && verbose=-v
 
-for f in "$AS" "$LD" "$SLGEN" "$BUILD/libc-z8001/obj" "$EXP"; do
+for f in "$AS" "$LD" "$SLGEN" "$BUILD/libc-z8001/obj"; do
 	[ -e "$f" ] || { echo "build-libc1: missing $f -- build the tool chain and libc first" >&2; exit 1; }
 done
 
@@ -46,7 +45,7 @@ trap 'rm -rf "$OUT"' EXIT INT TERM
 members=$(ls "$LIBC"/obj/*.o | grep -vE '/(_prof|strrchr|_finish)\.o$')
 nmem=$(echo "$members" | wc -w)
 
-"$SLGEN" $verbose -A "$AS" -L "$LD" -T "$OUT" -e "$EXP" -o "$OUT/libc.1" \
+"$SLGEN" $verbose -A "$AS" -L "$LD" -T "$OUT" -o "$OUT/libc.1" \
 	"$OUT/slrt.o" $members
 
 rm -f "$OUT"/slrt.o
@@ -54,7 +53,7 @@ publish_dir libc1
 trap - EXIT INT TERM
 
 # A library past either 64 KB ceiling cannot load; say so here.
-python3 - "$BUILD/libc1/libc.1" "$nmem" "$EXP" <<'PY'
+python3 - "$BUILD/libc1/libc.1" "$nmem" <<'PY'
 import sys
 b = open(sys.argv[1], 'rb').read()
 sh = lambda o: b[o] | b[o+1] << 8
@@ -66,10 +65,8 @@ private = sz[PRVI] + sz[BSSI] + sz[PRVD] + sz[BSSD]
 tb = sh(6)				# the shared segment starts the file
 nexp = (b[tb+4] << 8) | b[tb+5]		# sl_nexp, plain big-endian target bytes
 nfix = (b[tb+8] << 8) | b[tb+9]
-nlist = sum(1 for l in open(sys.argv[3])
-            if l.strip() and not l.lstrip().startswith('#'))
-print("libc.1: %d B on disk, %s members + slrt.o, %d exports (list names %d), %d fixups"
-      % (len(b), sys.argv[2], nexp, nlist, nfix))
+print("libc.1: %d B on disk, %s members + slrt.o, %d exports, %d fixups"
+      % (len(b), sys.argv[2], nexp, nfix))
 print("  shared  seg  SHRI %6d + SHRD %5d = %6d B of 65536  (%d B free)"
       % (sz[SHRI], sz[SHRD], shared, 65536 - shared))
 print("  private seg  PRVD %6d + BSSD %5d = %6d B of 65536  (%d B free)"

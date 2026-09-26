@@ -55,7 +55,7 @@ EOF
 cc tdata "$VARP"; cc tfun "$VARP"
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s"
 printf 'toy_sum_\ntoy_set_\ntoy_box_ data\ntoy_arr_ data\n' > "$T/toy.exp"
-"$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/toy.exp" -o "$T/libtoy.1" \
+"$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/libtoy.1" \
 	"$T/tdata.o" "$T/tfun.o" "$T/ss.o" > /dev/null
 
 echo "=== the library's export table"
@@ -107,7 +107,7 @@ cc tro 800000020808					# +VREADONLY
 echo "=== a readonly table, exported out of the shared segment"
 printf 'toy_sum_\ntoy_set_\ntoy_box_ data\ntoy_arr_ data\ntoy_ro_ shrd\n' \
 	> "$T/ro.exp"
-if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/ro.exp" -o "$T/libro.1" \
+if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/libro.1" \
 		"$T/tdata.o" "$T/tfun.o" "$T/tro.o" "$T/ss.o" \
 		> "$T/err" 2>&1; then
 	python3 "$H/tests/shlib-data-check.py" shrd "$T/libro.1" || fail=1
@@ -115,20 +115,6 @@ else
 	sed -n 1p "$T/err"
 	bad "slgen refused a readonly export"
 fi
-# Listing that table as `data' is refused: the kind is checked.
-
-printf 'toy_sum_\ntoy_set_\ntoy_box_ data\ntoy_arr_ data\ntoy_ro_ data\n' \
-	> "$T/rob.exp"
-if "$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/rob.exp" -o "$T/librob.1" \
-		"$T/tdata.o" "$T/tfun.o" "$T/tro.o" "$T/ss.o" \
-		> "$T/err" 2>&1; then
-	bad "slgen accepted a shared table called private"
-else
-	grep -q 'the list calls it' "$T/err" \
-		&& ok "$(sed -n 1p "$T/err")" \
-		|| bad "slgen refused, but not for the reason expected"
-fi
-
 # --------------------------------------- the indirection does not change value
 N2="${N2:-$(sh "$H/host/runner.sh" 2>/dev/null)}"
 echo "=== the same program, both ways, linked statically and run"

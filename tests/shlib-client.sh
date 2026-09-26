@@ -20,7 +20,7 @@ cc() {		# cc <name>: .c -> .o through the three passes
 
 # ---------------------------------------------------------------- the library
 cat > "$T/toy.c" <<'EOF'
-int toy_count;
+int __toy_count;
 
 int toy_add(a, b) int a, b;
 {
@@ -29,8 +29,8 @@ int toy_add(a, b) int a, b;
 
 int toy_bump(k) int k;
 {
-	toy_count = toy_add(toy_count, k);
-	return toy_count;
+	__toy_count = toy_add(__toy_count, k);
+	return __toy_count;
 }
 
 char *toy_name()
@@ -41,9 +41,9 @@ EOF
 cc toy
 printf '\t.globl\tSS\nSS = 0\n' > "$T/ss.s"; "$AS" -o "$T/ss.o" "$T/ss.s"
 # toy_name_ is exported and never referenced by any client below: nothing may
-# be bound for it.  toy_count_ is NOT exported, and case 5 asks for it.
+# be bound for it.  __toy_count is the library's own, and case 5 asks for it.
 printf 'toy_add_\ntoy_bump_\ntoy_name_\n' > "$T/toy.exp"
-"$SLGEN" -A "$AS" -L "$LD" -T "$T" -e "$T/toy.exp" -o "$T/libtoy.1" \
+"$SLGEN" -A "$AS" -L "$LD" -T "$T" -o "$T/libtoy.1" \
 	"$T/toy.o" "$T/ss.o" > /dev/null
 
 # ----------------------------------------------------------------- the client
@@ -157,8 +157,8 @@ else
 fi
 
 cat > "$T/cli3.c" <<'EOF'
-extern int toy_count;
-main() { toy_count = 3; return toy_count; }
+extern int __toy_count;
+main() { __toy_count = 3; return __toy_count; }
 EOF
 cc cli3
 if "$LD" -o "$T/noexp.out" "$T/cli3.o" "$T/ss.o" "$T/libtoy.1" \

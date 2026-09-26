@@ -25,6 +25,7 @@ L_GLOBAL, L_ABS, L_REF = 0o20, 9, 10
 SL_MAGIC, SL_VERSION, SL_HDRLEN, SL_EXPLEN, SL_FIXLEN = 0x534C, 1, 16, 20, 4
 SF_LOC_PRIVATE, SF_REF_PRIVATE = 0x0001, 0x0100
 SL_NOMSHR, SL_NOMPRV = 3, 4
+SE_DATA, SE_SHRD = 1, 2
 LDHLEN, LDSLEN = 48, 22
 
 fails = []
@@ -61,7 +62,7 @@ def main(libname, expname):
     for line in open(expname):
         line = line.split("#")[0].strip()
         if line:
-            want.append(line[:NCPLN].encode().ljust(NCPLN, b"\0"))
+            want.append(line.split()[0][:NCPLN].encode().ljust(NCPLN, b"\0"))
     want.sort()
 
     print("%s:" % libname)
@@ -113,8 +114,12 @@ def main(libname, expname):
         got.append(name)
         if not (0 <= eoff < shrlen):
             ok_off = False
+        # A function lives in the shared text, a readonly table in the
+        # shared data, an object in the private data or bss.
+        seg = {0: (L_SHRI,), SE_DATA: (L_PRVD, L_BSSD),
+               SE_DATA | SE_SHRD: (L_SHRD,)}.get(bew(b, e + 16), ())
         t = syms.get(name)
-        if t is None or t[0] != (L_GLOBAL | L_SHRI) or (t[1] & 0xFFFF) != eoff:
+        if t is None or (t[0] & ~L_GLOBAL) not in seg or (t[1] & 0xFFFF) != eoff:
             ok_sym = False
     check(nexp == len(want), "%d exports, as the list names" % len(want))
     check(got == want, "the exports are the listed names, sorted by name")
