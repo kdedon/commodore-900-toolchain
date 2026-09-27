@@ -122,6 +122,9 @@ $(B)/slgen: src/slgen/slgen.c
 #
 # tests/calr.sh: only a callee already emitted, same segment and in reach, gets
 # a PC-relative call.
+#
+# tests/relax.sh: ld shortens data operands below offset 256 and CALLs in reach,
+# and everything across the cuts still lands.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
@@ -149,6 +152,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/immstore.sh
 	sh tests/calr.sh
 	sh tests/switch.sh
+	sh tests/relax.sh
 	sh tests/regvar.sh
 	sh tests/volatile.sh
 	sh tests/volmem.sh

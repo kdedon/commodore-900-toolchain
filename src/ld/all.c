@@ -6,5 +6,6 @@
 #include "main.c"
 #include "pass1.c"
 #include "pass2.c"
+#include "relax.c"
 #include "shlib.c"
 #include "message.c"

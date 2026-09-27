@@ -73,6 +73,10 @@ typedef	long		SIGNEDADDRESS;		/* the within-segment offset at emit	*/
 #define	L_PRVD	4		/* private data segment			*/
 #define	L_BSSD	5		/* private bss (uninitialized data)	*/
 
+/* Relocation kinds ld may relax (the object is marked LF_RELAX). */
+#define	LR_SHORT	0200	/* long address operand ld may shorten	*/
+#define	LR_CALL		0240	/* CALL, on its opcode word		*/
+
 /*
  * Externals.
  */

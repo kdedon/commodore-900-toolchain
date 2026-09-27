@@ -31,6 +31,10 @@ mod_t	*mp;
 	FILE	*ifp, *irfp, *ofp, *orfp;
 	static	FILE	*inputf[NLSEG];
 	static	char	*fname = NULL;
+	int	rlx, kind;
+	unsigned int	si, callop;
+	uaddr_t	ibase[NXSEG];
+	site_t	*sitep;
 
 	if (mp->fname == NULL) {
 		lfixup2(mp);
@@ -38,6 +42,17 @@ mod_t	*mp;
 	}
 	if (watch)
 		mpmsg(mp, "loading");
+	/*
+	 * A relaxed module's text no longer moves in step with its input, so
+	 * its segment-relative bias comes from the layout, not from vbase.
+	 */
+	rlx = relaxed && mp->relax;
+	si = 0;
+	for (segn=0; segn<NXSEG; segn++)
+		ibase[segn] = mp->seg[segn].vbase;
+	if (relaxed && outputf[L_SHRI]!=NULL)
+		for (; mp->pad!=0; mp->pad--)
+			putbyte(0, outputf[L_SHRI], &oseg[L_SHRI]);
 	for (segn=0; segn<NLSEG; segn++) {
 		if (segn!=L_REL&&outputf[segn]==NULL)
 			continue;
@@ -80,6 +95,36 @@ mod_t	*mp;
 		/* put unrelocated stuff */
 		while (isgp->vbase < addr)
 			putbyte(getbyte(ifp, isgp), ofp, osgp);
+		/*
+		 * Unless relaxing, a branch record needs nothing and an
+		 * LR_SHORT or LR_CALL is an LR_LONG; relocation output keeps
+		 * only the LR_LONG.
+		 */
+		kind = opcode&LR_OP;
+		if (kind == LR_BRANCH) {
+			if ((opcode&LR_SEG) == L_SYM)
+				getsymno(irfp, irsp);
+			if (rlx && segn == L_SHRI)
+				rlxbranch(mp, ibase[L_SHRI], opcode&LR_PCR,
+					ifp, isgp, ofp, osgp);
+			else if (orfp != NULL)
+				orsp->size -= (opcode&LR_SEG) == L_SYM ? 7 : 5;
+			continue;
+		}
+		sitep = NULL;
+		if (kind == LR_SHORT || kind == LR_CALL) {
+			if (rlx && segn == L_SHRI)
+				sitep = rlxsite(mp, addr - ibase[L_SHRI], &si);
+			if (kind == LR_CALL) {
+				if (sitep != NULL)
+					callop = getword(ifp, isgp);
+				else {
+					putbyte(getbyte(ifp, isgp), ofp, osgp);
+					putbyte(getbyte(ifp, isgp), ofp, osgp);
+				}
+			}
+			opcode = opcode&~LR_OP | LR_LONG;
+		}
 		bias = 0;
 		symadd = 0;
 		dimp = 0;
@@ -117,8 +162,13 @@ mod_t	*mp;
 		case L_SHRD:
 		case L_PRVD:
 		case L_BSSD:
-			bias	= oseg[relseg].vbase
-				- mp->seg[relseg].vbase;
+			if (rlx)
+				bias = rbase[relseg] - ibase[relseg]
+				     + (relseg==L_SHRI ? mp->noff
+						       : mp->ooff[relseg]);
+			else
+				bias	= oseg[relseg].vbase
+					- mp->seg[relseg].vbase;
 		case L_ABS:
 			if (orfp!=NULL) {
 				putbyte(opcode, orfp, orsp);
@@ -151,11 +201,16 @@ mod_t	*mp;
 			putbyte((int)bias, ofp, osgp);
 			break;
 		case LR_WORD:
-			bias += getword(ifp, isgp);
+			field = getword(ifp, isgp);
+			if (rlx && relseg == L_SHRI)
+				bias -= cutat(mp, (field-ibase[L_SHRI])&0xFFFFL);
+			bias += field;
 			putword((short)bias, ofp, osgp);
 			break;
 		case LR_LONG:
 			field = vtop(getlong(ifp, isgp));
+			if (rlx && relseg == L_SHRI)
+				bias -= cutat(mp, (field-ibase[L_SHRI])&0xFFFFL);
 			/*
 			 * A SEGMENTED long operand relocated against a SYMBOL
 			 * carries no address of its own: the field is the
@@ -212,7 +267,10 @@ mod_t	*mp;
 				sldslot(sp, ptov(osgp->vbase));
 				bias = field & 0xFFFFL;
 			}
-			putlong((long)ptov(bias), ofp, osgp);
+			if (sitep != NULL)
+				rlxput(mp, sitep, callop, bias, ofp, osgp);
+			else
+				putlong((long)ptov(bias), ofp, osgp);
 			break;
 		}
 	}

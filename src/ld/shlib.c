@@ -460,6 +460,22 @@ slalloc()
 }
 
 /*
+ * Move the stubs down by the text relaxation cut.
+ */
+void
+slshift(d)
+uaddr_t	d;
+{
+	sllib_t	*lp;
+	slimp_t	*ip;
+
+	for (lp = slhead; lp != NULL; lp = lp->next)
+		for (ip = lp->imp; ip != NULL; ip = ip->next)
+			if (!ip->data)
+				ip->stub -= d;
+}
+
+/*
  * Offsets to virtual addresses, before pass 2 advances oseg[].vbase.
  */
 void

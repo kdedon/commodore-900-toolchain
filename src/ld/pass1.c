@@ -216,6 +216,12 @@ char	*fname, mname[];
 		mp->mname[i] = mname[0] ? mname[i] : 0;
 	for (i=0; i<NLSEG; i++)
 		mp->seg[i].size = ldh.l_ssize[i];
+	mp->relax = (ldh.l_flag & LF_RELAX) != 0;
+	for (i=0; i<NXSEG; i++)
+		mp->ooff[i] = oseg[i].size;
+	mp->noff = mp->pad = 0;
+	mp->site = NULL;
+	mp->nsite = 0;
 	baseall(mp->seg, &ldh);
 	segoffs(mp->seg, offs);
 	mp->nsym = nsym;

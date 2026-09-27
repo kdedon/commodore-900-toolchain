@@ -24,6 +24,7 @@
  *
  *	off 0	short l_magic	 0407
  *	off 2	short l_flag	 LF_SHR 01 / LF_SEP 02 / LF_NRB 04 / LF_32 020
+ *				 / LF_RELAX 01000
  *	off 4	short l_machine	 M_Z8001 4 (include/mtype.h)
  *	off 6	short l_tbase	 sizeof(struct ldheader), 48
  *	off 8	long l_ssize[9]
@@ -139,13 +140,13 @@ flagstr(f, buf)
 int f;
 char *buf;
 {
-	static int bits[] = { 01, 02, 04, 010, 020 };
-	static char *names[] = { "shr", "sep", "nrb", "ker", "32" };
+	static int bits[] = { 01, 02, 04, 010, 020, 01000 };
+	static char *names[] = { "shr", "sep", "nrb", "ker", "32", "relax" };
 	int i, first;
 
 	buf[0] = '\0';
 	first = 1;
-	for (i = 0; i < 5; i++) {
+	for (i = 0; i < 6; i++) {
 		if ((f & bits[i]) == 0)
 			continue;
 		if (!first)

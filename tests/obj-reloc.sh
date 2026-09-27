@@ -134,7 +134,7 @@ while p + 5 <= end:
 	sym = op & 0o17 == 7
 	if sym:
 		p += 2
-	if sym and op & 0o340 == 0o100:		# LR_LONG against a symbol
+	if sym and op & 0o340 in (0o100, 0o200):	# LR_LONG/LR_SHORT on a symbol
 		sites.append(addr)
 resolved = []
 base = None

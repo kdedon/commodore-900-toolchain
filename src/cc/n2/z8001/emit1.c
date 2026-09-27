@@ -54,6 +54,7 @@ register AFIELD	*afp;
 		outw(0x8000);			/* DA, segment-present; offset patched at outdone */
 		outw(0);
 		outfix(afp->a_sp, (long)afp->a_value);
+		outfixr(LR_SHORT);
 		return;
 	}
 	off = afp->a_value;
@@ -245,6 +246,7 @@ register INS	*ip;
 			d = ((long)dot + 2 - (long)t->a_sp->s_value) >> 1;
 			if (d >= -2048 && d <= 2047) {
 				outw(0xD000 | ((int)d & 07777));
+				outbranch(outhere() - 2, 0);
 				return;
 			}
 		}
@@ -252,6 +254,7 @@ register INS	*ip;
 		outw(0x8000);
 		outw(0);
 		outfix(t->a_sp, 0L);		/* patch the offset word to the callee */
+		outfixr(LR_CALL);
 		return;
 	}
 	if ((t->a_mode&A_AMOD) == A_WR || (t->a_mode&A_AMOD) == A_BR) {
@@ -323,6 +326,8 @@ register INS	*ip;
 	sty = opp->op_style;
 
 	/* data pseudo-ops: lay down initialized data rather than an instruction. */
+	if ((sty == OF_BYTE_ || sty == OF_WORD) && dotseg == SCODE)
+		outnorelax();
 	if (sty == OF_BYTE_) { outab((int)(ip->i_af[0].a_value & 0xFF)); return; }
 	if (sty == OF_WORD)  { outw((unsigned short)ip->i_af[0].a_value); return; }
 	if (sty == OF_LPTR || sty == OF_GPTR) {	/* far pointer datum: segment 0 : offset */
@@ -718,6 +723,7 @@ genfunc()
 		else {
 			disp = (tgt - (brv[i].pc + 2)) / 2;	/* signed 8-bit word displacement */
 			outpatchb(brv[i].pc + 1, disp);
+			outbranch(brv[i].pc, 0);
 		}
 	}
 	for (i = 0; i < nrel; ++i) {
@@ -730,6 +736,10 @@ genfunc()
 		if (tgt < 0)
 			cbotch("genfunc: unresolved switch label");
 		outpatchw(relv[i].at, (int)(tgt - relv[i].origin));
+		if (relv[i].origin == relv[i].at)
+			outbranch(relv[i].at, 1);	/* table word */
+		else
+			outbranch(relv[i].at - 2, 0);	/* LDAR */
 	}
 }
 

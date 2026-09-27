@@ -2,7 +2,8 @@
 # calr.sh -- calls to an already-emitted function in range use CALR.
 #
 # CALR is one word to CALL's three and reaches +-4 KB.  Backward and recursive
-# calls go relative; forward, extern and out-of-range calls stay CALL.
+# calls go relative; forward, extern and out-of-range calls stay CALL in the
+# object, and ld relaxes those in reach (relax.sh).
 
 set -e
 H="$(cd "$(dirname "$0")/.." && pwd)"

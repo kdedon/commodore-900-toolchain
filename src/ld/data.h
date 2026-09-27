@@ -57,11 +57,30 @@ typedef	struct	sym_t	{	/* symbol descriptor */
 	unsigned int	symno;	/* pass 2; symbol number */
 } sym_t;			/* above 2 items could be united */
 
+typedef	struct	site_t	{	/* an LR_SHORT or LR_CALL operand in text */
+	uaddr_t	off;		/* record address, module text relative */
+	uaddr_t	field;		/* the long address as read */
+	struct	sym_t	*sp;	/* target symbol, or NULL */
+	struct	mod_t	*tm;	/* module holding a text target */
+	uaddr_t	toff;		/* the target's offset in tm's text */
+	uaddr_t	cut;		/* bytes cut from the text before it */
+	short	kind;		/* LR_SHORT or LR_CALL */
+	char	seg;		/* target segment when sp is NULL */
+	char	form;		/* RF_LONG, RF_SHORT or RF_CALR */
+	char	nogo;		/* forms that stopped fitting */
+} site_t;
+
 typedef	struct	mod_t	{	/* descriptor for each input module */
 	struct	mod_t	*next;	/* chained together */
 	char	*fname;		/* file containing module */
 	char	mname[DIRSIZ];	/* module name if in archive */
 	seg_t	seg[NLSEG];	/* descriptor for each segment */
+	int	relax;		/* LF_RELAX */
+	uaddr_t	ooff[NXSEG];	/* pass 1 offset in each output segment */
+	uaddr_t	noff;		/* SHRI offset once relaxed */
+	uaddr_t	pad;		/* zeros before its SHRI once relaxed */
+	site_t	*site;		/* in address order */
+	unsigned int	nsite;
 	unsigned int	nsym;	/* #symbols for this module */
 	sym_t	*sym[];		/* array of nsym symbol ptrs */
 } mod_t;
@@ -182,6 +201,9 @@ char	*outbuf;		/* buffer for in-memory load */
 uaddr_t	prvbase;		/* -P: base of the private half */
 flag_t	prvset;			/* -P was given */
 FILE	*outputf[NLSEG];	/* output ptrs (for each segment) */
+uaddr_t	rlxmods;		/* SHRI the modules fill, before stubs */
+uaddr_t	rbase[NXSEG];		/* segment bases once relaxed */
+int	relaxed;		/* pass 2 follows a relaxed layout */
 
 /* seconds between ranlib update and archive modify times */
 #define	SLOPTIME 150
@@ -214,6 +236,9 @@ unsigned short	getword(), getlohi(), gethilo();
 unsigned long getlong(), getaddr();
 int	rdfile(), slread(), slfixread();
 void	slalloc(), slbind(), slsyms(), slemit(), slsearch(), sldslot();
-void	sldivert(), slrelout();
+void	sldivert(), slrelout(), slshift();
+void	relax(), rlxput(), rlxbranch();
+uaddr_t	cutat();
+site_t	*rlxsite();
 void	message(), fatal(), usage(), filemsg(), modmsg(), mpmsg(), spmsg();
 void	filerr(), moderr(), mperr(), sperr();

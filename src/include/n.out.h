@@ -71,6 +71,7 @@ struct	ldheader {
 #define	LF_SLIB	0100		/* Is the shared library	*/
 #define LF_DEBUG 0200		/* Include debug segment flag to linker */
 #define LF_FAKE	0400		/* Header is displaced to end of exe or prg */
+#define	LF_RELAX 01000		/* Every text branch has a relocation */
 
 /*
  * A fixed-address client names the slots it references, one bit each, beside
@@ -146,6 +147,17 @@ struct nlist	{
 #define LR_WORD		(1<<5)		/* Rel. a word		*/
 #define	LR_LONG		(2<<5)		/* Rel. a long		*/
 #define LR_HIWORD	(3<<5)		/* Rel. via hiword of long */
+
+/*
+ * An LF_RELAX module's text may shrink at link time.  LR_SHORT is a long
+ * segmented address operand ld may make short (seg:off<256 in one word);
+ * LR_CALL, placed on the opcode, a CALL it may also make CALR; LR_BRANCH, a
+ * JR, CALR, DJNZ or LDAR inside the module, whose displacement ld re-aims, or
+ * with LR_PCR a word holding its target less its own address.
+ */
+#define	LR_SHORT	(4<<5)		/* Long address, may shorten */
+#define	LR_CALL		(5<<5)		/* CALL addr, may shorten */
+#define	LR_BRANCH	(6<<5)		/* Branch within the module */
 #endif
 
 /* end of n.out.h */

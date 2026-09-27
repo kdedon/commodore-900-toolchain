@@ -41,6 +41,7 @@ char	*argv[];
 	 * Give each import a stub at the end of shared text and a slot at the
 	 * end of private data, before sizes become addresses.
 	 */
+	rlxmods = oseg[L_SHRI].size;
 	slalloc();
 	commfit();		/* every definition holds its common */
 	/*
@@ -86,6 +87,8 @@ char	*argv[];
 	}
 	baseall(oseg, &oldh);
 	slbind();		/* stub and slot offsets become addresses */
+	if (segoff && !reloc && !nundef)
+		relax();
 
 	/*
 	 * Give each common its final BSSD-relative offset, padding one that

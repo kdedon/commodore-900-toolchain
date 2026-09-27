@@ -32,7 +32,7 @@
  * textSize + its data offset + addend + L_SHRD/L_PRVD; an undefined external -> addend + a
  * symbol-based relocation.*/
 #define	NFIX	4096		/* growth ceiling: keeps the array within one 64K segment */
-struct ofix { short seg; long off; SYM *sp; long addend; };
+struct ofix { short seg; short width; long off; SYM *sp; long addend; };
 static struct ofix	*fixv;
 static int		nfix, fixcap;
 
@@ -57,6 +57,19 @@ struct osym { SYM *sp; short typ; unsigned long addr; };
 #define	NJFIX	4096		/* growth ceiling */
 static struct jfix { long off; }	*jfixv;
 static int		njfix, jfixcap;
+
+/* Every text-relative distance, so ld can re-aim it when it shortens the text
+ * between (LR_BRANCH): the JR, CALR or LDAR at an offset, or with LR_PCR a switch
+ * table word holding its target less its own address.  Kept as offset*2 + that
+ * bit.  Data words in the text could hold a distance ld cannot see, so any clears
+ * LF_RELAX. */
+#define	LR_BRANCH	0300
+#define	LR_PCR		020
+#define	LF_RELAX	01000
+#define	NBFIX	8192		/* growth ceiling */
+static long		*bfixv;
+static int		nbfix, bfixcap;
+static int		norelax;
 
 /* the non-code segments, in data-image order:
  *	SPURE SSTRN	-> SHRD (read-only, shared under -n)
@@ -83,6 +96,8 @@ outinit()
 	nfix = 0;
 	njfix = 0;
 	nsfix = 0;
+	nbfix = 0;
+	norelax = 0;
 }
 
 outseg(s)
@@ -140,10 +155,42 @@ long	addend;
 			cfatal("outcoh: out of memory");
 	}
 	fixv[nfix].seg = dotseg;
+	fixv[nfix].width = LR_LONG;
 	fixv[nfix].off = olen[dotseg] - 2;	/* the word just written */
 	fixv[nfix].sp = sp;
 	fixv[nfix].addend = addend;
 	++nfix;
+}
+
+/* Let ld relax the text fixup just recorded: LR_SHORT or LR_CALL. */
+outfixr(width)
+{
+	fixv[nfix-1].width = width;
+}
+
+/* Record the branch at text offset `off'; `self' marks a table word.  Past the
+ * ceiling the object is simply not relaxable. */
+outbranch(off, self)
+long	off;
+{
+	if (nbfix >= bfixcap) {
+		if (nbfix >= NBFIX) {
+			norelax = 1;
+			return;
+		}
+		bfixcap = (bfixcap == 0) ? 256 : bfixcap*2;
+		bfixv = (long *)(bfixv == NULL
+			? malloc((unsigned)(bfixcap*sizeof(long)))
+			: realloc((char *)bfixv, (unsigned)(bfixcap*sizeof(long))));
+		if (bfixv == NULL)
+			cfatal("outcoh: out of memory");
+	}
+	bfixv[nbfix++] = off*2 + (self != 0);
+}
+
+outnorelax()
+{
+	norelax = 1;
 }
 
 /*
@@ -198,6 +245,8 @@ long	off;
 	 * order, so everything at or past the rewind point belongs to it. */
 	while (nsfix > 0 && sfixv[nsfix-1] >= off)
 		--nsfix;
+	while (nbfix > 0 && bfixv[nbfix-1]/2 >= off)
+		--nbfix;
 }
 
 /* Record that the word at text offset `off' holds an absolute intra-function code address (a
@@ -359,7 +408,7 @@ outdone()
 				++nsymcap;
 	nsymcap += nfix + 1;			/* + SS, if any frame address needs it */
 	syms = (struct osym *)malloc((unsigned)(nsymcap*sizeof(struct osym)));
-	recs = (struct relrec *)malloc((unsigned)((nfix+njfix+nsfix+1)*sizeof(struct relrec)));
+	recs = (struct relrec *)malloc((unsigned)((nfix+njfix+nsfix+nbfix+1)*sizeof(struct relrec)));
 	if (syms == NULL || recs == NULL)
 		cfatal("outcoh: out of memory");
 
@@ -442,8 +491,8 @@ outdone()
 		 * word (loc-2).  patchaddr() fills the offset word, and the segment word too
 		 * when the value is negative; ld reads the full long, adds the target
 		 * segment's base, and re-derives the segment. */
-		recs[nr].addr = loc - 2;
-		recs[nr].width = LR_LONG;
+		recs[nr].addr = loc - (fixv[i].width == LR_CALL ? 4 : 2);
+		recs[nr].width = fixv[i].width;
 		if ((fs->s_flag&S_DEF) != 0 && fs->s_seg == SCODE) {
 			val = fs->s_value + fixv[i].addend;	/* defined function (text) */
 			recs[nr].sym = 0; recs[nr].code = L_SHRI;
@@ -481,6 +530,12 @@ outdone()
 		recs[nr].width = LR_BYTE;
 		++nr;
 	}
+	for (i = 0; i < nbfix; ++i) {
+		recs[nr].addr = bfixv[i] / 2;
+		recs[nr].sym = 0; recs[nr].code = L_SHRI | (bfixv[i]&1 ? LR_PCR : 0);
+		recs[nr].width = LR_BRANCH;
+		++nr;
+	}
 	/* ascending address order (ld streams relocations forward per segment) */
 	for (i = 0; i < nr; ++i)
 		for (j = i+1; j < nr; ++j)
@@ -495,7 +550,7 @@ outdone()
 		relsize += recs[i].sym ? 7 : 5;
 
 	/* header (48 bytes): magic, flag LF_32, machine z8001, tbase, 9 section sizes, entry */
-	leput(0407); leput(0x10); leput(4); leput(48);
+	leput(0407); leput(norelax ? 0x10 : 0x10|LF_RELAX); leput(4); leput(48);
 	canput((unsigned long)textsize);	/* ss[0] SHRI */
 	canput(0L); canput(0L);			/* ss[1..2] PRVI BSSI */
 	canput((unsigned long)shrdsize);	/* ss[3] SHRD (strings, readonly data) */
