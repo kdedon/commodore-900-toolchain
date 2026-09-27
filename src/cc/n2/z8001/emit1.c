@@ -367,8 +367,13 @@ register INS	*ip;
 				outw((ip->i_op==ZPUSHL ? 0x91F0 : 0x93F0) | sn);
 				return;
 			}
-			if (sam == A_IR && ip->i_op == ZPUSHL) {	/* PUSHL @R15,@Rs (far pointer from memory) */
-				outw(0x11F0 | sn);
+			if (sam == A_IR && s->a_value == 0) {		/* PUSH/PUSHL @R15,@Rs */
+				outw((ip->i_op==ZPUSHL ? 0x11F0 : 0x13F0) | sn);
+				return;
+			}
+			if (sam == A_X || sam == A_DIR) {		/* PUSH/PUSHL @R15,addr(Rs) */
+				outw((ip->i_op==ZPUSHL ? 0x51F0 : 0x53F0) | (sam == A_X ? sn : 0));
+				emitaddr(s);
 				return;
 			}
 			if (sam == A_IMM && ip->i_op == ZPUSH) {	/* PUSH @R15,#imm16 */

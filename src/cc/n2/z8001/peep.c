@@ -793,10 +793,14 @@ register INS	*cp;
  * before both are overwritten?  Linear forward scan: end-of-function or a RET ends the path
  * (the epilogue's RET is emitted outside the list, so falling off the end is a return);
  * a CALL clobbers the caller-saved pairs (d<6) unless it reads @RRd; a label/jump/block-move
- * is an unanalyzable boundary (conservatively NOT dead).
+ * is an unanalyzable boundary (conservatively NOT dead).  With pair 0 only the word Rd
+ * is asked about; d must then be even, since a pair operand is seen by its even half.
  */
+#define	pairdead(p, d)	regdead(p, d, 1)
+#define	worddead(p, d)	regdead(p, d, 0)
+
 static
-pairdead(p, d)
+regdead(p, d, pair)
 register INS	*p;
 {
 	register int	opj, i, nr, w, needlow, needhigh;
@@ -804,8 +808,11 @@ register INS	*p;
 	register int	op;
 	int		regs[2];
 
-	needlow = needhigh = 1;
+	needlow = 1;
+	needhigh = pair;
 	for (; p != &ins; p = p->i_fp) {
+		if (p->i_type == EPILOG)
+			return (d > 3);			/* R0..R3 may carry the return value */
 		if (p->i_type != CODE)
 			return (0);			/* label/jump boundary */
 		op = p->i_op;
@@ -817,8 +824,8 @@ register INS	*p;
 				return (1);		/* caller-saved: clobbered by the call */
 			continue;			/* callee-saved: preserved across */
 		}
-		if (barrierop(op) || quadhit(op, d))
-			return (0);			/* block move: opaque pointer use */
+		if (barrierop(op) || quadhit(op, d) || op == ZJP)
+			return (0);			/* block move, or a switch dispatch */
 		w = isbyteop(op);
 		for (opj = 0; opj < p->i_naddr; ++opj) {
 			o = &p->i_af[opj];
@@ -1096,40 +1103,68 @@ callreloc()
 }
 
 /*
- * Push-from-memory fold: `LDL RRd,@Rs ; PUSHL RRd' (load a far pointer through Rs, then push
- * it as a call argument) -> `PUSHL @Rs' in one word, when RRd is dead after the push (it was
- * only the deref scratch).  Rs must be an even, non-zero pair base (R0 cannot be an @RRn base).
+ * Can `PUSH' (lng 0) or `PUSHL' (lng 1) take the load's source s directly?  PUSH takes
+ * R, IM, IR, DA and X; PUSHL all but IM.  Nothing may name the stack pair, which the push
+ * moves before it reads its source, nor R13 as a value, which the frame rebase rewrites.
+ * An @RRn base and an X index cannot be R0.  An immediate LDK already loads in one word.
+ */
+static
+pushsrc(s, lng)
+register AFIELD	*s;
+{
+	register int	r;
+
+	r = s->a_mode & A_REGM;
+	switch (s->a_mode & A_AMOD) {
+	case A_WR:
+		return (lng ? (r & 1) == 0 && r != 12 && r != 14 : r < 13);
+	case A_IR:
+		return (s->a_value == 0 && s->a_sp == NULL && (r & 1) == 0 && r != 0 && r != 14);
+	case A_X:
+		return (r != 0 && r != 14 && r != 15);
+	case A_DIR:
+		return (1);
+	case A_IMM:
+		return (!lng && (s->a_sp != NULL || s->a_value < 0 || s->a_value > 15));
+	}
+	return (0);
+}
+
+/*
+ * Push fold: `LD Rd,src ; PUSH Rd' -> `PUSH src', and the same for LDL/PUSHL, when Rd is
+ * dead after the push.  One word shorter.
  */
 static
 pushfold()
 {
 	register INS	*ip, *nx;
-	register AFIELD	*d, *s;
-	int		sreg, dreg;
+	register AFIELD	*d;
+	int		dreg, lng;
 
 	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
-		if (ip->i_type != CODE || ip->i_op != ZLDL || ip->i_naddr != 2)
+		if (ip->i_type != CODE || ip->i_naddr != 2)
+			continue;
+		if (ip->i_op == ZLD)
+			lng = 0;
+		else if (ip->i_op == ZLDL)
+			lng = 1;
+		else
 			continue;
 		d = &ip->i_af[0];
-		s = &ip->i_af[1];
-		if ((d->a_mode&A_AMOD) != A_WR)
-			continue;
-		if ((s->a_mode&A_AMOD) != A_IR || s->a_value != 0 || s->a_sp != NULL)
-			continue;
-		sreg = s->a_mode & A_REGM;
-		if (sreg < 2 || sreg >= 15 || (sreg & 1))
+		if ((d->a_mode&A_AMOD) != A_WR || !pushsrc(&ip->i_af[1], lng))
 			continue;
 		dreg = d->a_mode & A_REGM;
+		if (dreg & 1)
+			continue;
 		nx = ip->i_fp;
-		if (nx == &ins || nx->i_type != CODE || nx->i_op != ZPUSHL || nx->i_naddr != 1)
+		if (nx == &ins || nx->i_type != CODE || nx->i_naddr != 1
+		 || nx->i_op != (lng ? ZPUSHL : ZPUSH))
 			continue;
 		if (nx->i_af[0].a_mode != (A_WR|dreg))
 			continue;
-		if (!pairdead(nx->i_fp, dreg))
+		if (!regdead(nx->i_fp, dreg, lng))
 			continue;
-		nx->i_af[0].a_mode = A_IR | sreg;	/* PUSHL RRd -> PUSHL @Rs */
-		nx->i_af[0].a_value = 0;
-		nx->i_af[0].a_sp = NULL;
+		nx->i_af[0] = ip->i_af[1];
 		ip = deleteins(ip, nx);			/* drop the load; resume at its predecessor */
 		++changes;
 	}
@@ -1276,6 +1311,170 @@ selfmove()
 }
 
 /*
+ * `EXTSB Rn' writes only RHn.  Delete it when the next instruction clears RHn without
+ * reading it: `AND Rn,#k' with k < 0x100, or `CLRB RHn'.  EXTSB sets no flags.
+ */
+static
+extsbdead()
+{
+	register INS	*ip, *nx;
+	register AFIELD	*o;
+	register int	r;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_op != ZEXTSB || ip->i_naddr != 1)
+			continue;
+		r = ip->i_af[0].a_mode & A_REGM;
+		nx = ip->i_fp;
+		if (nx == &ins || nx->i_type != CODE)
+			continue;
+		o = &nx->i_af[0];
+		if (nx->i_op == ZAND && nx->i_naddr == 2) {
+			if (o->a_mode != (A_WR|r)
+			 || (nx->i_af[1].a_mode&A_AMOD) != A_IMM || nx->i_af[1].a_sp != NULL
+			 || (nx->i_af[1].a_value & 0xFF00) != 0)
+				continue;
+		} else if (nx->i_op == ZCLRB && nx->i_naddr == 1) {
+			if (o->a_mode != (A_BR|r))	/* RHn is byte register n */
+				continue;
+		} else
+			continue;
+		ip = deleteins(ip, nx);
+		++changes;
+	}
+}
+
+/*
+ * `LD Rd,M ; INC Rd,#n ; LD M,Rd' -> `INC M,#n' (and DEC, and the byte forms) when Rd is
+ * dead after the store.  INC and DEC are the only arithmetic with a memory destination.
+ * Same flags.  M is DA, X, or @RRn with no displacement, and names no part of Rd.
+ */
+static
+incmem()
+{
+	register INS	*ip, *nx, *st;
+	register AFIELD	*m;
+	int		op, r, w, regs[2], nr, i;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_naddr != 2)
+			continue;
+		op = ip->i_op;
+		if (op != ZLD && op != ZLDB)
+			continue;
+		if ((ip->i_af[0].a_mode&A_AMOD) != (op == ZLD ? A_WR : A_BR))
+			continue;
+		r = ip->i_af[0].a_mode & A_REGM;
+		w = (op == ZLD) ? r : (r & 7);
+		if (w & 1)
+			continue;
+		m = &ip->i_af[1];
+		if ((m->a_mode & A_VOL) != 0)
+			continue;
+		switch (m->a_mode & A_AMOD) {
+		case A_DIR:
+			break;
+		case A_IR:
+			if (m->a_value != 0)
+				continue;
+			/* fall through */
+		case A_X:
+			nr = opregs(m, 0, regs);
+			for (i = 0; i < nr; ++i)
+				if (regs[i] == w)
+					break;
+			if (i < nr)
+				continue;
+			break;
+		default:
+			continue;
+		}
+		nx = ip->i_fp;
+		if (nx == &ins || nx->i_type != CODE || nx->i_naddr != 2)
+			continue;
+		if (op == ZLD ? nx->i_op != ZINC && nx->i_op != ZDEC
+			      : nx->i_op != ZINCB && nx->i_op != ZDECB)
+			continue;
+		if (nx->i_af[0].a_mode != ip->i_af[0].a_mode)
+			continue;
+		st = nx->i_fp;
+		if (st == &ins || st->i_type != CODE || st->i_op != op || st->i_naddr != 2)
+			continue;
+		if (st->i_af[1].a_mode != ip->i_af[0].a_mode || !sameaddr(&st->i_af[0], m)
+		 || (st->i_af[0].a_mode & A_VOL) != 0)
+			continue;
+		if (!worddead(st->i_fp, w))
+			continue;
+		nx->i_af[0] = *m;
+		deleteins(st, nx);
+		ip = deleteins(ip, nx);
+		++changes;
+	}
+}
+
+/* the n of an argument pop `INC R15,#n' or `ADD R15,#n', else 0. */
+static
+sppop(ip)
+register INS	*ip;
+{
+	if (ip->i_type != CODE || (ip->i_op != ZINC && ip->i_op != ZADD) || ip->i_naddr != 2
+	 || ip->i_af[0].a_mode != (A_WR|15)
+	 || (ip->i_af[1].a_mode&A_AMOD) != A_IMM || ip->i_af[1].a_sp != NULL
+	 || ip->i_af[1].a_value <= 0)
+		return (0);
+	return ((int)ip->i_af[1].a_value);
+}
+
+/*
+ * Defer an argument pop to the next pop in the same block:
+ *	INC R15,#a ; <pushes, calls, code> ; INC R15,#b  ->  <...> ; INC R15,#a+b
+ * The later arguments are pushed below the stale ones, which nothing reads; the stack
+ * is only deeper for a while.  The later pop must take exactly what was pushed since,
+ * or it would take a pending outer call's argument instead.  Stops at anything that
+ * names the stack pair or pops.  Only an INC waits, so at most 16 bytes, and an INC
+ * stays an INC, since an ADD also sets carry.
+ */
+static
+popmerge()
+{
+	register INS	*ip, *p;
+	register int	i, nr;
+	int		regs[2], opj, stop, a, b, pushed;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if ((a = sppop(ip)) == 0 || ip->i_op != ZINC)
+			continue;
+		pushed = 0;
+		for (p = ip->i_fp; p != &ins && p->i_type == CODE; p = p->i_fp) {
+			if (sppop(p))
+				break;
+			if (p->i_op == ZPOP || p->i_op == ZPOPL || p->i_op == ZJP)
+				break;
+			if (p->i_op == ZPUSH)
+				pushed += 2;
+			else if (p->i_op == ZPUSHL)
+				pushed += 4;
+			stop = 0;
+			for (opj = 0; opj < p->i_naddr; ++opj) {
+				nr = opregs(&p->i_af[opj], isbyteop(p->i_op), regs);
+				for (i = 0; i < nr; ++i)
+					if (regs[i] >= 14)
+						stop = 1;
+			}
+			if (stop)
+				break;
+		}
+		if (p == &ins || (b = sppop(p)) == 0 || b != pushed || b > 0x7FEF)
+			continue;
+		if (p->i_op == ZINC && a + b > 16)
+			continue;
+		p->i_af[1].a_value = a + b;
+		ip = deleteins(ip, ip->i_fp);
+		++changes;
+	}
+}
+
+/*
  * Frame far-pointer materialization fix.  cc1 forms a far pointer to a frame object by
  * reading the FP register R13 as a PAIR -- but R13's hardware pair is RR12 = (R12,R13), and
  * R12 is an ordinary scratch, NOT the frame segment.  `LDL RRd,RR12' therefore captures
@@ -1335,4 +1534,7 @@ peephole()
 	copyfwd();
 	pushfold();
 	selfmove();
+	extsbdead();
+	incmem();
+	popmerge();
 }
