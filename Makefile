@@ -148,6 +148,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/foldofs.sh
 	sh tests/immstore.sh
 	sh tests/calr.sh
+	sh tests/switch.sh
 	sh tests/regvar.sh
 	sh tests/volatile.sh
 	sh tests/volmem.sh

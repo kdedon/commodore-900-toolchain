@@ -9,6 +9,7 @@
  *
  *   0xC0..0xC3  data directives (ZBYTE/ZWORD/ZLPTR/ZGPTR) -- these flow through the
  *               normal CODE path (opinfo op_naddr 1, OF_*_ data style drives emit).
+ *   0xC4        ZSWREL, a switch-table word -- becomes an LLLINK node.
  *   0xD0..0xDF  the conditional relative-jump band (ZJREL|cc) -- becomes a JUMP node
  *               whose i_rel carries the 4-bit Z8000 condition code.
  *
@@ -29,11 +30,11 @@
  * shape the donor JUMP node consumes -- so read it as the mode word + label number.
  */
 static INS *
-jumpnode(cc)
+jumpnode(cc, mode)
 {
 	register INS	*ip;
 
-	if (iget() != (A_LID|A_DIR))
+	if (mode != (A_LID|A_DIR))
 		cbotch("jump target");
 	ip = newi(sizeof(INS));
 	ip->i_type = JUMP;
@@ -61,10 +62,28 @@ getcode()
 
 	opcode = bget();
 	if (opcode >= ZJREL && opcode <= (ZJREL|0xF))
-		return (jumpnode(opcode & 0xF));	/* conditional JR cc */
+		return (jumpnode(opcode & 0xF, iget()));	/* conditional JR cc */
+	if (opcode == ZSWREL) {				/* switch-table word */
+		ip = jumpnode(CC_ALWAYS, iget());
+		ip->i_type = LLLINK;
+		return (ip);
+	}
 	opp = &opinfo[opcode];
-	if (opp->op_style == OF_JP)
-		return (jumpnode(CC_ALWAYS));		/* JP -> relaxed relative jump */
+	if (opp->op_style == OF_JP) {
+		i = iget();
+		if (i == (A_LID|A_DIR))
+			return (jumpnode(CC_ALWAYS, i));	/* JP -> relaxed relative jump */
+		ip = newn(1);				/* JP @RRn: a switch dispatch */
+		ip->i_af[0].a_mode = i & (A_AMOD|A_REGM);
+		ip->i_af[0].a_sp = NULL;
+		ip->i_af[0].a_value = 0;
+		ip->i_type = CODE;
+		ip->i_fp = NULL;
+		ip->i_bp = NULL;
+		ip->i_op = opcode;
+		ip->i_naddr = 1;
+		return (ip);
+	}
 	ip = newn(opp->op_naddr);
 	ip->i_type = CODE;
 	ip->i_fp = NULL;

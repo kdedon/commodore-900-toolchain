@@ -257,8 +257,14 @@ static	char	*ccnames[16] = {
 static
 ijump(cc)
 {
-	if (iget() != (A_LID|A_DIR))
-		cbotch("jump target");
+	register int	mode;
+
+	if ((mode = iget()) != (A_LID|A_DIR)) {
+		if ((mode&A_AMOD) != A_IR)
+			cbotch("jump target");
+		fprintf(ofp, "\tjp\t@rr%d\n", mode&A_REGM);
+		return;
+	}
 	fprintf(ofp, "\tjr");
 	if (ccnames[cc][0] != 0)
 		fprintf(ofp, "\t%s,", ccnames[cc]);
@@ -287,6 +293,12 @@ icode()
 	}
 	if (op == ZJP) {
 		ijump(CC_ALWAYS);
+		return;
+	}
+	if (op == ZSWREL) {
+		if (iget() != (A_LID|A_DIR))
+			cbotch("switch-table label");
+		fprintf(ofp, "\t.word\tL" I_FMT "-.\n", iget());
 		return;
 	}
 	if (op < 0 || op >= (int)(sizeof(ins)/sizeof(ins[0]))

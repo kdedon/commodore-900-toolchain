@@ -178,6 +178,9 @@ listing()
 		case LLABEL:
 			printf("L%d:\n", ip->i_labno);
 			break;
+		case LLLINK:
+			printf("\t.word\tL%d-.\n", ip->i_labno);
+			break;
 		case EPILOG:
 			printf("\tepilog\n");
 			break;

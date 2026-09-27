@@ -13,8 +13,8 @@
  *     relation opcode (the optab relation rows hold CC_*);
  *   - gencoll's REG case: any base reg R1..R15 -> indexed mode A_X|reg (the
  *     Z8000 has no fixed BX/BP/SI/DI index registers);
- *   - genswitch is a correct if-chain for all n (the dense jump-table /
- *     table-search optimizations the i8086 used are not carried).
+ *   - genswitch dispatches a dense switch through a table of self-relative
+ *     words, else compares case by case.
  * The emission primitives + prologue/epilogue framing are machine-independent
  * (they write CODE/AUTOS records into the n1->n2 IR; n2 emits real instructions).
  */
@@ -23,6 +23,7 @@
 #else
 #include "cc1.h"
 #endif
+#include "pseudops.h"
 
 /* Machine-dependent allocation state (set up by routines here). Types match the
  * extern declarations in cc1.h (4.2.12 uses ival_t for the auto/temp counters). */
@@ -127,17 +128,66 @@ gencbr(c, n)
 }
 
 /*
- * Switch compilation. Correct for any n via an if-chain: compare the switch
- * value against each case and branch; fall through to the default.  The MI
- * (code.c) evaluates the switch expression into SWREG, so the comparisons MUST
- * use SWREG -- not a hard-wired register.  (The dense jump-table and
- * table-search strategies the i8086 used are not carried.)
+ * Switch compilation.  The MI (code.c) evaluates the switch expression into
+ * SWREG.  A compare chain costs 6 bytes and 13 cycles per case passed.  A table
+ * dispatch costs 18 bytes and 58 cycles, plus 4 bytes and 7 cycles to rebase a
+ * nonzero low case, plus a word per value in the range:
+ *
+ *	SUB	R0,#lo
+ *	CP	R0,#hi-lo
+ *	JR	UGT,default
+ *	ADD	R0,R0
+ *	LDAR	RR2,table
+ *	ADD	R3,R0		RR2 -> the value's entry
+ *	ADD	R3,@RR2		entry holds case - entry
+ *	JP	@RR2
+ * table:	.word	case-.	...	one per value, default for gaps
+ *
+ * The table is used only when it is smaller than the chain and faster than
+ * the chain's average case.  It needs no relocation, so it holds in any text
+ * segment and in shared code.
  */
 genswitch(def, n)
 {
 	register int i;
 	register ival_t l;
+	long lo, span, tsize, tcyc;
+	int tab;
 
+	if (n > 0) {
+		lo = cases[0].c_val;
+		if (lo > 0 && lo <= 2)
+			lo = 0;			/* two default words beat a SUB */
+		span = (long)cases[n-1].c_val - lo;
+		tsize = 18 + 2*(span+1) + (lo != 0 ? 4 : 0);
+		tcyc = 58 + (lo != 0 ? 7 : 0);
+		if (tsize < 6L*n + 2 && 2*tcyc < 13L*(n+1)) {
+			if (lo != 0)
+				genri(ZSUB, A_WR|SWREG, (ival_t)lo);
+			genri(ZCP, A_WR|SWREG, (ival_t)span);
+			gencbr(UGT, def);
+			genrr(ZADD, A_WR|SWREG, A_WR|SWREG);
+			tab = newlab();
+			bput(CODE);
+			bput(ZLDAR);
+			iput(A_WR|R2);
+			iput(A_LID|A_DIR);
+			iput(tab);
+			genrr(ZADD, A_WR|R3, A_WR|SWREG);
+			genrr(ZADD, A_WR|R3, A_IR|R2);
+			genr(ZJP, A_IR|R2);
+			genlab(tab);
+			for (i = 0; i < n; ++i) {
+				while (lo < cases[i].c_val) {
+					genl(ZSWREL, def);
+					++lo;
+				}
+				genl(ZSWREL, cases[i].c_lab);
+				++lo;
+			}
+			return;
+		}
+	}
 	for (i = 0; i < n; ++i) {
 		l = cases[i].c_val;
 		if (l == 0)

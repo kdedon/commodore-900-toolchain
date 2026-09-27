@@ -351,6 +351,8 @@ register INS	*ip;
 		sn = s->a_mode & A_REGM;
 		if (sty == OF_EXTS)			/* EXTS RRd: base | reg<<4 */
 			{ outw(base | sn<<4); return; }
+		if (sty == OF_JP && sam == A_IR)	/* JP @RRn */
+			{ outw(base | sn<<4 | 8); return; }
 		if (sty == OF_FLAG)			/* SETFLG/RESFLG/COMFLG #mask */
 			{ outw(base | (int)(s->a_value&0xF)<<4); return; }
 		if (ip->i_op == ZTESTL && sam != A_X && sam != A_DIR && sam != A_IR)
@@ -600,6 +602,29 @@ register INS	*ip;
 #define	NLAB	1024
 static struct { int labno; long pc; }	labv[NLAB];
 static struct { long pc; INS *ip; }	brv[NLAB];
+
+/* A switch table word or LDAR displacement: the word at `at' gets label - origin. */
+static struct rel { long at, origin; int labno; }	*relv;
+static int	nrel, relcap;
+
+static
+addrel(at, origin, labno)
+long	at, origin;
+{
+	if (nrel >= relcap) {
+		relcap = (relcap == 0) ? 64 : relcap*2;
+		relv = (struct rel *)(relv == NULL
+			? malloc((unsigned)(relcap*sizeof(struct rel)))
+			: realloc((char *)relv, (unsigned)(relcap*sizeof(struct rel))));
+		if (relv == NULL)
+			cnomem("genfunc");
+	}
+	relv[nrel].at = at;
+	relv[nrel].origin = origin;
+	relv[nrel].labno = labno;
+	++nrel;
+}
+
 genfunc()
 {
 	register INS	*ip;
@@ -613,12 +638,23 @@ genfunc()
 	fmark = outfixmark();
 
 	for (;;) {
-		nlab = nbr = 0;
+		nlab = nbr = nrel = 0;
 		for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
 			ip->i_pc = outhere();
 			switch (ip->i_type) {
 			case CODE:
+				if (ip->i_op == ZLDAR) {	/* LDAR RRd,label */
+					outw(0x3400 | (ip->i_af[0].a_mode&A_REGM));
+					addrel(outhere(), outhere() + 2,
+						ip->i_af[1].a_sp->s_labno);
+					outw(0);
+					break;
+				}
 				genins(ip);
+				break;
+			case LLLINK:
+				addrel(outhere(), outhere(), ip->i_labno);
+				outw(0);
 				break;
 			case LLABEL:
 				if (nlab >= NLAB) cbotch("genfunc: too many labels");
@@ -683,6 +719,17 @@ genfunc()
 			disp = (tgt - (brv[i].pc + 2)) / 2;	/* signed 8-bit word displacement */
 			outpatchb(brv[i].pc + 1, disp);
 		}
+	}
+	for (i = 0; i < nrel; ++i) {
+		tgt = -1;
+		for (j = 0; j < nlab; ++j)
+			if (labv[j].labno == relv[i].labno) {
+				tgt = labv[j].pc;
+				break;
+			}
+		if (tgt < 0)
+			cbotch("genfunc: unresolved switch label");
+		outpatchw(relv[i].at, (int)(tgt - relv[i].origin));
 	}
 }
 

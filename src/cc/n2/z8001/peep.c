@@ -613,12 +613,12 @@ register INS	*start;
 			m |= seen;
 		}
 		p->i_pc = ddgen * 16 + m;
-		if (p->i_type == JUMP) {
+		if (p->i_type == JUMP || p->i_type == LLLINK) {
 			tg = labtarget(p->i_labno);
 			if (tg == NULL || sp >= NDDSTK-1)
 				return (0);
 			ddstk[sp] = tg; ddmsk[sp] = m; ++sp;
-			if ((p->i_rel & 0xF) != 8) {	/* conditional: also the fall-through */
+			if (p->i_type == LLLINK || (p->i_rel & 0xF) != 8) {	/* conditional: also the fall-through */
 				ddstk[sp] = p->i_fp; ddmsk[sp] = m; ++sp;
 			}
 			continue;
