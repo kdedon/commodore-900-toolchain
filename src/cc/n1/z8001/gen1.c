@@ -78,6 +78,533 @@ coderinit()
 	}
 }
 
+/*
+ * A local the source did not declare `register' still gets a callee-saved
+ * register when nothing outside the function can reach its frame slot.  That
+ * takes the whole body, so at PROLOG the records are read ahead to EPILOG; if
+ * anything is promoted they are read again into a temporary file with its
+ * automatic ids made registers and its allocation records widened, and the
+ * tree reader takes its input from there until EPILOG.
+ *
+ * A candidate is a word, long or pointer slot of the function's own block --
+ * inner-block slots are reused once the block closes -- whose address is never
+ * taken and that is never accessed volatile, in a function that names no
+ * setjmp: a register holds a stale value when setjmp returns the second time.
+ * The most used candidates are served first.  Not under VDEBUG, whose records
+ * name the frame slot.
+ */
+#define	NPCAND	48		/* candidates considered, first declared first */
+#define	PMAXLEN	65536L		/* a longer function is not considered */
+#define	PWORD	1
+#define	PPAIR	2
+
+typedef struct {
+	lval_t	pm_offs;
+	int	pm_uses;
+	char	pm_kind;	/* PWORD, PPAIR, or 0: never a register */
+	char	pm_vol;
+	char	pm_esc;		/* address taken */
+	int	pm_reg;		/* register given, or -1 */
+} PMSLOT;
+
+static	PMSLOT	*pmslot;
+static	int	npmslot, pmslotmax;
+static	FILE	*pmout;		/* the rewrite goes here; NULL: only look */
+static	FILE	*pmtmp;
+static	FILE	*pmsaved;	/* the real input, while reading pmtmp */
+static	long	pmlen;		/* bytes read since PROLOG */
+static	int	pmbad;		/* not a function this can read */
+static	int	pmsetjmp;
+static	int	pmnauto;	/* allocation records seen */
+static	ival_t	pmtop;		/* frame size of the function's own block */
+static	PREGSET	pmmask;		/* registers claimed anywhere in the function */
+static	PREGSET	pmpro;		/* ... and those promotion added */
+
+static int
+pmget()
+{
+	register int	c;
+
+	if ((c = getc(ifp)) == EOF) {
+		pmbad = 1;
+		return (0);
+	}
+	++pmlen;
+	return (c);
+}
+
+static
+pmput(p, n)
+register char	*p;
+register int	n;
+{
+	if (pmout != NULL)
+		while (n-- > 0)
+			putc(*p++, pmout);
+}
+
+static
+pmbyte()
+{
+	char	c;
+
+	c = pmget();
+	pmput(&c, 1);
+	return (c & 0377);
+}
+
+static ival_t
+pmival()
+{
+	ival_t		i;
+	register char	*p;
+	register int	n;
+
+	p = (char *)&i;
+	for (n = sizeof(i); n > 0; --n)
+		*p++ = pmget();
+	return (i);
+}
+
+static lval_t
+pmlval()
+{
+	lval_t		l;
+	register char	*p;
+	register int	n;
+
+	p = (char *)&l;
+	for (n = sizeof(l); n > 0; --n)
+		*p++ = pmget();
+	return (l);
+}
+
+static
+pmputi(i)
+ival_t	i;
+{
+	pmput((char *)&i, sizeof(i));
+}
+
+static ival_t
+pmicpy()
+{
+	ival_t	i;
+
+	i = pmival();
+	pmputi(i);
+	return (i);
+}
+
+/* Copy a size; returns it as a long. */
+static lval_t
+pmzcpy()
+{
+#if	SIZEOF_LARGE
+	lval_t	l;
+
+	l = pmlval();
+	pmput((char *)&l, sizeof(l));
+	return (l);
+#else
+	return ((lval_t)pmicpy());
+#endif
+}
+
+/* Copy a string into 'buf' of 'n' bytes. */
+static
+pmscpy(buf, n)
+register char	*buf;
+register int	n;
+{
+	register int	c;
+
+	while ((c = pmbyte()) != 0 && !pmbad)
+		if (n > 1) {
+			*buf++ = c;
+			--n;
+		}
+	*buf = 0;
+}
+
+static PMSLOT *
+pmfind(offs)
+lval_t	offs;
+{
+	register PMSLOT	*sp;
+	register int	i;
+
+	for (i = 0, sp = pmslot; i < npmslot; ++i, ++sp)
+		if (sp->pm_offs == offs)
+			return (sp);
+	return (NULL);
+}
+
+static
+pmkind(t)
+{
+	switch (t) {
+	case S16:
+	case U16:
+	case SPTR:
+		return (PWORD);
+	case S32:
+	case U32:
+	case LPTR:
+		return (PPAIR);
+	}
+	return (0);
+}
+
+/* Note a reference to the slot at 'offs' of type 't'. */
+static
+pmref(offs, t, addr)
+lval_t	offs;
+{
+	register PMSLOT	*sp;
+
+	if ((sp = pmfind(offs)) == NULL) {
+		if (npmslot >= pmslotmax) {
+			pmslotmax = pmslotmax ? 2*pmslotmax : 32;
+			sp = (PMSLOT *)(pmslot != NULL
+			    ? realloc((char *)pmslot, pmslotmax*sizeof(PMSLOT))
+			    : malloc(pmslotmax*sizeof(PMSLOT)));
+			if (sp == NULL) {
+				pmbad = 1;
+				return;
+			}
+			pmslot = sp;
+		}
+		sp = &pmslot[npmslot++];
+		sp->pm_offs = offs;
+		sp->pm_uses = 0;
+		sp->pm_kind = pmkind(t & ~TVOL);
+		sp->pm_vol = sp->pm_esc = 0;
+		sp->pm_reg = -1;
+	}
+	++sp->pm_uses;
+	if (pmkind(t & ~TVOL) != sp->pm_kind)
+		sp->pm_kind = 0;
+	if ((t & TVOL) != 0)
+		sp->pm_vol = 1;
+	if (addr)
+		sp->pm_esc = 1;
+}
+
+/* Copy a tree whose parent is 'up'. */
+static
+pmtree(up)
+{
+	register PMSLOT	*sp;
+	register int	t;
+	ival_t		op, size;
+	lval_t		offs;
+	char		name[NCSYMB];
+
+	op = pmival();
+	if (op == NIL || pmbad) {
+		pmputi(op);
+		return;
+	}
+	t = pmget();
+	name[0] = t;
+	if ((t & ~TVOL) == BLK)
+		size = pmival();
+	if (op == AID) {
+#if	SIZEOF_LARGE
+		offs = pmlval();
+#else
+		offs = pmival();
+#endif
+		if (pmout == NULL)
+			pmref(offs, t, up == ADDR);
+		else if ((sp = pmfind(offs)) != NULL && sp->pm_reg >= 0) {
+			pmputi((ival_t)REG);
+			pmput(name, 1);
+			pmputi((ival_t)sp->pm_reg);
+			return;
+		}
+	}
+	pmputi(op);
+	pmput(name, 1);
+	if ((t & ~TVOL) == BLK)
+		pmputi(size);
+	switch (op) {
+	case ICON:
+	case REG:
+		pmicpy();
+		break;
+	case LCON:
+		offs = pmlval();
+		pmput((char *)&offs, sizeof(offs));
+		break;
+	case DCON:
+		for (t = sizeof(dval_t); t > 0 && !pmbad; --t)
+			pmbyte();
+		break;
+	case AID:
+#if	SIZEOF_LARGE
+		pmput((char *)&offs, sizeof(offs));
+#else
+		pmputi((ival_t)offs);
+#endif
+		break;
+	case PID:
+		pmzcpy();
+		break;
+	case LID:
+		pmzcpy();
+		pmbyte();
+		pmicpy();
+		break;
+	case GID:
+		pmzcpy();
+		pmbyte();
+		pmscpy(name, NCSYMB);
+#if	APPENDBAR
+		if ((t = strlen(name)) > 0 && name[t-1] == '_')
+			name[t-1] = 0;
+#endif
+		if (strcmp(name, "setjmp") == 0 || strcmp(name, "_setjmp") == 0
+		 || strcmp(name, "sigsetjmp") == 0 || strcmp(name, "envsave") == 0)
+			pmsetjmp = 1;
+		break;
+	case FIELD:
+		pmbyte();
+		pmbyte();
+		pmtree(op);
+		break;
+	default:
+		if (!pmbad)
+			pmtree(op);
+		if (!pmbad)
+			pmtree(op);
+	}
+}
+
+/* Copy a debug record of class 'class'. */
+static
+pmdbg(class)
+{
+	register int	n;
+	lval_t		z;
+	char		name[NCSYMB];
+
+	pmicpy();
+	if (class >= DC_AUTO && class < DC_MOS)
+		pmicpy();
+	else if (class >= DC_MOS) {
+		pmbyte();
+		pmbyte();
+		pmicpy();
+	}
+	pmscpy(name, NCSYMB);
+	while (!pmbad) {
+		n = pmbyte();
+		z = pmzcpy();
+		switch (n) {
+		case DT_STRUCT:
+		case DT_UNION:
+		case DT_ENUM:
+		case DD_PTR:
+		case DD_FUNC:
+		case DD_ARRAY:
+			continue;
+		case DX_MEMBS:
+			while (--z >= 0 && !pmbad)
+				pmdbg(pmbyte());
+			return;
+		case DX_NAME:
+			pmscpy(name, NCSYMB);
+			return;
+		default:
+			if (n > DT_VOID)
+				pmbad = 1;
+			return;
+		}
+	}
+}
+
+/* Copy the records up to and including EPILOG.  Returns 0 if it cannot. */
+static
+pmfunc()
+{
+	register int	op, n;
+	ival_t		ofs, mask;
+	char		name[NCSYMB];
+
+	pmlen = 1;
+	while (!pmbad) {
+		op = pmbyte();
+		switch (op) {
+		case LINE:
+		case LLABEL:
+		case JUMP:
+			pmicpy();
+			break;
+		case DLABEL:
+			pmdbg(pmbyte());
+			break;
+		case MNAME:
+		case FNAME:
+		case GLABEL:
+		case SLABEL:
+			pmscpy(name, NCSYMB);
+			break;
+		case COMM:
+			pmscpy(name, NCSYMB);
+			pmzcpy();
+			break;
+		case BLOCK:
+			pmzcpy();
+			break;
+		case ENTER:
+		case ALIGN:
+			pmbyte();
+			break;
+		case AUTOS:
+			ofs = pmival();
+			mask = pmival();
+			pmputi(ofs);
+			pmputi((ival_t)(mask | pmpro));
+			pmtop = ofs;
+			pmmask |= (PREGSET)(uival_t)mask;
+			++pmnauto;
+			break;
+		case IBLOCK:
+			for (n = pmbyte(); n > 0 && !pmbad; --n)
+				pmbyte();
+			break;
+		case FEXPR:
+		case TEXPR:
+			pmicpy();
+			/* fall through */
+		case EEXPR:
+		case IEXPR:
+		case REXPR:
+		case SEXPR:
+			pmtree(-1);
+			break;
+		case SBODY:
+			pmicpy();
+			for (n = 2*pmicpy(); n > 0 && !pmbad; --n)
+				pmicpy();
+			break;
+		case EPILOG:
+			return (!pmbad);
+		default:
+			return (0);
+		}
+	}
+	return (0);
+}
+
+/* Take a free register, or an even-aligned pair, from R6..R12. */
+static
+pmreg(pair)
+{
+	register int	r;
+
+	if (pair) {
+		for (r = R10; r >= R6; r -= 2)
+			if ((pmmask & (BREG(r)|BREG(r+1))) == 0) {
+				pmmask |= BREG(r) | BREG(r+1);
+				return (RR0 + (r >> 1));
+			}
+	} else {
+		for (r = R12; r >= R6; --r)
+			if ((pmmask & BREG(r)) == 0) {
+				pmmask |= BREG(r);
+				return (r);
+			}
+	}
+	return (-1);
+}
+
+static
+pmcmp(a, b)
+PMSLOT	*a, *b;
+{
+	return (a->pm_offs < b->pm_offs ? 1 : a->pm_offs > b->pm_offs ? -1 : 0);
+}
+
+/* Give registers to the most used candidates.  Returns the number given. */
+static
+pmpick()
+{
+	register PMSLOT	*sp, *best;
+	register int	i, n, r;
+	PREGSET		was, held;
+
+	shellsort((char *)pmslot, npmslot, sizeof(PMSLOT), &pmcmp);
+	n = 0;
+	for (i = 0, sp = pmslot; i < npmslot; ++i, ++sp) {
+		if (sp->pm_offs < -(lval_t)pmtop || sp->pm_offs >= 0
+		 || sp->pm_kind == 0 || sp->pm_vol)
+			continue;
+		if (n++ >= NPCAND)
+			sp->pm_esc = 1;
+	}
+	was = pmmask;
+	/* Keep one aligned pair free: a far pointer live across a call needs
+	 * a callee-saved pair, and so does its spill. */
+	held = 0;
+	if ((r = pmreg(1)) >= 0)
+		held = BREG(2*(r-RR0)) | BREG(2*(r-RR0)+1);
+	n = 0;
+	for (;;) {
+		best = NULL;
+		for (i = 0, sp = pmslot; i < npmslot; ++i, ++sp) {
+			if (sp->pm_offs < -(lval_t)pmtop || sp->pm_offs >= 0
+			 || sp->pm_kind == 0 || sp->pm_vol || sp->pm_esc
+			 || sp->pm_reg >= 0)
+				continue;
+			if (best == NULL || sp->pm_uses > best->pm_uses)
+				best = sp;
+		}
+		if (best == NULL
+		 || (best->pm_reg = pmreg(best->pm_kind == PPAIR)) < 0)
+			break;
+		++n;
+	}
+	pmpro = pmmask & ~held & ~was;
+	return (n);
+}
+
+/* On PROLOG: decide, and if anything is promoted, switch to a rewritten copy. */
+promote()
+{
+	char	*name;
+	long	start;
+
+	if (isvariant(VDEBUG) || ifp == NULL || (start = ftell(ifp)) < 0)
+		return;
+	pmout = NULL;
+	pmbad = pmsetjmp = pmnauto = npmslot = 0;
+	pmtop = 0;
+	pmmask = NOFREE;
+	pmpro = 0;
+	if (pmfunc() && pmlen <= PMAXLEN && pmnauto != 0 && !pmsetjmp
+	 && pmpick() != 0) {
+		if (pmtmp == NULL && (name = tmpnam(NULL)) != NULL
+		 && (pmtmp = fopen(name, "w+")) != NULL)
+			unlink(name);
+		if (pmtmp != NULL) {
+			rewind(pmtmp);
+			fseek(ifp, start, 0);
+			pmout = pmtmp;
+			pmfunc();
+			pmout = NULL;
+			fflush(pmtmp);
+			rewind(pmtmp);
+			pmsaved = ifp;
+			ifp = pmtmp;
+			return;
+		}
+	}
+	fseek(ifp, start, 0);
+}
+
 /* Function prolog: clear the max auto / temp watermarks. */
 doprolog()
 {
@@ -87,6 +614,7 @@ doprolog()
 	mdtcoded = 1;
 	maxtemp = 0;
 	maxregbusy = 0;
+	promote();
 }
 
 /* Just before EPILOG: emit one AUTOS record telling cc2 the temp space and the
@@ -94,6 +622,10 @@ doprolog()
  * it).  cc0's per-block cmask grows and shrinks; the UNION is what must be saved. */
 doepilog()
 {
+	if (pmsaved != NULL) {		/* back from the rewritten copy */
+		ifp = pmsaved;
+		pmsaved = NULL;
+	}
 	bput(AUTOS);
 	iput(maxtemp);
 	iput((ival_t)maxregbusy);

@@ -163,6 +163,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/relax.sh
 	sh tests/peepfold.sh
 	sh tests/regvar.sh
+	sh tests/promote.sh
 	sh tests/volatile.sh
 	sh tests/volmem.sh
 	sh tests/initvol.sh

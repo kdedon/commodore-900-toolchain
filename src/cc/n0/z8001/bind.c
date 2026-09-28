@@ -22,7 +22,6 @@ int	cmask;			/* Current mask */
 int	llofs;			/* Last local offset reported */
 int	lmask;			/* Last register mask reported */
 int	lastword = T_PTR;	/* Last 16 bit type */
-static int fnmask;		/* every register the function claims */
 char	inbtr[]	 = "identifier \"%s\" not bound to register";
 
 /*
@@ -125,6 +124,79 @@ faligntype(t) register int t;
 }
 
 /*
+ * The function's own aggregates, by frame range.  Their initializers store to
+ * the members as automatic ids; the code generator gives an automatic id of a
+ * word, long or pointer type a register when its address is never taken, so
+ * such a store goes out through the aggregate's address instead.
+ */
+typedef struct {
+	int	a_ofs;
+	int	a_end;
+} AGGR;
+
+static	AGGR	*aggr;
+static	int	naggr, naggrmax;
+
+static
+addaggr(ofs, size)
+{
+	register AGGR	*ap;
+
+	if (naggr >= naggrmax) {
+		naggrmax = naggrmax ? 2*naggrmax : 16;
+		ap = (AGGR *)(aggr != NULL
+		    ? realloc((char *)aggr, (size_t)(naggrmax*sizeof(AGGR)))
+		    : malloc((size_t)(naggrmax*sizeof(AGGR))));
+		if (ap == NULL)
+			cfatal("out of space");
+		aggr = ap;
+	}
+	ap = &aggr[naggr++];
+	ap->a_ofs = ofs;
+	ap->a_end = ofs + size;
+}
+
+/*
+ * A member store 'tp', of machine type 't', rewritten as *(&aggregate + n).
+ */
+static TREE *
+aggrpart(tp, t)
+register TREE	*tp;
+{
+	register AGGR	*ap;
+	register TREE	*sp, *pp;
+	int		i;
+
+	if (t!=S16 && t!=U16 && t!=S32 && t!=U32 && t!=mytypes[T_PTR])
+		return (tp);
+	for (i = 0, ap = aggr; i < naggr; ++i, ++ap)
+		if (tp->t_offs >= ap->a_ofs && tp->t_offs < ap->a_end)
+			break;
+	if (i >= naggr)
+		return (tp);
+	sp = talloc();
+	*sp = *tp;
+	sp->t_op = STAR;
+	pp = talloc();
+	pp->t_op = ICON;
+	pp->t_type = S16;
+	pp->t_ival = tp->t_offs - ap->a_ofs;
+	sp->t_rp = NULL;
+	sp->t_lp = talloc();
+	sp->t_lp->t_op = ADD;
+	sp->t_lp->t_type = mytypes[T_PTR];
+	sp->t_lp->t_rp = pp;
+	pp = sp->t_lp->t_lp = talloc();
+	pp->t_op = ADDR;
+	pp->t_type = mytypes[T_PTR];
+	pp->t_lp = tp;
+	pp->t_rp = NULL;
+	tp->t_offs = ap->a_ofs;
+	tp->t_vol = 0;
+	return (sp);
+}
+
+/*
  * Empty the local binding stack and mark the registers usable
  * for register variables (SI and DI) as available.
  */
@@ -135,6 +207,7 @@ initlocals()
 	cmask = NOFREE;		/* FP + SP (R13:R15) always busy; no segment regs */
 	llofs = 0;
 	lmask = NOFREE;
+	naggr = 0;
 	bput(AUTOS);
 	iput((ival_t)clofs);
 	iput((ival_t)cmask);
@@ -193,7 +266,6 @@ register SYM	*sp;
 		}
 	}
 	if (c==C_AUTO || c==C_REG) {
-		sp->s_cand = (sp->s_flag&S_VOLAT) ? 0 : pcandable(sp);
 		clofs -= ssize(sp);
 		/*
 		 * Z8000: word and long frame accesses must be EVEN-aligned;
@@ -228,6 +300,10 @@ register SYM	*sp;
 		sp->s_value = clofs;
 		if (clofs >= 0)
 			cerror("auto \"%s\" is not addressable", sp->s_id);
+		if (clstp == NULL && (sp->s_dp != NULL
+		    ? sp->s_dp->d_type == D_ARRAY
+		    : sp->s_type == T_STRUCT || sp->s_type == T_UNION))
+			addaggr(clofs, (int)ssize(sp));
 	}
 }
 
@@ -245,7 +321,7 @@ nextreg()
 
 	for (r = R12; r >= R6; --r) {
 		if ((cmask & BREG(r)) == 0) {
-			fnmask |= cmask |= BREG(r);
+			cmask |= BREG(r);
 			return (r);
 		}
 	}
@@ -264,30 +340,11 @@ nextpair()
 
 	for (r = R10; r >= R6; r -= 2) {
 		if ((cmask & (BREG(r) | BREG(r+1))) == 0) {
-			fnmask |= cmask |= BREG(r) | BREG(r+1);
+			cmask |= BREG(r) | BREG(r+1);
 			return (RR0 + (r >> 1));
 		}
 	}
 	return (-1);
-}
-
-/*
- * Take one even-aligned pair of the callee-saved pool out of reach and return
- * the bits taken, so the caller can give them back.
- */
-static int
-holdpair()
-{
-	register int r, m;
-
-	for (r = R10; r >= R6; r -= 2) {
-		m = BREG(r) | BREG(r+1);
-		if ((cmask & m) == 0) {
-			cmask |= m;
-			return (m);
-		}
-	}
-	return (0);
 }
 
 grabreg(sp)
@@ -316,289 +373,6 @@ register SYM	*sp;
 	if ((type==T_LONG || type==T_ULONG) && sp->s_class==C_REG)
 		return (nextpair());
 	return (-1);
-}
-
-/*
- * Promote non-`register' locals whose address is never taken.  That is known
- * only after the body, so the function's output is held and its automatic-id
- * records rewritten at the end.  Only top-level locals qualify: inner-block
- * symbols are freed, and their addresses reused, when the block closes.
- */
-typedef struct {
-	ival_t	c_reg;			/* register given, or -1 */
-	int	c_uses;
-	char	c_pair;			/* wants a PAIR */
-	char	c_escapes;
-} PCAND;
-
-/* A held record the rewrite may replace: an automatic id, or an allocation
- * record whose mask grows by the registers handed out. */
-typedef struct {
-	long	k_off;
-	int	k_len;
-	int	k_cand;			/* candidate, or -1 for an allocation record */
-	ival_t	k_ofs, k_mask;
-} PSITE;
-
-#define	NPCAND	 48
-#define	PBUFMAX	 60000L			/* past this, give up rather than grow */
-
-static PCAND	pcand[NPCAND];
-static int	npcand;
-static PSITE	*psite;
-static int	npsite, npsitemax;
-static int	promask;		/* registers promoted to */
-static int	proff;			/* no promotion in this function */
-int	toplocal;			/* reading the function's own declarations */
-static int fnbufon;			/* output is being held */
-static char	*fnbuf;
-static long	fnbufp, fnbufmax;
-
-/*
- * Flush held output unchanged and stop holding.
- */
-static
-pgiveup()
-{
-	register long	i;
-
-	proff = 1;
-	fnbufon = 0;
-	bputhold = NULL;
-	for (i = 0; i < fnbufp; ++i)
-		bput(fnbuf[i]);
-	fnbufp = 0;
-}
-
-fnbufput(b)
-{
-	register char	*cp;
-
-	if (fnbufp >= fnbufmax) {
-		cp = NULL;
-		if (fnbufmax < PBUFMAX) {
-			fnbufmax = fnbufmax ? fnbufmax * 2 : 2048;
-			cp = (char *)(fnbuf != NULL
-				? realloc((char *)fnbuf, (size_t)fnbufmax)
-				: malloc((size_t)fnbufmax));
-		}
-		if (cp == NULL) {
-			pgiveup();
-			bput(b);
-			return;
-		}
-		fnbuf = cp;
-	}
-	fnbuf[fnbufp++] = b;
-}
-
-pfnstart()
-{
-	npcand = 0;
-	npsite = 0;
-	fnbufp = 0;
-	promask = 0;
-	proff = isvariant(VDEBUG);	/* a debug record names the frame slot */
-	fnmask = cmask;
-	bputhold = (fnbufon = !proff) ? fnbufput : (int (*)())NULL;
-}
-
-/*
- * Offer a local; returns the candidate number its references carry, or 0.
- */
-pcandidate(pair)
-{
-	register PCAND	*cp;
-
-	if (proff || !toplocal || npcand >= NPCAND)
-		return (0);
-	cp = &pcand[npcand++];
-	cp->c_reg = -1;
-	cp->c_uses = 0;
-	cp->c_pair = pair;
-	cp->c_escapes = 0;
-	return (npcand);
-}
-
-/*
- * Offer a local of a type grabreg() would take.
- */
-pcandable(sp)
-register SYM	*sp;
-{
-	register DIM	*dp;
-	register int	type;
-
-	if ((dp=sp->s_dp) != NULL)
-		return (dp->d_type == D_PTR
-			? pcandidate(notvariant(VSMALL)) : 0);
-	type = sp->s_type;
-	if (type>=T_SHORT && type<=lastword)
-		return (pcandidate(0));
-	if (type==T_LONG || type==T_ULONG)
-		return (pcandidate(1));
-	return (0);
-}
-
-/*
- * Candidate 'i' has to keep its frame slot.
- */
-pescape(i)
-{
-	if (!proff && i > 0 && i <= npcand)
-		pcand[i-1].c_escapes = 1;
-}
-
-/*
- * After a setjmp returns twice, registers hold stale values; frame slots
- * do not.  So nothing is promoted.
- */
-psetjmp(id)
-register char	*id;
-{
-	register int	i;
-
-	if (strcmp(id, "setjmp")!=0 && strcmp(id, "_setjmp")!=0
-	 && strcmp(id, "sigsetjmp")!=0 && strcmp(id, "envsave")!=0)
-		return;
-	for (i = 0; i < npcand; ++i)
-		pcand[i].c_escapes = 1;
-}
-
-/*
- * Offset of the next held record, or -1.
- */
-long
-pmark()
-{
-	return (fnbufon ? fnbufp : -1L);
-}
-
-static PSITE *
-pnewsite()
-{
-	register PSITE	*p;
-
-	if (npsite >= npsitemax) {
-		npsitemax = npsitemax ? npsitemax * 2 : 64;
-		p = (PSITE *) (psite != NULL
-			? realloc((char *)psite, (size_t)(npsitemax*sizeof(PSITE)))
-			: malloc((size_t)(npsitemax*sizeof(PSITE))));
-		if (p == NULL) {
-			pgiveup();
-			return (NULL);
-		}
-		psite = p;
-	}
-	return (&psite[npsite++]);
-}
-
-/*
- * Note the automatic-id record just written for candidate 'i'.
- */
-psiteid(off, i)
-long	off;
-{
-	register PSITE	*p;
-
-	if (proff || off < 0 || i <= 0 || i > npcand)
-		return;
-	pcand[i-1].c_uses += 1;
-	if ((p=pnewsite()) == NULL)
-		return;
-	p->k_off = off;
-	p->k_len = (int)(fnbufp - off);
-	p->k_cand = i - 1;
-}
-
-/*
- * Note an allocation record, whose mask the rewrite has to widen.
- */
-static
-psiteautos(off, ofs, mask)
-long	off;
-ival_t	ofs, mask;
-{
-	register PSITE	*p;
-
-	if (proff || off < 0 || (p=pnewsite()) == NULL)
-		return;
-	p->k_off = off;
-	p->k_len = (int)(fnbufp - off);
-	p->k_cand = -1;
-	p->k_ofs = ofs;
-	p->k_mask = mask;
-}
-
-/*
- * Give the free callee-saved registers to the most-used candidates, then write
- * the function out with their references rewritten.  Needs a held allocation
- * record: it tells cc1 which registers the prolog saves.
- */
-pfnend()
-{
-	register PCAND	*cp;
-	register PSITE	*p;
-	register long	i;
-	int		best, n, sawautos, savemask, wasmask, held;
-
-	if (proff) {
-		pgiveup();
-		return;
-	}
-	fnbufon = 0;
-	bputhold = NULL;
-	sawautos = 0;
-	for (n = 0; n < npsite; ++n)
-		if (psite[n].k_cand < 0)
-			sawautos = 1;
-	savemask = cmask;
-	wasmask = cmask = fnmask;
-	/* Keep one aligned pair free: a far pointer live across a call needs
-	 * a callee-saved pair, and so does its spill. */
-	held = holdpair();
-	while (sawautos) {
-		best = -1;
-		for (n = 0; n < npcand; ++n) {
-			cp = &pcand[n];
-			if (cp->c_escapes || cp->c_reg >= 0 || cp->c_uses == 0)
-				continue;
-			if (best < 0 || cp->c_uses > pcand[best].c_uses)
-				best = n;
-		}
-		if (best < 0)
-			break;
-		cp = &pcand[best];
-		if ((cp->c_reg = cp->c_pair ? nextpair() : nextreg()) < 0) {
-			cp->c_reg = -1;
-			break;
-		}
-	}
-	cmask &= ~held;
-	promask = cmask & ~wasmask;
-	cmask = savemask;
-	i = 0;
-	for (n = 0; n < npsite; ++n) {
-		p = &psite[n];
-		while (i < p->k_off)
-			bput(fnbuf[i++]);
-		if (p->k_cand < 0) {
-			bput(AUTOS);
-			iput(p->k_ofs);
-			iput((ival_t)(p->k_mask | promask));
-		} else if (pcand[p->k_cand].c_reg >= 0) {
-			iput((ival_t) REG);
-			bput(fnbuf[p->k_off + sizeof(ival_t)]);
-			iput(pcand[p->k_cand].c_reg);
-		} else {
-			while (i < p->k_off + p->k_len)
-				bput(fnbuf[i++]);
-		}
-		i = p->k_off + p->k_len;
-	}
-	while (i < fnbufp)
-		bput(fnbuf[i++]);
-	fnbufp = 0;
 }
 
 /*
@@ -750,18 +524,14 @@ SYM	*sp;
  */
 putautos()
 {
-	long	off;
-
 	if (clofs != llofs || cmask != lmask) {
 		if (isvariant(VALIGN) && (clofs & 1) != 0)
 			--clofs;
 		llofs = clofs;
 		lmask = cmask;
-		off = pmark();
 		bput(AUTOS);
 		iput((ival_t)-clofs);
 		iput((ival_t)cmask);
-		psiteautos(off, (ival_t)-clofs, (ival_t)cmask);
 	}
 }
 
@@ -943,6 +713,8 @@ register TREE	*tp;
 				tp = lp;
 		}
 	}
+	if (tp->t_op == AID && above != ADDR)
+		tp = aggrpart(tp, tp->t_type);
 	return (tp);
 }
 
