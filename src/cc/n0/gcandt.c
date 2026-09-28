@@ -50,6 +50,7 @@ int	*rfp;
 	int		rf, af;		/* readonly, alien */
 	int		sf, lf, uf;	/* short, long, unsigned */
 	int		cf, vf, nf;	/* const, volatile, signed */
+	int		tf;		/* typedef's volatile flags */
 
 	c  = C_NONE;
 	t  = T_NONE;
@@ -57,6 +58,7 @@ int	*rfp;
 	rf = af = 0;
 	sf = lf = uf = 0;
 	cf = vf = nf = 0;
+	tf = 0;
 	for (;;) {
 		switch (s) {
 
@@ -108,6 +110,7 @@ int	*rfp;
 					t = sp->s_type;
 					dp = sp->s_dp;
 					ip = sp->s_ip;
+					tf = sp->s_flag & (S_VOLAT|S_VTARG);
 					sp->s_flag |= S_USED;
 					if (t==T_STRUCT || t==T_UNION
 					||  t==T_ENUM)
@@ -171,8 +174,9 @@ int	*rfp;
 				*rfp |= S_RONLY;
 			if (af)
 				*rfp |= S_ALIEN;
+			*rfp |= tf;
 			if (vf)
-				*rfp |= S_VOLAT;
+				*rfp |= ptrdims(dp, -1) ? S_VTARG : S_VOLAT;
 			return;
 		}
 		lex();

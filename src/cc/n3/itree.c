@@ -66,8 +66,10 @@ int	n;
 		sprintf(opid, "Bad == %d", op);
 	}
 	type = bget();
-	fprintf(ofp, "%s %s ", opid, tynames[type]);
-	if (type == BLK)
+	fprintf(ofp, "%s %s ", opid, tynames[type & ~TVOL]);
+	if ((type & TVOL) != 0)
+		fprintf(ofp, "volatile ");
+	if ((type & ~TVOL) == BLK)
 		fprintf(ofp, "(" I_FMT " bytes) ", iget());
 	switch (op) {
 

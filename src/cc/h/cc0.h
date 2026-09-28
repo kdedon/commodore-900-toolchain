@@ -304,6 +304,7 @@ typedef struct {
 #define	S_INIT	020			/* Initialized			*/
 #define S_SYMB	040			/* Written to debug table	*/
 #define S_VOLAT	0100			/* Volatile			*/
+#define S_VTARG	0200			/* Points at volatile		*/
 
 /* Disjunct symbol table levels */
 #define SL_CPP	-2			/* Cpp tokens			*/
@@ -592,6 +593,7 @@ extern unsigned char ct[];
 extern	int	nerr;
 extern	char	*passname;
 extern	int	nargs;
+extern	int	dvol;
 extern	SYM	*args[];
 extern	int	incpp;
 extern	int	ininit;

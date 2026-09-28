@@ -53,6 +53,7 @@ int	lastchar;		/* Last character read from a file */
 int	ininit;			/* "in an initializer" flag */
 int	incase;			/* "in a case" flag */
 int	nargs;			/* # of args this function */
+int	dvol;			/* Declarator's `* volatile', S_ flags */
 SYM	*args[NARGS];		/* The args themselves */
 int	llex;			/* Lexical level */
 int	lsym = SL_MOS;		/* Symbol table level */
@@ -377,7 +378,7 @@ xdef()
 			break;
 		}
 		sp = nsp;
-		sp = declare(sp, c, t, ndp, ip, rf);
+		sp = declare(sp, c, t, ndp, ip, volqual(rf, ndp, dp));
 		if (c!=C_GREF && sp->s_class!=C_GREF && sp->s_class!=C_TYPE) {
 			if (isfunc(sp)) {
 				xfunc(sp);
@@ -482,7 +483,8 @@ register SYM	*sp;
 		for (;;) {
 			if (gdecl(&nfsp, &fdp, dp, c, SL_VAR)) {
 				fsp = nfsp;
-				fsp = declare(fsp, c, t, fdp, ip, rf);
+				fsp = declare(fsp, c, t, fdp, ip,
+					      volqual(rf, fdp, dp));
 			}
 			if (s != COMMA)
 				break;

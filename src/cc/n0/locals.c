@@ -38,7 +38,8 @@ locals()
 		for (;;) {
 			if (gdecl(&nsp, &ndp, dp, c, SL_VAR)) {
 				sp = nsp;
-				sp = declare(sp, c, t, ndp, ip, rf);
+				sp = declare(sp, c, t, ndp, ip,
+					     volqual(rf, ndp, dp));
 				if ((dc=sp->s_class) == C_SIN) {
 					seg = SPURE;
 					if ((rf&S_RONLY) == 0) {

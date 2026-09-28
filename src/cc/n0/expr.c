@@ -118,6 +118,8 @@ tree(n)
 				lp = build(STAR, lp, NULL);
 			if (sp->s_flag & S_VOLAT)
 				volmemb(lp);
+			else if (sp->s_flag & S_VTARG)
+				lp->t_vol = V_TARG;
 			if (sp->s_width != 0) {
 				fp = talloc();
 				fp->t_op = FIELD;
@@ -837,8 +839,9 @@ register SYM	*sp;
 	tp->t_dp   = sp->s_dp;
 	tp->t_ip   = sp->s_ip;
 	if (sp->s_flag & S_VOLAT)
-		tp->t_vol = (sp->s_dp != NULL && sp->s_dp->d_type == D_PTR)
-			  ? V_TARG : V_ACC;
+		tp->t_vol = V_ACC;
+	else if (sp->s_flag & S_VTARG)
+		tp->t_vol = V_TARG;
 	return tp;
 }
 

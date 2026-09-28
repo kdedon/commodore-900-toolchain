@@ -25,6 +25,7 @@ int	c, ls;
 	int		ll;	/* Lexical level */
 	int		aok;	/* Args are OK flag */
 	sizeof_t	bound;	/* Array bound */
+	int		vf;	/* `* volatile' */
 
 	aok = (llex==LL_EXT && (c==C_GDEF || c==C_GREF || c==C_SEX) && nargs==0);
 	while (s == CONST || s == VOLATILE) {
@@ -34,8 +35,13 @@ int	c, ls;
 	}
 	if (s == MUL) {
 		lex();
+		vf = 0;
+		for (; s == CONST || s == VOLATILE; lex())
+			vf |= s == VOLATILE;
 		if (gdecl(asp, adp, NULL, c, ls) == 0)
 			return 0;
+		if (vf)
+			dvol |= ptrdims(*adp, -1) ? S_VTARG : S_VOLAT;
 		*adp = tackdim(*adp, D_PTR, (sizeof_t)0);
 		while (tdp != NULL) {
 			*adp = tackdim(*adp, tdp->d_type, tdp->d_bound);
@@ -185,7 +191,7 @@ INFO	**aip;
 				lex();
 			continue;
 		}
-		if ((rf & ~S_VOLAT) != 0 || c != C_NONE)
+		if ((rf & ~(S_VOLAT|S_VTARG)) != 0 || c != C_NONE)
 			cerror("class not allowed in structure body");
 		if (isvariant(VSINU)) {
 		/*
@@ -242,7 +248,8 @@ INFO	**aip;
 						cerror("bad field width");
 				}
 				ofs = fieldalign(t, mdp, ip, w, ofs);
-				msp = declare(msp, mc, t, mdp, ip, rf, w, ofs);
+				msp = declare(msp, mc, t, mdp, ip,
+					      volqual(rf, mdp, dp), w, ofs);
 				nip = newinfo(nip, msp);
 				if (tsp != NULL)
 					msp->s_flag |= S_TAG;
@@ -433,6 +440,44 @@ sizeof_t b;
 }
 
 /*
+ * Nonzero if any of the first 'n' dims (all, if 'n' < 0) is not an array:
+ * a `volatile' past it qualifies something pointed at, not the object.
+ */
+ptrdims(dp, n)
+register DIM	*dp;
+register int	n;
+{
+	for (; dp != NULL && n-- != 0; dp = dp->d_dp)
+		if (dp->d_type != D_ARRAY)
+			return 1;
+	return 0;
+}
+
+/*
+ * Volatile flags for a declarator with dims 'dp' whose specifier gave 'rf'
+ * and dims 'tdp'.  The specifier's S_VOLAT becomes S_VTARG when the declarator
+ * adds a pointer or function; the declarator's own `* volatile' are added.
+ */
+volqual(rf, dp, tdp)
+register int	rf;
+DIM	*dp, *tdp;
+{
+	register int	n;
+	register DIM	*p;
+
+	n = 0;
+	for (p = dp; p != NULL; p = p->d_dp)
+		++n;
+	for (; tdp != NULL; tdp = tdp->d_dp)
+		--n;
+	if ((rf & S_VOLAT) != 0 && ptrdims(dp, n))
+		rf = (rf & ~S_VOLAT) | S_VTARG;
+	rf |= dvol;
+	dvol = 0;
+	return rf;
+}
+
+/*
  * Release a DIM chain.
  */
 dropdim(dp)
@@ -551,22 +596,27 @@ TREE *
 cast()
 {
 	register TREE	*tp;
-	DIM		*dp;
+	DIM		*dp, *tdp;
 	INFO		*ip;
 	DIM		*cast1();
-	int		rf;
+	int		rf, ov;
 	int 		c, t;
 
 	gcandt(&c, &t, &dp, &ip, &rf);
 	if (c==C_NONE && t==T_NONE && rf==0)
 		return NULL;
-	if ((rf & ~S_VOLAT) != 0 || c != C_NONE)
+	if ((rf & ~(S_VOLAT|S_VTARG)) != 0 || c != C_NONE)
 		cerror("storage class not allowed in cast");
 	if (t == T_NONE) {
 		cerror("type required in cast");
 		t = T_INT;
 	}
+	tdp = dp;
+	ov = dvol;		/* we may be in a declarator's array bound */
+	dvol = 0;
 	dp = cast1(dp);
+	rf = volqual(rf, dp, tdp);
+	dvol = ov;
 	if (t == T_VOID && isvoidptr(dp))
 		t = T_CHAR;
 	if (t==T_VOID && dp!=NULL && !isfunction(dp)) {
@@ -577,7 +627,7 @@ cast()
 	tp = talloc();
 	tp->t_op = CAST;
 	tp->t_type = t;
-	if ((rf & S_VOLAT) != 0 && dp != NULL && dp->d_type == D_PTR)
+	if ((rf & S_VTARG) != 0)
 		tp->t_vol = V_TARG;
 	tp->t_dp = dp;
 	tp->t_ip = ip;
@@ -593,13 +643,20 @@ DIM	*tdp;
 	register DIM	*dp;
 	register sizeof_t b;
 	DIM		*cast2();
+	int		vf;
 
 	while (s == CONST || s == VOLATILE) {
 		lex();
 	}
 	if (s == MUL) {
 		lex();
-		dp = cast2(cast1(NULL), D_PTR, (sizeof_t)0);
+		vf = 0;
+		for (; s == CONST || s == VOLATILE; lex())
+			vf |= s == VOLATILE;
+		dp = cast1(NULL);
+		if (vf)
+			dvol |= ptrdims(dp, -1) ? S_VTARG : S_VOLAT;
+		dp = cast2(dp, D_PTR, (sizeof_t)0);
 	} else {
 		dp = NULL;
 		if (s == LPAREN) {

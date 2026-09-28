@@ -141,6 +141,7 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 	ip = sp->s_ip;
 	sym.s_class = c;
 	sym.s_value = sp->s_value;
+	sym.s_flag = sp->s_flag & S_VOLAT;
 	brace = 0;
 	if (s == LBRACE) {
 		++brace;
@@ -162,6 +163,7 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 			sym.s_type = mp->s_type;
 			sym.s_dp   = mp->s_dp;
 			sym.s_ip   = mp->s_ip;
+			sym.s_flag = (sp->s_flag | mp->s_flag) & S_VOLAT;
 			mo = mp->s_value;
 			if (!isauto(&sym) && lo!=mo) {
 				/* Output BLOCK item for padding. */
