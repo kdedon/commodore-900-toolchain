@@ -179,6 +179,7 @@ check-effdiff-linked:
 check-libc: libc
 	sh tests/notmem.sh
 	sh tests/printf.sh
+	sh tests/sbrk.sh
 
 # What each program is MADE OF, declared once by the build that runs on the
 # C900 and read by every cross-build (host/srcman.sh).  The build scripts assert

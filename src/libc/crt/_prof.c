@@ -22,7 +22,7 @@ _profon()
 
 	bufl = (unsigned)etext / 2;
 	buf = (short *)sbrk(bufl * sizeof (short));
-	if (buf == NULL) {
+	if (buf == (short *)-1) {
 		write(STDERR, emsg, sizeof emsg);
 		abort();
 	}

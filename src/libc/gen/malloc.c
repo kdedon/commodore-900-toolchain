@@ -69,17 +69,17 @@ unsigned int	size;
 		 * segment, i.e. it would cap the arena at 64K forever.
 		 *
 		 * sbrk() is the authority: it carries when a block would not fit,
-		 * abandoning the tail rather than straddling, and returns NULL
+		 * abandoning the tail rather than straddling, and fails
 		 * only when the kernel actually refuses.  The discontiguity that
 		 * carrying produces is already handled below -- the new region is
 		 * linked in and the skipped gap marked used, so nothing coalesces
 		 * across a segment boundary.
 		 */
-		if ((ap=sbrk(len)) == NULL)	/* no space */
+		if ((ap=sbrk(len)) == (alloc_t *)-1)	/* no space */
 			return (NULL);
 #else
 		if ((char*)(ap=sbrk(0))+len <= (char*)ap  /* wraparound */
-		 || (ap=sbrk(len)) == NULL)	/* no space */
+		 || (ap=sbrk(len)) == (alloc_t *)-1)	/* no space */
 			return (NULL);
 #endif
 		if (_a_arena == NULL) {		/* first alloc */
@@ -88,7 +88,7 @@ unsigned int	size;
 			register int tmp;
 
 			tmp = roundup(size + sizeof(alloc_t), 1<<9);
-			if (sbrk(tmp-len) == NULL)
+			if (sbrk(tmp-len) == (char *)-1)
 				return (NULL);
 			len = tmp;
 			bp->a_next = ap;

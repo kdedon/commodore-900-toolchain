@@ -132,6 +132,9 @@ libc() {	# "<source with int f()>" want
 if [ -f "$LIBC/libc-z8001.a" ]; then
 	libc 'int f(){ char *s; int n; s="hello"; n=strlen(s); if(strcmp(s,"hello")==0) n=n+100; return n; }' 105
 	libc 'int f(){ char b[8]; strcpy(b,"abc"); return strlen(b); }' 3
+	libc 'int f(){ char b[4]; memset(b,65,4); return b[0]+b[3]; }' 130
+	libc 'int f(){ char a[4],b[4]; a[0]=1;a[1]=2;a[2]=3;a[3]=4; memcpy(b,a,4); return b[0]+b[3]; }' 5
+	libc 'int f(){ char a[3],b[3]; a[0]=1;a[1]=2;a[2]=9; b[0]=1;b[1]=2;b[2]=3; return memcmp(a,b,3); }' 1
 	# float compound-assign: `d *= x' had no F64 rule and no makecall
 	# (only binary float ops makecall), so it "no match"ed (EDFA69, hit by printf's
 	# _dtoa `d *= _powtab[i]').  modoper now expands `d op= x' -> `d = d <op> x'.

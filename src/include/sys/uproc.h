@@ -129,6 +129,10 @@ typedef struct uproc {
 	int	u_argc;			/* Argument count (for ps) */
 	unsigned u_argp;		/* Offset of argv[0] (for ps) */
 	int	u_signo;		/* Signal number (for debugger) */
+#ifndef _I386
+	long	u_stkcur;		/* RLIMIT_STACK soft limit */
+	long	u_stkmax;		/* RLIMIT_STACK hard limit */
+#endif
 #ifdef _I386
 	int	*u_regl;
 	int	u_rval2;

@@ -30,6 +30,7 @@ getegid     56
 geteuid     57
 getgid      47
 getpid      20
+getrlimit   49
 getuid      24
 halt        130
 ioctl       54
@@ -51,6 +52,7 @@ read        3
 reboot      131
 setgid      46
 setpgrp     62
+setrlimit   50
 setuid      23
 sload       64
 stat        18

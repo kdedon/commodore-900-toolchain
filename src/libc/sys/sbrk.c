@@ -49,7 +49,7 @@ unsigned int	incr;
 #else
 	send = rend + incr;
 	if (send < rend)
-		return (NULL);
+		return ((char *)-1);
 #endif
 	errno = 0;
 	brk(send);
@@ -63,7 +63,7 @@ unsigned int	incr;
 		 * reaches the end of its data segment.
 		 */
 		__end = oend;
-		return (NULL);
+		return ((char *)-1);
 	}
 	return ((char *)rend);
 }
