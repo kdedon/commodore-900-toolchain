@@ -45,15 +45,40 @@ char	*fname;
 			FILE	*xfp = fopen(fname, ORMODE);
 			ars_t	ars;
 
+			fsize_t	arsend = arhend;
+			char	*arstab = NULL;
+			fsize_t	arssize = 0;
+
 			if (watch)
 				filemsg(fname, "ranlib");
+			/*
+			 * A marker entry first: the index names symbols over
+			 * NCPLN characters, from a string table it ends with.
+			 */
+			fseek(xfp, offs=sizeof magic+sizeof arh, 0);
+			if (fread(&ars, sizeof ars, 1, xfp)==1
+			 && ARS_ISMARK(ars.ar_id)) {
+				cansize(ars.ar_off);
+				arsend = offs+ars.ar_off;
+				fseek(xfp, arsend, 0);
+				rdstrtab(xfp, fname, "", (ldh_t *)NULL);
+				arstab = strtab;
+				arssize = strsize;
+			}
 			do {
 				found = 0;
 				fseek(xfp, offs=sizeof magic+sizeof arh, 0);
-				for (; offs < arhend; offs+=sizeof ars) {
+				for (; offs < arsend; offs+=sizeof ars) {
+					char	*ln;
+
 					if (fread(&ars, sizeof ars, 1, xfp)!=1)
 						break;
-					if (symref(&ars)==NULL)
+					if (ARS_ISMARK(ars.ar_id))
+						continue;
+					strtab = arstab;
+					strsize = arssize;
+					ln = lnameof(&ars);
+					if (symref(&ars, ln)==NULL)
 						continue;
 					cansize(ars.ar_off);
 					fseek(ifp, ars.ar_off+=arhend, 0);
@@ -64,6 +89,9 @@ char	*fname;
 						fname, arh.ar_name);
 				}
 			} while (nundef&&found);
+			if (arstab != NULL)
+				free(arstab);
+			strtab = NULL;
 			fclose(xfp);
 			fclose(ifp);
 			return (1);
@@ -112,20 +140,32 @@ char	*fname, mname[];
 		moderr(fname, mname, "not a 32-bit l.out");
 		return (0);
 	}
+	strtab = NULL;
+	if (ldh.l_flag & LF_LNAME) {
+		fseek(fp, offs, 0);
+		rdstrtab(fp, fname, mname, &ldh);
+		fseek(fp, offs+sizeof ldh, 0);
+	}
 	fseek(fp, symoff(&ldh), 1);
 	for (nsym=ldh.l_ssize[L_SYM]/sizeof lds; nsym; nsym--) {
 		if (fread(&lds, sizeof lds, 1, fp)!=1) {
 			moderr(fname, mname, "bad symbol segment");
-			return (0);
+			break;
 		}
 		canshort(lds.ls_type);
 		if (lds.ls_type&L_GLOBAL
 		 && lds.ls_type!=(L_GLOBAL|L_REF)
-		 && symref(&lds)!=NULL) {
+		 && symref(&lds, lnameof(&lds))!=NULL) {
 			fseek(fp, offs, 0);
+			if (strtab != NULL)
+				free(strtab);
+			strtab = NULL;
 			return (addmod(fp, offs, fname, mname));
 		}
 	}
+	if (strtab != NULL)
+		free(strtab);
+	strtab = NULL;
 	return (0);
 }
 
@@ -158,6 +198,14 @@ char	*fname, mname[];
 	}
 	if ((ldh.l_flag & LF_32) == 0) {
 		moderr(fname, mname, "not 32-bit load module");
+		return (0);
+	}
+	if ((ldh.l_flag & LF_LNAME) != 0
+	 && (!lnames || (ldh.l_flag & LF_SLIB) != 0)) {
+		moderr(fname, mname, lnames
+			? "a shared library cannot name a symbol over %d characters"
+			: "names a symbol over %d characters: link with -N",
+			NCPLN);
 		return (0);
 	}
 	/*
@@ -228,6 +276,12 @@ char	*fname, mname[];
 	/*
 	 * add symbols
 	 */
+	strtab = NULL;
+	if (ldh.l_flag & LF_LNAME) {
+		fseek(fp, offs, 0);
+		rdstrtab(fp, fname, mname, &ldh);
+		fseek(fp, offs+sizeof ldh, 0);
+	}
 	fseek(fp, symoff(&ldh), 1);
 	for (i=0; i < nsym; i++) {
 		if (fread(&lds, sizeof lds, 1, fp)!=1) {
@@ -252,9 +306,12 @@ char	*fname, mname[];
 				 * absolutes pass through unchanged.
 				 */
 				lds.ls_addr = vtop(lds.ls_addr);
-			mp->sym[i] = addsym(&lds, mp);
+			mp->sym[i] = addsym(&lds, lnameof(&lds), mp);
 		}
 	}
+	if (strtab != NULL)
+		free(strtab);
+	strtab = NULL;
 	max = segmax[machine];
 	for (i=0; i<NLSEG; i++)
 		if (i!=L_SYM)
@@ -311,8 +368,9 @@ register ldh_t *ldhp;
  * size of output symbol segment.
  */
 sym_t *
-addsym(lsp, mp)
+addsym(lsp, lname, mp)
 register lds_t	*lsp;
+char	*lname;
 mod_t	*mp;
 {
 	register sym_t	*sp;
@@ -323,7 +381,8 @@ mod_t	*mp;
 		if (nolcl || noilcl && lsp->ls_id[0] == 'L')
 			return (NULL);
 	} else for (sp=symtable[h]; sp!=NULL; sp=sp->next) {
-		if (sp->s.ls_type&L_GLOBAL && eq(sp->s.ls_id, lsp->ls_id)) {
+		if (sp->s.ls_type&L_GLOBAL && eq(sp->s.ls_id, lsp->ls_id)
+		 && lneq(sp, lname)) {
 			if (lsp->ls_type!=(L_GLOBAL|L_REF)) {
 				if (sp->s.ls_type!=(L_GLOBAL|L_REF))
 					/* new def, old def */
@@ -369,6 +428,12 @@ mod_t	*mp;
 	sp->next = symtable[h];
 	symtable[h] = sp;
 	sp->s = *lsp;	/* struct assign */
+	sp->lname = NULL;
+	if (lname != NULL) {
+		if ((sp->lname=malloc(strlen(lname)+1))==NULL)
+			fatal("out of space");
+		strcpy(sp->lname, lname);
+	}
 	sp->mod = mp;
 	sp->sldata = 0;
 	sp->commsize = sp->s.ls_type==(L_GLOBAL|L_REF)
@@ -376,11 +441,11 @@ mod_t	*mp;
 	/*
 	 * note reference to internal symbol
 	 */
-	if (eq(sp->s.ls_id, etext_id))
+	if (sp->lname == NULL && eq(sp->s.ls_id, etext_id))
 		etext_s = sp;
-	else if (eq(sp->s.ls_id, edata_id))
+	else if (sp->lname == NULL && eq(sp->s.ls_id, edata_id))
 		edata_s = sp;
-	else if (eq(sp->s.ls_id, end_id))
+	else if (sp->lname == NULL && eq(sp->s.ls_id, end_id))
 		end_s = sp;
 	else if (sp->s.ls_type==(L_GLOBAL|L_REF))
 		if (sp->s.ls_addr==0)
@@ -497,23 +562,33 @@ char	*modnam;
 		filerr(modnam, "inconsistent machine");
 		return;
 	}
+	strtab = NULL;
+	if (ldh.l_flag & LF_LNAME) {
+		rewind(fp);
+		rdstrtab(fp, modnam, "", &ldh);
+		fseek(fp, (long)sizeof ldh, 0);
+	}
 	fseek(fp, symoff(&ldh), 1);
 	for (i=ldh.l_ssize[L_SYM]/sizeof lds; i; i--) {
 		if (fread((char *)&lds, sizeof lds, 1, fp) != 1) {
 			filerr(modnam, "bad symbol segment");
-			return;
+			break;
 		} else {
 			canshort(lds.ls_type);
 			canlong(lds.ls_addr);
 			if (lds.ls_type&L_GLOBAL
 			 && lds.ls_type!=(L_GLOBAL|L_REF)
-			 && (sp=symref(&lds))!=NULL) {
+			 && (sp=symref(&lds, lnameof(&lds)))!=NULL) {
 				sp->s.ls_type = L_GLOBAL | L_ABS;
 				sp->s.ls_addr = vtop(lds.ls_addr);
 				nundef--;
 			}
 		}
 	}
+	if (strtab != NULL)
+		free(strtab);
+	strtab = NULL;
+	fclose(fp);
 }
 
 /*
@@ -525,17 +600,116 @@ char	*modnam;
  * pointer type serves for both callers.
  */
 sym_t *
-symref(ldsp)
+symref(ldsp, lname)
 lds_t	*ldsp;
+char	*lname;
 {
 	register sym_t	*sp;
 
 	for (sp=symtable[hash(ldsp->ls_id)]; sp!=NULL; sp=sp->next)
 		if (sp->s.ls_type==(L_GLOBAL|L_REF)
 		 && sp->s.ls_addr == 0
-		 && eq(sp->s.ls_id, ldsp->ls_id))
+		 && eq(sp->s.ls_id, ldsp->ls_id)
+		 && lneq(sp, lname))
 			break;
 	return (sp);
+}
+
+/*
+ * Is the name of sp the long name `lname' (NULL for one of NCPLN or fewer
+ * characters, whose ls_id has already matched)?
+ */
+int
+lneq(sp, lname)
+register sym_t	*sp;
+char	*lname;
+{
+	if (lname == NULL)
+		return (sp->lname == NULL);
+	return (sp->lname != NULL && strcmp(sp->lname, lname) == 0);
+}
+
+/*
+ * Read the string table of the LF_LNAME module whose header fp is at,
+ * into strtab, and seek back; with no header, the table fp is at.
+ */
+void
+rdstrtab(fp, fname, mname, ldhp)
+FILE	*fp;
+char	*fname, mname[];
+ldh_t	*ldhp;
+{
+	fsize_t	here, offs;
+	unsigned char	b[4];
+	int	i;
+
+	here = ftell(fp);
+	offs = 0;
+	if (ldhp != NULL) {
+		offs = ldhp->l_tbase;
+		for (i=0; i<NLSEG; i++)
+			if (i!=L_BSSI && i!=L_BSSD)
+				offs += ldhp->l_ssize[i];
+	}
+	strtab = NULL;
+	strsize = 0;
+	if (fseek(fp, here+offs, 0) != 0 || fread(b, 4, 1, fp) != 1) {
+		moderr(fname, mname, "no string table");
+		goto out;
+	}
+	strsize = (fsize_t)b[0]<<16 | (fsize_t)b[1]<<24
+		| (fsize_t)b[2] | (fsize_t)b[3]<<8;
+	if (strsize < 4 || (strtab=malloc((unsigned)strsize+1)) == NULL) {
+		moderr(fname, mname, strsize < 4 ? "bad string table"
+			: "string table: out of space");
+		strsize = 0;
+		goto out;
+	}
+	if (strsize > 4 && fread(strtab+4, (int)(strsize-4), 1, fp) != 1) {
+		moderr(fname, mname, "short string table");
+		strsize = 0;
+	}
+	strtab[strsize] = 0;
+out:
+	fseek(fp, here, 0);
+}
+
+/*
+ * A long name's text, out of strtab, with its first NCPLN characters put in
+ * ls_id; NULL for a name in ls_id.  The argument is an lds_t or an ars_t,
+ * as for symref().
+ */
+char *
+lnameof(ldsp)
+lds_t	*ldsp;
+{
+	register char	*np;
+	fsize_t	off;
+	int	i;
+
+	if (strtab == NULL || !LS_ISLONG(ldsp->ls_id))
+		return (NULL);
+	off = LS_LOFF(ldsp->ls_id);
+	np = off < 4 || off >= strsize ? "" : strtab+off;
+	for (i=0; i<NCPLN; i++)
+		ldsp->ls_id[i] = *np ? *np++ : 0;
+	return (strlen(np) == 0 ? NULL : strtab+off);
+}
+
+/*
+ * The name of sp, for a message.
+ */
+char *
+symname(sp)
+register sym_t	*sp;
+{
+	static char	id[NCPLN+1];
+
+	if (sp->lname != NULL)
+		return (sp->lname);
+	strncpy(id, sp->s.ls_id, NCPLN);
+	id[NCPLN] = 0;
+	return (id);
 }
 
 /*

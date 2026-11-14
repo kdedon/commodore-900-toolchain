@@ -55,6 +55,7 @@ typedef	struct	sym_t	{	/* symbol descriptor */
 	int	sldata;		/* a shared library's DATA export */
 	uaddr_t	commsize;	/* largest common seen for this name */
 	unsigned int	symno;	/* pass 2; symbol number */
+	char	*lname;		/* a name over NCPLN chars; s.ls_id is its head */
 } sym_t;			/* above 2 items could be united */
 
 typedef	struct	site_t	{	/* an LR_SHORT or LR_CALL operand in text */
@@ -204,6 +205,9 @@ FILE	*outputf[NLSEG];	/* output ptrs (for each segment) */
 uaddr_t	rlxmods;		/* SHRI the modules fill, before stubs */
 uaddr_t	rbase[NXSEG];		/* segment bases once relaxed */
 int	relaxed;		/* pass 2 follows a relaxed layout */
+flag_t	lnames;			/* -N: names over NCPLN chars (LF_LNAME) */
+char	*strtab;		/* the input's string table, LF_LNAME */
+fsize_t	strsize;		/* its size */
 
 /* seconds between ranlib update and archive modify times */
 #define	SLOPTIME 150
@@ -229,6 +233,9 @@ uaddr_t ptov(), vtop();
 fsize_t	segoffs();
 void	symredef(), rdsymbol(), commfit();
 sym_t	*addsym(), *symref();
+char	*lnameof(), *symname();
+int	lneq(), wrstrtab();
+void	rdstrtab();
 fsize_t	symoff();
 void	loadmod(), putstruc(), putword(), putlohi(), puthilo(), putbyte();
 void	putlong();

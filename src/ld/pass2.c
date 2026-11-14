@@ -185,8 +185,8 @@ mod_t	*mp;
 		 */
 		if (dimp && ((opcode&LR_OP) != LR_LONG || (opcode&LR_PCR) != 0
 			  || segn != L_PRVD)) {
-			mperr(mp, "%.*s: a shared library's data can only be reached through a far pointer in private data (compile with -VPIC)",
-				NCPLN, sp->s.ls_id);
+			mperr(mp, "%s: a shared library's data can only be reached through a far pointer in private data (compile with -VPIC)",
+				symname(sp));
 			dimp = 0;
 		}
 		if (opcode&LR_PCR)

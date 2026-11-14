@@ -32,7 +32,7 @@ usage(args)
 char	*args;
 {
 	fatal("%r\n\
-Usage: ld [-d] [-e entry] [-k[sysnam]] [-i] [-l<name>] [-m] [-n] [-o file]\\\n\
+Usage: ld [-d] [-e entry] [-k[sysnam]] [-i] [-l<name>] [-m] [-n] [-N] [-o file]\\\n\
 \t[-R relocbase] [-P privbase] [-L] [-r] [-s] [-u symbol] [-X|x] file ...",
 		&args);
 }
@@ -81,9 +81,9 @@ sym_t	*sp;
 char	*args;
 {
 	if (sp->mod==NULL)
-		message("symbol %.*s: %r", NCPLN, sp->s.ls_id, &args);
+		message("symbol %s: %r", symname(sp), &args);
 	else
-		mpmsg(sp->mod, "symbol %.*s: %r", NCPLN, sp->s.ls_id, &args);
+		mpmsg(sp->mod, "symbol %s: %r", symname(sp), &args);
 }
 
 /*

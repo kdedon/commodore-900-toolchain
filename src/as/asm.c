@@ -53,6 +53,10 @@ char *argv[];
 					++xflag;
 					break;
 
+				case 'N':
+					++nflag;
+					break;
+
 				default:
 					usage();
 				}
@@ -168,7 +172,7 @@ asm()
 	address cs;
 	struct tsymp *tsp;
 	struct expr e1;
-	char id[NCPLN];
+	char id[NCPID];
 	char *p;
 	int d;
 
@@ -371,7 +375,7 @@ address n;
 
 usage()
 {
-	fprintf(stderr, "Usage: as [-glx] [-o file] file [file ...]\n");
+	fprintf(stderr, "Usage: as [-glNx] [-o file] file [file ...]\n");
 	exit(1);
 }
 

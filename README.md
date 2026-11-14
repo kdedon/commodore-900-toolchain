@@ -42,6 +42,31 @@ segment. Startup code must define it with the segment byte repeated:
 COHERENT user programs use `0x0000`; the kernel uses `0x3F3F`. Freestanding
 programs must use the segment selected by their startup code.
 
+## Long external names
+
+An l.out symbol name is 16 bytes, the `_` cc appends included; cc2 warns
+when it truncates one.  `ccz -VLNAME` (cc2 variant VLNAME, `as -N`,
+`ld -N`) keeps names of up to 127 characters instead.  An object or image
+that names a longer one sets `LF_LNAME` (02000) in `l_flag`; one that does
+not is the same bytes as without the option.
+
+In an `LF_LNAME` file a name of 16 characters or fewer is in `ls_id` as
+before.  A longer one has `ls_id[0]` zero and, in `ls_id[4..7]`, the offset
+of the name in a string table that follows `L_REL`: a header-order long
+holding the table's size, its own four bytes included, then NUL-terminated
+names.  An archive index naming a long symbol starts with a marker entry
+(`ar_id[1]` 1, `ar_off` the table's offset in `__.SYMDEF`) and ends with the
+same kind of table (`<ar.h>`).  Names past 127 characters are cut there,
+with cc2's warning.
+
+`ld` refuses an `LF_LNAME` input without `-N`, and refuses long names in a
+shared library or a program that uses one, whose export and import records
+the kernel reads at 16 bytes; `slgen` refuses `LF_LNAME` objects.  ld, ar,
+loutid and loutdis read both forms; `nlist()` reads both and finds names of
+up to 16 characters.  COHERENT's own tools (nm, size, strip, db, and ld and
+ar built before this format) do not read `LF_LNAME` files; files without
+long names are unaffected.
+
 ## Optional inputs
 
 | Variable | Used for |

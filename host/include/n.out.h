@@ -57,6 +57,7 @@ struct	ldheader {
 #define LF_DEBUG 0200		/* Include debug segment flag to linker */
 #define LF_FAKE	0400		/* Header is displaced to end of exe or prg */
 #define	LF_RELAX 01000		/* Every text branch has a relocation */
+#define	LF_LNAME 02000		/* Names over NCPLN chars, see below */
 
 /*
  * A fixed-address client sets one bit per library slot it uses; exec attaches
@@ -116,6 +117,20 @@ struct nlist	{
 };
 
 #define	L_GLOBAL	020
+
+/*
+ * Long names, in an LF_LNAME file only.  A name of up to NCPLN characters
+ * is in ls_id as always.  A longer one leaves ls_id zero except ls_id[4..7],
+ * the offset of the name in the string table, a long in the header's byte
+ * order (high word first, each word low byte first).  The string table
+ * follows the last section, L_REL: that same long form holding the table's
+ * size in bytes, its own four included, then the names, each ending in a
+ * NUL.  The tools write names of up to LNMAX characters.
+ */
+#define	LNMAX	127
+#define	LS_LOFF(id)	((long)((id)[4]&0xFF)<<16 | (long)((id)[5]&0xFF)<<24 \
+			 | (long)((id)[6]&0xFF) | (long)((id)[7]&0xFF)<<8)
+#define	LS_ISLONG(id)	((id)[0] == 0 && LS_LOFF(id) != 0)
 
 /*
  * Relocation.

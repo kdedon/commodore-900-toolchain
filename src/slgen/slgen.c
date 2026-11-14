@@ -52,6 +52,7 @@
 #define	M_Z8001		4
 #define	LF_SHR		01
 #define	LF_SLIB		0100
+#define	LF_LNAME	02000
 #define	L_SHRI		0
 #define	L_PRVI		1
 #define	L_BSSI		2
@@ -318,6 +319,9 @@ char **objv;
 			fatal("%s: bad magic number", objv[i]);
 		if (canw(hdr + 4) != M_Z8001)
 			fatal("%s: not a Z8001 object", objv[i]);
+		/* The export table and exec's import records hold NCPLN. */
+		if (canw(hdr + 2) & LF_LNAME)
+			fatal("%s: names a symbol over %d characters, which a shared library cannot", objv[i], NCPLN);
 		if (canw(hdr + 2) & LF_SLIB) {
 			fclose(fp);
 			continue;
@@ -872,6 +876,9 @@ char **objv;
 			fatal("%s: bad magic number", objv[i]);
 		if (canw(hdr + 4) != M_Z8001)
 			fatal("%s: not a Z8001 object", objv[i]);
+		/* The export table and exec's import records hold NCPLN. */
+		if (canw(hdr + 2) & LF_LNAME)
+			fatal("%s: names a symbol over %d characters, which a shared library cannot", objv[i], NCPLN);
 		for (j = 0; j < NLSEG; j++)
 			sz[j] = canl(hdr + 8 + 4 * j);
 		o = LDHLEN;

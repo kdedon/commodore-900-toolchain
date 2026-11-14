@@ -12,6 +12,7 @@ int	lop;
 int	pass;
 int	lflag;
 int	xflag;
+int	nflag;
 int	gflag;
 int	eflag;
 address	laddr;

@@ -135,6 +135,11 @@ $(B)/slgen: src/slgen/slgen.c
 # structure or the member is.
 #
 # tests/vdebug.sh: a -VDEBUG program compiles and runs.
+#
+# tests/symlen.sh: cc2 names the externals the 16-byte l.out symbol truncates.
+#
+# tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
+# ld, ld -r, the native ar's index, loutid, loutdis and nlist().
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
@@ -170,6 +175,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/volmem.sh
 	sh tests/initvol.sh
 	sh tests/vdebug.sh
+	sh tests/symlen.sh
+	sh tests/lname.sh
 	sh tests/bytearg.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and

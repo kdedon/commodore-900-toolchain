@@ -37,6 +37,8 @@
 #define	SEGSHRI	0
 #define	SEGPRVI	1
 #define	SEGSYM	7
+#define	LF_LNAME 02000		/* names over 16 chars in a string table */
+#define	LNMAX	127
 
 char *progname = "loutdis";
 
@@ -59,7 +61,7 @@ struct hdr {
 };
 
 struct sym {
-	char name[17];
+	char name[LNMAX + 1];
 	unsigned long typ, addr;
 	int seg;
 };
@@ -195,10 +197,11 @@ unsigned char *data;
 long n;
 struct sym *out;
 {
-	long start, o;
+	long start, o, str, so;
 	int i, k, cnt;
 
 	start = segoffset(h, SEGSYM);
+	str = segoffset(h, NLSEG);	/* the string table, LF_LNAME */
 	cnt = (int)(h->ssize[SEGSYM] / SYMSIZE);
 	for (i = 0; i < cnt; i++) {
 		o = start + (long)i * SYMSIZE;
@@ -211,6 +214,14 @@ struct sym *out;
 			if (out[i].name[k] == '\0')
 				break;
 		out[i].name[k] = '\0';
+		so = (long)u32of(h->d32, data + o + 4);
+		if ((h->flag & LF_LNAME) != 0 && k == 0 && so >= 4
+		    && str + so < n) {
+			for (k = 0; k < LNMAX && str + so + k < n
+			    && data[str + so + k] != 0; k++)
+				out[i].name[k] = (char)data[str + so + k];
+			out[i].name[k] = '\0';
+		}
 		out[i].typ = u16of(h->d16, data + o + 16);
 		out[i].addr = u32of(h->d32, data + o + 18);
 		out[i].seg = (int)(out[i].typ & 017);

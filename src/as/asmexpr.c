@@ -112,7 +112,7 @@ register struct expr *esp;
 {
 	register c;
 	address  n;
-	char id[NCPLN];
+	char id[NCPID];
 	struct sym  *sp;
 	struct tsym *tp;
 	int r, v;

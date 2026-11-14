@@ -46,6 +46,7 @@ struct	ar_hdr ahb;
 int	nname;
 char	**namep;
 char	*ctime();
+char	*malloc(), *realloc();
 int	usage();
 long	fsize();
 long	ftell();
@@ -1212,12 +1213,51 @@ ropen()
 struct ldheader ldh;
 struct ldsym lds;
 struct ar_sym ars;
+char	*mstr;			/* the module's string table, LF_LNAME */
+long	mstrlen;
+char	*rstr;			/* the header's string table */
+long	rstrlen;
 
 xwrite()
 {
+	register char *np;
+	register long n;
+	long off;
+
+	if (mstr != NULL && LS_ISLONG(lds.ls_id)) {
+		off = LS_LOFF(lds.ls_id);
+		np = off < 4 || off >= mstrlen ? "" : mstr+off;
+		n = strlen(np) + 1;
+		if (rstrlen == 0)
+			rstrlen = 4;
+		rstr = rstr == NULL ? malloc((unsigned)(rstrlen+n))
+			: realloc(rstr, (unsigned)(rstrlen+n));
+		if (rstr == NULL)
+			diag(1, "out of space");
+		strcpy(rstr+rstrlen, np);
+		lnput(lds.ls_id, rstrlen);
+		rstrlen += n;
+	}
 	if (fwrite(lds.ls_id, sizeof(lds.ls_id), 1, rfp) != 1
 	 || fwrite(&ars.ar_off, sizeof(ars.ar_off), 1, rfp) != 1)
 		ioerr(rnp);
+}
+
+/*
+ * Name, in id, the string-table offset `off'.
+ */
+lnput(id, off)
+register char *id;
+long off;
+{
+	register int i;
+
+	for (i = 0; i < NCPLN; i++)
+		id[i] = 0;
+	id[4] = off>>16;
+	id[5] = off>>24;
+	id[6] = off;
+	id[7] = off>>8;
 }
 
 xread(fp) register FILE *fp;
@@ -1264,6 +1304,9 @@ raddmod(afp, mfp) FILE *afp, *mfp;
 		cansize(ldh.l_ssize[seg]);
 		offset += ldh.l_ssize[seg];
 	}
+	mstr = NULL;
+	if ((ldh.l_flag & (LF_32|LF_LNAME)) == (LF_32|LF_LNAME))
+		rdmstr(mfp, off, offset);
 	fseek(mfp, offset, 1);
 	cansize(ldh.l_ssize[L_SYM]);
 	if ((ldh.l_flag & LF_32) == 0)
@@ -1280,7 +1323,77 @@ raddmod(afp, mfp) FILE *afp, *mfp;
 			xwrite();
 	}
 done:
+	if (mstr != NULL)
+		free(mstr);
+	mstr = NULL;
 	fseek(mfp, off, 0);	/* back to beginning of module */
+}
+
+/*
+ * Read the string table of the module at `off', whose symbol table is at
+ * `offset' from the end of its header.
+ */
+rdmstr(mfp, off, offset)
+FILE *mfp;
+fsize_t off, offset;
+{
+	unsigned char b[4];
+	fsize_t here, sz[2];
+
+	here = ftell(mfp);
+	sz[0] = ldh.l_ssize[L_SYM];
+	sz[1] = ldh.l_ssize[L_REL];
+	cansize(sz[0]);
+	cansize(sz[1]);
+	if (fseek(mfp, here+offset+sz[0]+sz[1], 0) != 0
+	 || fread(b, 4, 1, mfp) != 1)
+		diag(1, "module %.*s: no string table", DIRSIZ, ahb.ar_name);
+	mstrlen = (long)b[0]<<16 | (long)b[1]<<24 | (long)b[2] | (long)b[3]<<8;
+	if (mstrlen < 4 || (mstr = malloc((unsigned)mstrlen+1)) == NULL)
+		diag(1, "module %.*s: bad string table", DIRSIZ, ahb.ar_name);
+	if (mstrlen > 4 && fread(mstr+4, (int)(mstrlen-4), 1, mfp) != 1)
+		diag(1, "module %.*s: short string table", DIRSIZ, ahb.ar_name);
+	mstr[mstrlen] = 0;
+	fseek(mfp, here, 0);
+}
+
+/*
+ * Put the marker entry in front of the header and its string table after:
+ * the header names a symbol over NCPLN characters.
+ */
+rlong()
+{
+	register char *p;
+	long n;
+
+	n = ftell(rfp);
+	fclose(rfp);
+	if ((rfp = fopen(rnp, "rb")) == NULL)
+		diag(1, creop, rnp);
+	if ((p = malloc((unsigned)n+1)) == NULL)
+		diag(1, "out of space");
+	if (n != 0 && fread(p, (int)n, 1, rfp) != 1)
+		ioerr(rnp);
+	fclose(rfp);
+	if ((rfp = fopen(rnp, "wb")) == NULL)
+		diag(1, ccrea, rnp);
+	lnput(ars.ar_id, 0L);
+	ars.ar_id[1] = 1;
+	ars.ar_off = sizeof(ars.ar_id) + sizeof(ars.ar_off) + n;
+	cansize(ars.ar_off);
+	rstr[0] = rstrlen>>16;
+	rstr[1] = rstrlen>>24;
+	rstr[2] = rstrlen;
+	rstr[3] = rstrlen>>8;
+	if (fwrite(ars.ar_id, sizeof(ars.ar_id), 1, rfp) != 1
+	 || fwrite(&ars.ar_off, sizeof(ars.ar_off), 1, rfp) != 1
+	 || (n != 0 && fwrite(p, (int)n, 1, rfp) != 1)
+	 || fwrite(rstr, (int)rstrlen, 1, rfp) != 1)
+		ioerr(rnp);
+	free(p);
+	free(rstr);
+	rstr = NULL;
+	rstrlen = 0;
 }
 
 /*
@@ -1290,6 +1403,8 @@ done:
 rcopy()
 {
 	register FILE *fp;
+	if (rstr != NULL)
+		rlong();
 	fclose(rfp);
 	rfp = NULL;
 	if ((fp = fopen(rnp, "rb")) == NULL)

@@ -133,7 +133,7 @@ ldh_t	*ldhp;
 		canlong(lds.ls_addr);
 		if ((lds.ls_type&L_GLOBAL) == 0
 		 || lds.ls_type == (L_GLOBAL|L_REF)
-		 || (sp=symref(&lds)) == NULL)
+		 || (sp=symref(&lds, (char *)NULL)) == NULL)
 			continue;
 		sp->s.ls_type = L_GLOBAL|L_ABS;
 		sp->s.ls_addr = vtop(lds.ls_addr);
@@ -290,7 +290,7 @@ ldh_t	*ldhp;
 			fatal("%s: export %.*s lies outside the %s image",
 				fname, NCPLN, lds.ls_id,
 				eflg == SE_DATA ? "private" : "shared");
-		if ((sp=symref(&lds)) == NULL)
+		if ((sp=symref(&lds, (char *)NULL)) == NULL)
 			continue;		/* not referenced: skip it */
 		if ((ip=(slimp_t *)malloc(sizeof(slimp_t))) == NULL)
 			fatal(nospace);
@@ -360,7 +360,7 @@ ldh_t	*ldhp;
 		if ((lds.ls_type&L_GLOBAL) == 0
 		 || lds.ls_type == (L_GLOBAL|L_REF)
 		 || slisimp(simp, nsimp, lds.ls_id)
-		 || (sp=symref(&lds)) == NULL
+		 || (sp=symref(&lds, (char *)NULL)) == NULL
 		 || isbuiltin(sp))
 			continue;
 		filemsg(fname, "%.*s: referenced, but the library does not export it",

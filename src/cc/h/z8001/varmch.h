@@ -32,5 +32,8 @@
 #define	VPIC	(VMBASE+9)	/* reach extern data not defined here through
 				 * a 4-byte far-pointer slot in the literal
 				 * pool, bound at exec */
+#define	VLNAME	(VMBASE+10)	/* keep externals of up to 127 characters:
+				 * an LF_LNAME object when one is longer
+				 * than the 16-byte l.out name */
 
 /* end of h/z8001/varmch.h */

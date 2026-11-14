@@ -44,4 +44,13 @@ typedef	struct	ar_sym {
 	fsize_t	ar_off;			/* offset of load module */
 } ar_sym;				/* ...from end of header module */
 
+/*
+ * An index naming a symbol longer than NCPLN characters starts with a
+ * marker entry: ar_id[0] 0, ar_id[1] 1, the rest 0, and ar_off the offset
+ * of a string table from the start of the header module.  The table is
+ * laid out as an LF_LNAME object's (n.out.h) and ends the module.  A long
+ * entry's ar_id is zero but for ar_id[4..7], as an ldsym's ls_id.
+ */
+#define	ARS_ISMARK(id)	((id)[0] == 0 && (id)[1] == 1)
+
 #endif

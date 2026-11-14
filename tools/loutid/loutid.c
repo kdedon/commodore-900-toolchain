@@ -63,6 +63,7 @@
 #define LDHDR_SIZE	48		/* sizeof(struct ldheader), and so l_tbase */
 #define L_ENTRY_OFF	44
 #define L_SYM		7
+#define LF_LNAME	02000		/* names over 16 chars in a string table */
 #define LDSYM_SIZE	22		/* sizeof(struct ldsym) */
 #define NSEG		9
 #define HEADREAD	4096
@@ -140,13 +141,13 @@ flagstr(f, buf)
 int f;
 char *buf;
 {
-	static int bits[] = { 01, 02, 04, 010, 020, 01000 };
-	static char *names[] = { "shr", "sep", "nrb", "ker", "32", "relax" };
+	static int bits[] = { 01, 02, 04, 010, 020, 01000, 02000 };
+	static char *names[] = { "shr", "sep", "nrb", "ker", "32", "relax", "lname" };
 	int i, first;
 
 	buf[0] = '\0';
 	first = 1;
-	for (i = 0; i < 6; i++) {
+	for (i = 0; i < 7; i++) {
 		if ((f & bits[i]) == 0)
 			continue;
 		if (!first)
@@ -220,10 +221,10 @@ unsigned char *b;
 long n;
 struct sbuf *sb;
 {
-	unsigned long sizes[NSEG], off, end, addr;
+	unsigned long sizes[NSEG], off, end, addr, str, so;
 	long o;
 	int i, typ;
-	char name[17], line[64], *sect, sbuf2[16];
+	char name[17], line[64], *sect, sbuf2[16], *np;
 
 	if (n < LDHDR_SIZE || le16(b, 6) != LDHDR_SIZE)
 		return 0;
@@ -236,9 +237,18 @@ struct sbuf *sb;
 	end = off + sizes[L_SYM];
 	if (sizes[L_SYM] % LDSYM_SIZE != 0 || end > (unsigned long)n)
 		return 0;
+	/* LF_LNAME: a name over 16 characters is in the string table, which
+	 * follows the last section; ls_id is zero but for its offset. */
+	str = end + sizes[L_SYM + 1];
 	for (o = (long)off; o < (long)end; o += LDSYM_SIZE) {
 		memcpy(name, b + o, 16);
 		name[16] = '\0';
+		np = name;
+		so = pdp32(b, o + 4);
+		if ((le16(b, 2) & LF_LNAME) != 0 && name[0] == '\0' && so >= 4
+		    && str + so < (unsigned long)n
+		    && memchr(b + str + so, 0, (size_t)(n - (long)(str + so))) != 0)
+			np = (char *)b + str + so;
 		typ = le16(b, o + 16) & 017;
 		addr = pdp32(b, o + 18);
 		if (typ < (int)NSECT)
@@ -249,7 +259,7 @@ struct sbuf *sb;
 		}
 		sprintf(line, "\n  %s 0x%lx ", sect, addr);
 		sbcat(sb, line);
-		sbcat(sb, name);
+		sbcat(sb, np);
 	}
 	return 1;
 }

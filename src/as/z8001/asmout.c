@@ -24,6 +24,7 @@ char	txt[NTXT];
 char	rel[NREL];
 char	*txtp	= { txt };
 char	*relp	= { rel };
+long	strsize;		/* string table, LF_LNAME */
 
 outab(b)
 {
@@ -320,7 +321,7 @@ outinit()
 	register struct sym *sp;
 	register i;
 	struct ldsym lds;
-	int rn;
+	int rn, rs;
 	long sb, ss;
 
 	ldh.l_magic = L_MAGIC;
@@ -356,6 +357,19 @@ outinit()
 			||  sp->s_id[0] != 'L')) {
 				sp->s_ref = rn++;
 				symcopy(lds.ls_id, sp->s_id);
+				if (sp->s_lid != NULL) {
+					/* the name's string-table offset */
+					if (strsize == 0)
+						strsize = 4;
+					for (rs = 0; rs < NCPLN; ++rs)
+						lds.ls_id[rs] = 0;
+					lds.ls_id[4] = strsize>>16;
+					lds.ls_id[5] = strsize>>24;
+					lds.ls_id[6] = strsize;
+					lds.ls_id[7] = strsize>>8;
+					strsize += strlen(sp->s_lid) + 1;
+					sp->s_flag |= S_LSTR;
+				}
 				if (sp->s_kind == S_NEW)
 					lds.ls_type = L_REF;
 				else if (sp->s_type != E_DIR)
@@ -390,6 +404,8 @@ outfinish()
 	int	i;
 
 	ldh.l_ssize[L_REL] = crseek-crbase;
+	if (strsize != 0)
+		outstr();
 	canshort(ldh.l_magic);
 	canshort(ldh.l_flag);
 	canshort(ldh.l_machine);
@@ -404,6 +420,28 @@ outfinish()
 	fseek(ofp, (long)0, 0);
 	xwrite(&ldh, sizeof(ldh), 1);
 	fclose(ofp);
+}
+
+/*
+ * Write the string table after the relocation, in symbol-table order.
+ */
+outstr()
+{
+	register struct sym *sp;
+	register i;
+	char b[4];
+
+	ldh.l_flag |= LF_LNAME;
+	fseek(ofp, crseek, 0);
+	b[0] = strsize>>16;
+	b[1] = strsize>>24;
+	b[2] = strsize;
+	b[3] = strsize>>8;
+	xwrite(b, 1, 4);
+	for (i=0; i<NHASH; ++i)
+		for (sp = symhash[i]; sp != NULL; sp = sp->s_sp)
+			if ((sp->s_flag&S_LSTR) != 0 && sp->s_lid != NULL)
+				xwrite(sp->s_lid, 1, strlen(sp->s_lid)+1);
 }
 
 /*

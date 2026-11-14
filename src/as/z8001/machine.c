@@ -66,7 +66,7 @@ machine1(sp)
 register struct sym *sp;
 {
 	register op;
-	char id[NCPLN];
+	char id[NCPID];
 	struct expr cnt, dst, src;
 	int c, cc, disp;
 	int addr, flag, kind, mask, max;
@@ -355,7 +355,7 @@ machine2(sp)
 register struct sym *sp;
 {
 	register op;
-	char id[NCPLN];
+	char id[NCPID];
 	struct expr cnt, dst, src;
 	int c, cc, disp;
 	int addr, flag, kind, mask;
@@ -797,7 +797,7 @@ comma()
 code()
 {
 	register struct sym *sp;
-	int id[NCPLN];
+	char id[NCPID];
 
 	getid(id, -1);
 	if ((sp=lookup(id, 0))==NULL || sp->s_kind!=S_CC) {
@@ -817,7 +817,7 @@ optcode()
 	register struct sym *sp;
 	register char *sip;
 	register c;
-	char id[NCPLN];
+	char id[NCPID];
 
 	sip = ip;
 	if (ctype[c = getnb()] == LETTER) {
@@ -1126,7 +1126,7 @@ char *cp;
 	struct sym *sp;
 	struct loc *lp1, *lp2;
 	int c;
-	char id[NCPLN];
+	char id[NCPID];
 
 	lp = (struct loc *) new(sizeof(struct loc));
 	lp->l_seg = t;
@@ -1150,6 +1150,7 @@ char *cp;
 			*cp2++ = c;
 	while (cp2 < &id[NCPLN])
 		*cp2++ = 0;
+	*cp2 = 0;
 	sp = lookup(id, 1);
 	sp->s_kind = S_LOC;
 	sp->s_flag = 0;

@@ -39,7 +39,7 @@ char *id;
 		if (lflag)
 			stoerr('u');
 		else {
-			printf("%04d u %.*s", line, NCPLN, id);
+			printf("%04d u %.*s", line, NCPID, id);
 			if (ifn != NULL)
 				printf(" %s", ifn);
 			putchar('\n');

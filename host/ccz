@@ -20,6 +20,9 @@
 #     -slibc     link against shared libc.1 (crt0sl.o + libc.1, no archive)
 #     -lNAME     shared library libNAME, NAME versioned (-lc.1 = -slibc);
 #                importers first; $C900_LIBPATH searched first
+#     -VLNAME    keep externals of up to 127 characters (cc2 VLNAME, as -N,
+#                ld -N); an object naming one over 16 is LF_LNAME, which
+#                the COHERENT native tools cannot read
 #     -VPIC      extern data through slots, for a -c object to be linked
 #                against a shared library (implied when compiling and linking)
 #   FILE may be .c, .s, or .o (objects pass straight to the link).
@@ -62,7 +65,7 @@ fi
 VAR="${CCZ_VAR:-800000020800}"			# includes VREADONLY (ctype.h's `readonly')
 # base unset -> ld uses its Coherent userbase (segment 3), producing a real multi-segment
 # C900 binary (CODE seg 3 / DATA in its segment / STACK seg 0).  -R BASE forces a flat link.
-incs=""; defs=""; out=""; compileonly=0; base=""; nostdlib=0; strip=0; sep=""; large=""; files=""; slibc=0; pic=0; lnames=""; slibs=""
+incs=""; defs=""; out=""; compileonly=0; base=""; nostdlib=0; strip=0; sep=""; large=""; files=""; slibc=0; pic=0; lnames=""; slibs=""; lnflag=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 	-c) compileonly=1;;
@@ -94,6 +97,7 @@ while [ $# -gt 0 ]; do
 	# by path, since theirs carry the machine name (libm-z8001.a).
 	-l*) lnames="$lnames ${1#-l}";;
 	-VPIC) pic=1;;
+	-VLNAME) lnflag="-N";;
 	-s) strip=1;;
 	-*) echo "ccz: unknown option $1" >&2; exit 2;;
 	*) files="$files $1";;
@@ -131,6 +135,12 @@ done
 if [ "$pic" = 1 ] || { [ "$slibc" = 1 ] && [ "$compileonly" = 0 ]; }; then
 	VAR="${CCZ_VAR:-800000020808}"
 fi
+# cc2's variant string with VLNAME (VMBASE+10, bit 4 of byte 5) set.
+C2VAR="${PEEP:-0010}"
+if [ -n "$lnflag" ]; then
+	while [ ${#C2VAR} -lt 12 ]; do C2VAR="${C2VAR}0"; done
+	C2VAR="${C2VAR%??}$(printf %02x $((0x${C2VAR#??????????} | 0x10)))"
+fi
 [ -n "$files" ] || { echo "ccz: no input files" >&2; exit 2; }
 [ -x "$O/cc0-z8001" ] || { echo "ccz: toolchain not built (run build-z8001.sh + build-cc2-z8001.sh)" >&2; exit 1; }
 
@@ -143,7 +153,7 @@ for f in $files; do
 	*.a)  objs="$objs $f";;	# archive: ld scans it after the objects
 	*.s)  o="$tmp/$stem.o"; c900_buildlog "$f"
 	      if [ "$compileonly" = 1 ]; then c900_buildmap "${out:-$stem.o}" "$f"; fi
-	      "$AS" -o "$o" "$f"
+	      "$AS" $lnflag -o "$o" "$f"
 	      if [ "$compileonly" = 1 ]; then
 		      co=${out:-$stem.o}; cp "$o" "$co"; echo "ccz: $f -> $co"
 	      fi
@@ -161,7 +171,7 @@ for f in $files; do
 		if [ "$compileonly" = 1 ]; then c900_buildmap "${out:-$stem.o}" "$f"; fi
 		"$O/cc0-z8001" $VAR "$f" "$tmp/$stem.z0" $incs -I"$OS/include" -I"$OS/include/sys" $defs
 		"$O/cc1-z8001" $VAR "$tmp/$stem.z0" "$tmp/$stem.z1"
-		"$O/cc2-z8001" "${PEEP:-0010}" "$tmp/$stem.z1" "$o" "$tmp/$stem.scr" 0
+		"$O/cc2-z8001" "$C2VAR" "$tmp/$stem.z1" "$o" "$tmp/$stem.scr" 0
 		if [ "$compileonly" = 1 ]; then
 			co=${out:-$stem.o}; cp "$o" "$co"; echo "ccz: $f -> $co"
 		fi
@@ -183,16 +193,16 @@ c900_buildmap "$a" $files
 Rflag=""; [ -n "$base" ] && Rflag="-R $base"
 sflag=""; [ "$strip" = 1 ] && sflag="-s"		# -s: strip the symbol table (deliverable binaries)
 if [ "$nostdlib" = 1 ]; then
-	"$LD" $sep $large $sflag $Rflag -o "$a" $objs
+	"$LD" $lnflag $sep $large $sflag $Rflag -o "$a" $objs
 else
 	if [ "$slibc" = 1 ]; then
 		for l in $slibs; do
 			[ -f "$l" ] || { echo "ccz: $l not built (run build-libc1.sh)" >&2; exit 1; }
 		done
-		"$LD" $sep $large $sflag $Rflag -o "$a" "$LIBC1/crt0sl.o" $objs $slibs
+		"$LD" $lnflag $sep $large $sflag $Rflag -o "$a" "$LIBC1/crt0sl.o" $objs $slibs
 	else
 	[ -f "$LIBC/crt0.o" ] || { echo "ccz: libc not built (run build-libc-z8001.sh)" >&2; exit 1; }
-	"$LD" $sep $large $sflag $Rflag -o "$a" "$LIBC/crt0.o" $objs "$LIBC/libc-z8001.a"
+	"$LD" $lnflag $sep $large $sflag $Rflag -o "$a" "$LIBC/crt0.o" $objs "$LIBC/libc-z8001.a"
 	fi
 fi
 # -s: also drop the trailing REL section.  The kernel exec loader (sys/coh/exec.c) uses

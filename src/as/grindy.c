@@ -18,7 +18,10 @@
  * the buffer `id'. The character `c'
  * is the first character of the name;
  * if < 0 then a character must be
- * read.
+ * read.  Under -N a name keeps LNMAX
+ * characters and ends in a NUL past
+ * the first NCPLN; id[NCPLN] is 0 for
+ * one that fits in NCPLN.
  */
 getid(id, c)
 register c;
@@ -35,7 +38,7 @@ char *id;
 			qerr();
 	}
 	p = id;
-	e = p + NCPLN;
+	e = p + (nflag ? LNMAX : NCPLN);
 	do {
 		if (p < e)
 			*p++ = c;
@@ -44,8 +47,10 @@ char *id;
 	} while (ctype[c] <= 0);	/* LETTER or DIGIT */
 	if (c != 0)
 		--ip;
+	e = id + NCPLN;
 	while (p < e)
 		*p++ = 0;
+	*p = 0;
 }
 
 /*
@@ -93,7 +98,9 @@ char *id;
 	}
 	if ((sp = symhash[ht&HMASK]) != NULL) {
 		do {
-			if (sp->s_total==ht && symeq(id, sp->s_id))
+			if (sp->s_total==ht && symeq(id, sp->s_id)
+			 && (id[NCPLN] == 0 ? sp->s_lid == NULL
+			  : sp->s_lid != NULL && strcmp(sp->s_lid, id) == 0))
 				return (sp);
 		} while ((sp = sp->s_sp) != NULL);
 	}
@@ -109,6 +116,9 @@ char *id;
 	sp->s_flag = S_SYMT;
 	sp->s_addr = 0;
 	symcopy(sp->s_id, id);
+	sp->s_lid = NULL;
+	if (id[NCPLN] != 0)
+		strcpy(sp->s_lid = new(strlen(id)+1), id);
 	return (sp);
 }
 

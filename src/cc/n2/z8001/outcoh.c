@@ -396,6 +396,43 @@ long	off, val;
 }
 
 /*
+ * An l.out symbol keeps 16 bytes of its name, the appended `_' included, and
+ * the linker matches those bytes alone: a longer external is truncated, and
+ * two that agree in their first 16 bytes become one symbol.  Under -VLNAME a
+ * name keeps up to LNMAX characters, and the object takes the LF_LNAME form
+ * when one is longer than 16.  Name each symbol truncated, and say which ones
+ * this object already merges.
+ */
+#define	SYMLEN	16
+#define	LNMAX	127
+#define	LF_LNAME	02000
+
+static
+symwarn(syms, nsym, lim)
+struct osym	*syms;
+{
+	register int	i, j;
+	register char	*name;
+	char		cut[LNMAX+1];
+
+	for (i = 0; i < nsym; ++i) {
+		name = syms[i].sp->s_id;
+		if (strlen(name) <= lim)
+			continue;
+		strncpy(cut, name, lim);
+		cut[lim] = '\0';
+		cwarn("external \"%s\" is longer than %d characters; the linker sees \"%s\"",
+		    name, lim, cut);
+		for (j = 0; j < nsym; ++j)
+			if (j != i
+			 && (j < i || strlen(syms[j].sp->s_id) <= lim)
+			 && strncmp(syms[j].sp->s_id, name, lim) == 0)
+				cwarn("externals \"%s\" and \"%s\" are one symbol to the linker",
+				    syms[j].sp->s_id, name);
+	}
+}
+
+/*
  * Write the finished object.  Defined globals first (L_GLOBAL), then the undefined
  * externals (L_GLOBAL|L_REF) -- matching the Go n2's symbol order.  A text symbol's
  * address is its in-segment offset; a data symbol's is textSize + its offset.  Then the
@@ -406,8 +443,9 @@ outdone()
 {
 	register SYM	*sp;
 	register int	i, j;
-	int		pass, nsym, nr, nsymcap, sssym;
+	int		pass, nsym, nr, nsymcap, sssym, lim, lflag;
 	long		textsize, shrdsize, datasize, bsssize, symsize, relsize;
+	long		strsize;
 	long		segbase[NSEG];
 	struct osym	*syms;
 	struct relrec	*recs;
@@ -515,6 +553,19 @@ outdone()
 		syms[nsym].addr = 0;
 		++nsym;
 	}
+	/* Under -VLNAME, a name longer than 16 goes in the string table. */
+	lim = isvariant(VLNAME) ? LNMAX : SYMLEN;
+	symwarn(syms, nsym, lim);
+	lflag = 0;
+	strsize = 4;
+	if (lim > SYMLEN)
+		for (i = 0; i < nsym; ++i) {
+			j = strlen(syms[i].sp->s_id);
+			if (j > SYMLEN) {
+				lflag = LF_LNAME;
+				strsize += (j < lim ? j : lim) + 1;
+			}
+		}
 
 	/* resolve fixups: patch each referencing word and build a relocation record. */
 	nr = 0;
@@ -590,7 +641,7 @@ outdone()
 		relsize += recs[i].sym ? 7 : 5;
 
 	/* header (48 bytes): magic, flag LF_32, machine z8001, tbase, 9 section sizes, entry */
-	leput(0407); leput(norelax ? 0x10 : 0x10|LF_RELAX); leput(4); leput(48);
+	leput(0407); leput((norelax ? 0x10 : 0x10|LF_RELAX) | lflag); leput(4); leput(48);
 	canput((unsigned long)textsize);	/* ss[0] SHRI */
 	canput(0L); canput(0L);			/* ss[1..2] PRVI BSSI */
 	canput((unsigned long)shrdsize);	/* ss[3] SHRD (strings, readonly data) */
@@ -615,11 +666,20 @@ outdone()
 	}
 	/* SBSS emits no file bytes: its size is declared in ss[5] BSSD and the loader zero-fills. */
 
+	strsize = 4;
 	for (i = 0; i < nsym; ++i) {		/* symbol table: native ldsym, 22 bytes each */
 		register char	*name;
 		name = syms[i].sp->s_id;
-		for (j = 0; j < 16; ++j)
-			putc(j < (int)strlen(name) ? name[j] : 0, ofp);
+		if (lflag && strlen(name) > SYMLEN) {
+			leput(0); leput(0);	/* the name's string-table offset */
+			canput((unsigned long)strsize);
+			for (j = 8; j < 16; ++j)
+				putc(0, ofp);
+			j = strlen(name);
+			strsize += (j < lim ? j : lim) + 1;
+		} else
+			for (j = 0; j < 16; ++j)
+				putc(j < (int)strlen(name) ? name[j] : 0, ofp);
 		leput(syms[i].typ);		/* ls_type at +16 */
 		canput(syms[i].addr);		/* ls_addr at +18 */
 	}
@@ -638,6 +698,18 @@ outdone()
 		} else {
 			putc(recs[i].code|recs[i].width, ofp); putc(0, ofp); putc(0, ofp);
 			putc((int)(recs[i].addr&0xFF), ofp); putc((int)((recs[i].addr>>8)&0xFF), ofp);
+		}
+	}
+	if (lflag) {				/* the string table */
+		canput((unsigned long)strsize);
+		for (i = 0; i < nsym; ++i) {
+			register char	*name;
+			name = syms[i].sp->s_id;
+			if (strlen(name) <= SYMLEN)
+				continue;
+			for (j = 0; j < lim && name[j] != 0; ++j)
+				putc(name[j], ofp);
+			putc(0, ofp);
 		}
 	}
 }

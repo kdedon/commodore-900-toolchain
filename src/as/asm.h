@@ -67,7 +67,14 @@ struct	sym
 		struct loc *s_lp;
 		int s_segn;
 	} s_base;		/* Base */
+	char	*s_lid;		/* Name over NCPLN chars (-N), else NULL */
 };
+
+/*
+ * An identifier buffer.  Under -N getid() keeps up to LNMAX characters;
+ * id[NCPLN] is nonzero only for a name longer than NCPLN.
+ */
+#define	NCPID	(LNMAX+1)
 
 /* Flags */
 #define	S_GBL	01		/* Global */
@@ -75,6 +82,7 @@ struct	sym
 #define	S_MDF	04		/* Mult. def */
 #define	S_END	010		/* End mark */
 #define	S_SYMT	020		/* For l.out symbol table */
+#define	S_LSTR	0100		/* Name in the string table */
 
 /* Kinds */
 #define	S_NEW	0		/* New name */
@@ -139,6 +147,7 @@ extern	int	lflag;
 extern	int	gflag;
 extern	int	eflag;
 extern	int	xflag;
+extern	int	nflag;
 extern	address	laddr;
 extern	address	fuzz;
 extern	int	lmode;

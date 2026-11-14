@@ -32,7 +32,8 @@ char	*argv[];
 	FILE	*ofp;
 	int	i, segn;
 	unsigned int	symno;
-	fsize_t	daddr;
+	fsize_t	daddr, ostrsize;
+	lds_t	lds;
 
 	scanargs(argc, argv);
 	if (machine == 0)
@@ -183,6 +184,7 @@ char	*argv[];
 	 * run through symbol table fixing everything up
 	 */
 	symno = 0;
+	ostrsize = 0;
 	for (i=0; i<NHASH; i++) {
 		for (sp=symtable[i]; sp!=NULL; sp=sp->next) {
 			if ((segn=sp->s.ls_type&~L_GLOBAL) < L_SYM) {
@@ -214,7 +216,20 @@ char	*argv[];
 				sp->s.ls_addr = ptov(sp->s.ls_addr);
 				canshort(sp->s.ls_type);
 				canlong(sp->s.ls_addr);
-				putstruc(&sp->s, sizeof sp->s,
+				lds = sp->s;	/* struct assign */
+				if (sp->lname != NULL) {
+					/* its string-table offset */
+					if (ostrsize == 0)
+						ostrsize = 4;
+					for (segn=0; segn<NCPLN; segn++)
+						lds.ls_id[segn] = 0;
+					lds.ls_id[4] = ostrsize>>16;
+					lds.ls_id[5] = ostrsize>>24;
+					lds.ls_id[6] = ostrsize;
+					lds.ls_id[7] = ostrsize>>8;
+					ostrsize += strlen(sp->lname) + 1;
+				}
+				putstruc(&lds, sizeof lds,
 					outputf[L_SYM], &oseg[L_SYM]);
 				canshort(sp->s.ls_type);
 				canlong(sp->s.ls_addr);
@@ -247,6 +262,12 @@ char	*argv[];
 	/*
 	 * All over but the flushing
 	 */
+	if (ostrsize != 0) {
+		if (oldh.l_flag & (LF_SLREF|LF_SLIB))
+			fatal("a shared library or a program using one cannot name a symbol over %d characters",
+				NCPLN);
+		oldh.l_flag |= LF_LNAME;
+	}
 	canshort(oldh.l_magic);
 	canshort(oldh.l_flag);
 	canshort(oldh.l_machine);
@@ -263,6 +284,8 @@ char	*argv[];
 			outbuf[i] = *((char *)&oldh + i);
 		fwrite(outbuf, 1, (int)daddr, ofp);
 	}
+	if (ostrsize != 0)
+		wrstrtab(ofp, oseg[L_REL].daddr+oseg[L_REL].size, ostrsize);
 	/*
 	 * nerror, not just nundef.  A module with a bad symbol segment or an
 	 * unresolvable relocation is reported and then skipped, so the image
@@ -335,6 +358,9 @@ register char *av[];
 			continue;
 		case 'n':
 			oldh.l_flag |= LF_SHR;
+			continue;
+		case 'N':
+			lnames++;
 			continue;
 		case 'P':	/* Base of the private half */
 			if (++i >= ac)
@@ -549,6 +575,7 @@ register char *cp;
 char *m;
 {
 	char	id[NCPLN], *s=&id[0];
+	char	*lname = strlen(cp) > NCPLN ? cp : NULL;
 	uaddr_t	oaddr = 0;
 	int notoct = 0;
 	int base = 10;
@@ -576,12 +603,15 @@ char *m;
 	for (sp=symtable[hash(id)]; sp!=NULL; sp=sp->next) {
 		if (sp->s.ls_type&L_GLOBAL
 		 && sp->s.ls_type!=(L_GLOBAL|L_REF)
-		 && eq(sp->s.ls_id, id)) {
+		 && eq(sp->s.ls_id, id) && lneq(sp, lname)) {
 			oaddr = sp->s.ls_addr;
 			return (oaddr);
 		}
 	}
-	message("%s %.*s undefined", m, NCPLN, id);
+	if (lname != NULL)
+		message("%s %s undefined", m, lname);
+	else
+		message("%s %.*s undefined", m, NCPLN, id);
 	return (0);
 }
 
@@ -655,7 +685,33 @@ char	*s;
 	}
 	lds.ls_type = L_GLOBAL|L_REF;
 	lds.ls_addr = 0;
-	addsym(&lds, NULL);
+	addsym(&lds, lnames && *s != '\0' ? s-NCPLN : NULL, NULL);
+}
+
+/*
+ * Write the string table at `offs': its size, then each long name in the
+ * order the symbol table took them.
+ */
+wrstrtab(fp, offs, size)
+FILE	*fp;
+fsize_t	offs, size;
+{
+	register sym_t	*sp;
+	unsigned char	b[4];
+	int	i;
+
+	fseek(fp, offs, 0);
+	b[0] = size>>16;
+	b[1] = size>>24;
+	b[2] = size;
+	b[3] = size>>8;
+	fwrite(b, 4, 1, fp);
+	for (i=0; i<NHASH; i++)
+		for (sp=symtable[i]; sp!=NULL; sp=sp->next)
+			if (sp->lname != NULL)
+				fwrite(sp->lname, strlen(sp->lname)+1, 1, fp);
+	if (ferror(fp))
+		fatal("cannot write %s", ofname);
 }
 
 /*

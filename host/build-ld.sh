@@ -117,16 +117,16 @@ static void vrender(FILE *f, char *fmt, va_list *ap) {
 void message(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 void fatal(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); exit(1); }
 void usage(char *fmt, ...){ va_list ap; va_start(ap,fmt); fputs("Ld: ",stderr); vrender(stderr,fmt,&ap);
-	fputs("\nUsage: ld [-d][-e entry][-i][-l<name>][-m][-n][-o file][-r][-s][-u sym][-x] file ...\n",stderr); va_end(ap); exit(1); }
+	fputs("\nUsage: ld [-d][-e entry][-i][-l<name>][-m][-n][-N][-o file][-r][-s][-u sym][-x] file ...\n",stderr); va_end(ap); exit(1); }
 void filemsg(char *fname, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 void modmsg(char *fname, char mname[], char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); if(mname[0]) fprintf(stderr,"module %.16s: ",mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 void mpmsg(mod_t *mp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",mp->fname?mp->fname:"?"); if(mp->mname[0]) fprintf(stderr,"module %.16s: ",mp->mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
-void spmsg(sym_t *sp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %.16s: ",sp->s.ls_id); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void spmsg(sym_t *sp, char *fmt, ...){ va_list ap; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %s: ",symname(sp)); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 /* the counted forms; nerror decides main()'s exit status */
 void filerr(char *fname, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 void moderr(char *fname, char mname[], char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",fname); if(mname[0]) fprintf(stderr,"module %.16s: ",mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 void mperr(mod_t *mp, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: file %s: ",mp->fname?mp->fname:"?"); if(mp->mname[0]) fprintf(stderr,"module %.16s: ",mp->mname); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
-void sperr(sym_t *sp, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %.16s: ",sp->s.ls_id); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
+void sperr(sym_t *sp, char *fmt, ...){ va_list ap; nerror++; va_start(ap,fmt); fprintf(stderr,"Ld: symbol %s: ",symname(sp)); vrender(stderr,fmt,&ap); fputc('\n',stderr); va_end(ap); }
 MSGEOF
 
 cd "$OUT"
