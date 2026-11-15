@@ -1,0 +1,148 @@
+# Z8001 segmented-mode clock cycles, from the Z8000 CPU Technical Manual
+# (Mar 1981) section 6.7.  One line per instruction and addressing mode:
+#   MNEMONIC MODE SS [SL]
+# SS is the short-offset (or only) figure, SL the long-offset one for DA and
+# X.  Modes: R IM IR DA X BA BX RA, and "-" for instructions with no operand
+# mode.  A mnemonic ending in "<" is the store form of a load (memory
+# destination).  Byte forms (LDB, ADDB, ...) use the word line unless they
+# have their own.  Shifts, multiply, divide, LDM and conditional returns are
+# priced in fpcycles.py.
+ADC   R  5
+SBC   R  5
+ADD   R  4
+ADD   IM 7
+ADD   IR 7
+ADD   DA 10 12
+ADD   X  10 13
+ADDL  R  8
+ADDL  IM 14
+ADDL  IR 14
+ADDL  DA 16 18
+ADDL  X  16 19
+SUB   R  4
+SUB   IM 7
+SUB   IR 7
+SUB   DA 10 12
+SUB   X  10 13
+SUBL  R  8
+SUBL  IM 14
+SUBL  IR 14
+SUBL  DA 16 18
+SUBL  X  16 19
+AND   R  4
+AND   IM 7
+AND   IR 7
+AND   DA 10 12
+AND   X  10 13
+OR    R  4
+OR    IM 7
+OR    IR 7
+OR    DA 10 12
+OR    X  10 13
+XOR   R  4
+XOR   IM 7
+XOR   IR 7
+XOR   DA 10 12
+XOR   X  10 13
+CP    R  4
+CP    IM 7
+CP    IR 7
+CP    DA 10 12
+CP    X  10 13
+CPL   R  8
+CPL   IM 14
+CPL   IR 14
+CPL   DA 16 18
+CPL   X  16 19
+BIT   R  4
+BIT   IR 8
+BIT   DA 11 13
+BIT   X  11 14
+SET   R  4
+RES   R  4
+CLR   R  7
+CLR   IR 8
+CLR   DA 12 14
+CLR   X  12 15
+COM   R  7
+NEG   R  7
+TEST  R  7
+TEST  IR 8
+TEST  DA 12 14
+TEST  X  12 15
+TESTL R  13
+TESTL IR 13
+TESTL DA 17 19
+TESTL X  17 20
+INC   R  4
+INC   IR 11
+INC   DA 14 16
+INC   X  14 17
+DEC   R  4
+DEC   IR 11
+DEC   DA 14 16
+DEC   X  14 17
+EX    R  6
+EXTS  R  11
+EXTSB R  11
+EXTSL R  11
+LDK   R  5
+LD    R  3
+LD    IM 7
+LD    IR 7
+LD    DA 10 12
+LD    X  10 13
+LD    BA 14
+LD    BX 14
+LD<   IR 8
+LD<   DA 12 14
+LD<   X  12 15
+LD<   BA 14
+LD<   BX 14
+LDB   IM 5
+LDL   R  5
+LDL   IM 11
+LDL   IR 11
+LDL   DA 13 15
+LDL   X  13 16
+LDL   BA 17
+LDL   BX 17
+LDL<  IR 11
+LDL<  DA 15 17
+LDL<  X  15 18
+LDL<  BA 17
+LDL<  BX 17
+LDA   DA 13 15
+LDA   X  13 16
+LDA   BA 15
+LDA   BX 15
+PUSH  R  9
+PUSH  IM 12
+PUSH  IR 13
+PUSH  DA 14 17
+PUSH  X  14 17
+PUSHL R  12
+PUSHL IR 20
+PUSHL DA 21 24
+PUSHL X  21 24
+POP   R  8
+POPL  R  12
+JR    RA 6
+DJNZ  RA 11
+DBJNZ RA 11
+CALR  RA 15
+CALL  IR 15
+CALL  DA 18 20
+CALL  X  18 21
+JP    DA 8 10
+JP    X  11 11
+SC    IM 39
+RLC   R  6
+RRC   R  6
+RL    R  6
+RR    R  6
+RLDB  R  9
+RRDB  R  9
+SETFLG - 7
+RESFLG - 7
+NOP   -  7
