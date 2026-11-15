@@ -30,7 +30,7 @@ fix: `d_dp != NULL` guard before `d_dp->d_type == D_FUNC`
 why: NULL deref on every `arr[i]` decay; survivable only because Coherent mapped page 0
 
 patch: bitcompat-signedness
-file: n0/stat.c 6c69ef04b83a4af8fec18ad257e703335bc863f6fb1eb55923a2b83d9cec9a04
+file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
 fix: signedness guard on `bitcompat()` for DIV/REM/SHR/ASHR (+ op-assign)
 why: mixed-signedness divide/shift skipped the conversion that selects signed vs unsigned instructions
 
@@ -157,14 +157,14 @@ fix: `#if Z8001` arms in the driver's variant defaults: `VSEG` + `VREADONLY` ins
 why: the C900's C model is the segmented one -- a pointer is a two-word seg:offset (`h/z8001/varmch.h` VSEG) -- and the donor's default is Intel's, so a driver taking it would compile every program for a flat Z8002 with truncated pointers. `VREADONLY` goes with it because the COHERENT 3.2 headers spell const `readonly` (`ctype.h`) and without the keyword they do not parse. The Intel block below forces the small model outside OMF output; there is no OMF on this machine, and `VSEG`/`VNSEG` are one machine-dependent slot apart and must never both be set. Both arms are `#if Z8001`, so no other target sees them
 
 patch: char-parameter-address
-file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: n0/z8001/bind.c
 fix: a parameter declared `char'/`unsigned char' KEEPS that type instead of being retyped to `int': `declare()`'s C_ARG arm asks the machine layer's new `subwordparm()` first, and skips `fixtype()` when it answers yes (`extern int subwordparm()` declared in cc0.h). The machine layer then binds such a parameter at the LOW-ORDER byte of its word slot -- `bindargs()` gives it `offset+1` and still advances by 2, so every later parameter keeps its address
 why: A FRONT-END EDIT MADE ON PURPOSE, owner-decided (TASK #321), because no machine layer can express the fix: after `fixtype()` retypes the parameter to `int` the fact that it was a byte object is GONE, and `&c` can only name the whole word. K&R promotes a char ARGUMENT to int at the call, so the parameter does occupy a word (unchanged: callers still push one, and the ABI is untouched) -- but the parameter is still a one-byte object, and on this BIG-ENDIAN machine the caller's byte is the second byte of that word. The donor handed out the word's own address, which is the low-order byte only because the i8086 it descends from is little-endian; here it named the HIGH byte, zero for every ASCII character, so `write(fd,&c,1)` inside `f(c) char c;` wrote a NUL -- libcurses `waddch` drew NULs while the cursor advanced, and kermit could not send a character (#324). `subwordparm()` answers from `mysizes[]`, so a machine whose char is a word gets the donor's promotion unchanged, and short/float are unaffected (a short IS a word; float is promoted to double by both sides). Reading the parameter's value now takes a byte load plus the extend the declared type asks for, where the promoted word allowed one word load; that is the price of the object having an address at all, and it is also what K&R says the object is -- `f(c) char c; c = 300;` now truncates, and a caller passing 200 into a signed `char' parameter reads -56 back, both of which every conforming compiler does (the differential oracle, gcc, agrees on all 18 generators). Code that wants the wider value must say `int' or `unsigned char', as it must anywhere else. Measured cost: over the 315 objects of this compiler's own self-host build, the ONLY two that change are the two files edited here; over 108 COHERENT userland commands the total is +76 bytes, 0.014%, in exactly the five objects that have a byte parameter -- and `units.o' gets SMALLER, because a byte compare no longer widens first. A byte parameter never reaches a register: `grabreg()` takes word types only and the promotion pass offers no parameter at all, so it stays addressable and correct. Six value assertions through cc0->cc1->cc2->ld->run cover both byte types, both directions and the second parameter's placement (tests/regress.sh, promoted from expected-fail); the byte-identity fixpoint cannot see this class at all, since a compiler reading the wrong byte agrees with itself about it
 
 patch: function-redeclared-after-definition
-file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
 fix: `declare()' restores a demoted C_GREF to the symbol's OLD class for data only. A function declared again, after it was defined earlier in the same file, keeps C_GREF and so reads as the declaration it is
 why: `int f();' at file scope is demoted C_GDEF -> C_GREF a few lines above, exactly so `xdef()' will not take it for a definition. The redeclaration arm then handed the old class back, and where the old class was C_GDEF -- the function was DEFINED in this file -- `xdef()' saw a definition with no body and said "compound statement required", after which the parser was lost for the rest of the file. The declaration is legal C that every other compiler takes, and the host build takes it too, so nothing in the tree could see the difference until a unity build put a definition and a later declaration of the same function in one translation unit: src/ld/all.c, which is how the machine's own linker is compiled, and which stopped compiling. Restoring the old class is right for DATA, where `int x; ... extern int x;' must leave x defined; for a function there is nothing to preserve, since the definition has already been emitted under its own label and the class only says whether this DECLARATOR defines it. Nothing that compiled before can change: the case this reaches was a hard error, so no object in the tree was built through it -- and none is, measured: libc-z8001's 215 objects are byte-identical across the edit, and of the 490 in the compiler's own self-host build the only one that changes is `ddecl.o', whose source this is
 
@@ -260,7 +260,7 @@ why: every other undotted name take the archive they always took: the 122
 why: userland programs and the libc objects come out byte-identical
 
 patch: void-pointer
-file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n0/expr.c 858c5e0a6abcc2375eaee45d132c23944ab1c861595c7480ffc68781335f2c9b
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
@@ -295,7 +295,7 @@ why: refusals are ours.
 patch: volatile-local
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: n0/gcandt.c fcb06fac89760c8c5ed36b65cf1ddee1f84e89582058cd715ba8e0b2f358a70d
-file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
 file: n0/z8001/bind.c
 fix: `gcandt()' returns `volatile' as `S_VOLAT' among the modifier flags it already returns for `readonly' and `alien', so `declare()' records it on the symbol. A qualifier on a parameter is not a redeclaration: the C_ARG placeholder the parameter list leaves behind carries no flags, and that arm already takes any combination. The machine layer then refuses both a register and the promotion offer to any local or parameter carrying the flag
 why: the keyword was parsed and thrown away. While nothing held a local anywhere but its frame slot that cost nothing; now the callee-saved pool is handed out to locals the source never declared `register', and a volatile local would be read from a register that no longer matches the slot -- wrong exactly where the qualifier was asked for, and quietly. Nothing else in the compiler changes: a local without the qualifier is offered as before, and the flag is a new bit in `s_flag'
@@ -350,7 +350,7 @@ why: a defect on every target, since id[] is NCSYMB bytes and NCSYMB is machine-
 patch: ansi-prototypes
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
-file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
 file: n0/expr.c 858c5e0a6abcc2375eaee45d132c23944ab1c861595c7480ffc68781335f2c9b
 file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/intuition port). Function prototypes and ANSI definitions: `garglist()' and `cproto()' read a parameter type list wherever a function declarator appears -- declarations, definitions, typedefs, casts, sizeof, struct members, nested function-pointer parameters -- with named or abstract parameters, `(void)' and a trailing `...'. The list is kept as each parameter's promoted type, interned in a pool of 512-byte chunks, and a D_FUNC's d_bound holds its index (0 is `()', as before). An ANSI definition declares its parameters exactly as the K&R form does; the names of any other prototype are scoped to it (`dropargs()'). A call through a prototype converts each fixed argument as assignment would (int to long, a constant 0 to a 32-bit null, no integer/pointer mixing) and checks the count; `...' arguments keep the default promotions; under -VSVARG (record vsvarg-variant) an int in a `...' slot warns. `declare()' keeps a prototype across a `()' or K&R redeclaration and calls conflicting ones a redeclaration; `xfunc()' checks a K&R definition against an earlier prototype
@@ -360,7 +360,7 @@ patch: long-switch
 file: h/ops.h dcf446daf7e26941b4187f7234e2294c993448028a35ea42eed396bc5fe3c48b
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: h/cc1.h ad9eaee22669a51462c1027abede6574b6ae9b24206679793c6c4d9c2430e171
-file: n0/stat.c 6c69ef04b83a4af8fec18ad257e703335bc863f6fb1eb55923a2b83d9cec9a04
+file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
 file: n0/expr.c 858c5e0a6abcc2375eaee45d132c23944ab1c861595c7480ffc68781335f2c9b
 file: n1/cc1.c 0abdeced26fc7bb48bebfa0935d9d75288d70d35d0f6ab2659a799bad1feebe9
 file: n1/code.c 747566dae0a5a81d9c31afcef4616d0376bf40f107ad3340dbf05e3637affc41
@@ -377,7 +377,7 @@ why: additive: `//' outside a string was not C before -- the second `/' was alwa
 
 patch: mixed-declarations
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
-file: n0/stat.c 6c69ef04b83a4af8fec18ad257e703335bc863f6fb1eb55923a2b83d9cec9a04
+file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
 file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/intuition port). Declarations after statements: a block's statements are read by `body()', which hands a statement that starts with a declaration specifier or a typedef name (not a label) to `locals()' and then `putautos()', exactly as the declarations at the head of the block are read, so a name is in scope from its declarator to the end of the block and its initializer runs where it stands. `for (T i = e; ...)' reads the declaration in a scope of its own, opened as a nested block's is and closed after the loop. A jump past a declaration is not checked, as C99 allows without VLAs
 why: additive: before this, a declaration after a statement was a syntax error, so a block whose declarations are all at its head takes the same path as before and compiles byte-identical (libc, libm, libc.1, the kernel and drivers, the userland and Exec900). On the C900 a later declaration takes the next frame slots below the block's earlier ones, announced by the same AUTOS record a nested block's entry emits, and the block's exit restores the frame as before, so the frame is bounded by the deepest nesting as it was; no data is added to cc0
@@ -405,7 +405,7 @@ why: the MINIT context is what tells a machine layer that an address in an initi
 patch: auto-array-size
 file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
 file: n0/expr.c 858c5e0a6abcc2375eaee45d132c23944ab1c861595c7480ffc68781335f2c9b
-file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/AROS port). An automatic array declared without a bound takes it from its initializer, as C89 allows: `declare()' refuses such an array only without an initializer, and `locals()' hands it to `iflex()', which reads the initializer with `init()' as for a static array, keeping each item (the member's type, dimensions, offset and tree) and each LINE record that `expr()' would have written, in order, with the tree space kept until they are written; then it binds the array, writes its AUTOS record and writes the kept records as `iassign()' and `expr()' would have. A structure element of an automatic array goes through `init()', so it too may be initialized whole from a structure expression (record auto-struct-init)
@@ -416,7 +416,7 @@ file: n0/etc.c 480fb38624f8f57212ce9e7ae84acccc3fb3e30660aa7e92f00235946686dad1
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n0/get.c cc75dea4ec472417119bd3ab6b0e8e4653a48c3db679785be9133d75caff17cd
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
-file: n0/stat.c 6c69ef04b83a4af8fec18ad257e703335bc863f6fb1eb55923a2b83d9cec9a04
+file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
 file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
 file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: coh/cc.c 0364333a706756c33c00fa901778851151d7e01e1f6926754ed37bcf1ef5346f
@@ -491,6 +491,13 @@ why: wrong code on every target: the value of a `?:' or a comma is the value of 
 
 patch: cast-fconv-keep
 file: n0/expr.c 858c5e0a6abcc2375eaee45d132c23944ab1c861595c7480ffc68781335f2c9b
-file: n0/stat.c 6c69ef04b83a4af8fec18ad257e703335bc863f6fb1eb55923a2b83d9cec9a04
+file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
 fix: a bit-compatible cast that changes signedness keeps its CAST node over a conversion from float or double (a CAST or CONVERT whose operand is float or double), in the LPAREN cast (`term()', n0/expr.c) and in the return coercion (n0/stat.c), as records cast-signedness-keep and cast-cond-keep keep it over a divide, a shift, a `?:' or a comma; and `adjust()' (n0/expr.c), which retypes a tree for a cast and descends through bit-compatible CASTs, stops above such a conversion when the signedness changes
 why: wrong code on every target: the collapse retyped the conversion in place, so `(unsigned long)(long)d' converted the double to unsigned long instead of to long. With d = -2.0 that conversion is out of range, which C leaves undefined, and the C900's routine gave 0 instead of 4294967294; `(long)(unsigned long)d' with d = 3e9 gave -2147483648 instead of -1294967296, `(unsigned)(int)d' 0 instead of 65534, and the same for a float, a function's result, an expression, through an assignment, a prototyped argument and a return, and `return (long)d;' in a function returning unsigned long. The tree cc0 writes is machine-independent, so every target is asked for the out-of-range conversion. A conversion through a temporary was correct. With no widening the kept cast costs nothing: cc1 selects a conversion between types of the same size at zero cost (leaves.t same-kind identity). tests/dblcast.sh checks 870 casts of a float or double conversion (a variable, a function's result, an expression) over fourteen type pairs, unwidened, widened by a cast, an assignment, a prototyped argument and a return, returned from a function of the cast's type, and cast to and fro twice, against C's rules with a 16-bit int, only at values C defines; on the donor's rule 295 of them are wrong. No corpus source casts such a conversion with a change of signedness (the library, kernel, driver, userland, Exec900 and Workbench objects compile byte-identical). No ABI or data change on the C900
+
+patch: char-return-narrow
+file: n0/ddecl.c e34ce2fe85c043d96f0e7764b853a43ce34b89aa9ca43771b7a1562d7d7bb4d5
+file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
+file: n2/z8001/peep.c
+fix: a return in a function declared with a char type narrows its value to that type before widening it to the int or unsigned the function is compiled as returning. `declare()' (n0/ddecl.c) keeps a function's declared return type in its symbol's `s_width', which only a member otherwise uses, before `fixtype()' widens it; the return coercion (n0/stat.c) then casts the value to it with `rnarrow()', which reads a char variable of the other signedness as the declared type in place, as a cast does, narrows a widened char unwidened, and leaves alone a comparison, `!', `&&' or `||', an assignment to a variable of the declared type and a call of a function declared with it, whose values are narrowed already. The Z8001 peephole (n2/z8001/peep.c `extdup()') deletes an `EXTSB Rn' or `CLRB RHn' that repeats the instruction before it, so the narrowing and the widening extend once
+why: wrong code on every target: `fixtype()' replaces the declared char type with the widened one, so the return converted the value to int or unsigned only, and `unsigned char f() { return i; }' with int i = -2 returned 65534 instead of 254, `signed char f() { return i - 300; }' -302 instead of -46, `unsigned char f() { char c = -2; return c; }' 65534, and `unsigned char f() { return 300; }' 300. C converts the value of a return as if by assignment to the function's type. The donor and the June 1985 Z8001 compiler write the same tree. The callee is the side responsible: a caller of such a function, in the donor, the 1985 passes and here, takes the word in R1 as the int value of the call and widens, compares and passes it without narrowing, so a callee that narrows gives every existing caller the right value and the calling convention does not change; a callee compiled before the fix still returns what it returned. On the C900 the narrowing costs one EXTSB or CLRB, none for a value narrowed already. tests/charret.sh checks 432 returns from char, signed char and unsigned char functions of a variable of each integer type, through an automatic, a register, a parameter and a pointer, of an expression, a `?:', a comma, an assignment, a compound assignment, a postincrement, a comparison, a negation, a call and constants, used fourteen ways by the caller, against C's rules with a 16-bit int; on the donor's rule 312 of them are wrong. The corpus sites (the library, kernel, driver, userland, Exec900 and Workbench objects) are the returns from char functions of a value C requires narrowing, and the repeated extensions the peephole deletes. No ABI or data change on the C900

@@ -154,6 +154,9 @@ $(B)/slgen: src/slgen/slgen.c
 # tests/dblcast.sh: a cast of a float-to-integer conversion converts the
 # integer: (unsigned long)(long)d with d = -2.0 is 4294967294.
 #
+# tests/charret.sh: a function of a char type returns its value narrowed:
+# `unsigned char f() { return i; }' with int i = -2 returns 254.
+#
 # tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
 # ld, ld -r, the native ar's index, loutid, loutdis and nlist().
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-loutdis-table check-paths check-effdiff check-effdiff-linked check-libc libc1 \
@@ -213,6 +216,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/opasg.sh
 	sh tests/condcast.sh
 	sh tests/dblcast.sh
+	sh tests/charret.sh
 	sh tests/sllpair.sh
 	sh tests/peepstamp.sh
 

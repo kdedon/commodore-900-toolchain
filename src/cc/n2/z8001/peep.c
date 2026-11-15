@@ -1377,6 +1377,33 @@ extsbdead()
 }
 
 /*
+ * A second `EXTSB Rn' or `CLRB RHn' right after the first does nothing: a byte
+ * narrowed and widened again extends twice.  Neither sets flags.
+ */
+static
+extdup()
+{
+	register INS	*ip, *nx;
+	register int	m;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_naddr != 1
+		 || (ip->i_op != ZEXTSB && ip->i_op != ZCLRB))
+			continue;
+		m = ip->i_af[0].a_mode;
+		if ((m&A_AMOD) != A_WR && (m&A_AMOD) != A_BR)
+			continue;
+		nx = ip->i_fp;
+		if (nx == &ins || nx->i_type != CODE || nx->i_op != ip->i_op
+		 || nx->i_naddr != 1 || nx->i_af[0].a_mode != m)
+			continue;
+		deleteins(nx, ip);
+		ip = ip->i_bp;
+		++changes;
+	}
+}
+
+/*
  * `LD Rd,M ; INC Rd,#n ; LD M,Rd' -> `INC M,#n' (and DEC, and the byte forms) when Rd is
  * dead after the store.  INC and DEC are the only arithmetic with a memory destination.
  * Same flags.  M is DA, X, or @RRn with no displacement, and names no part of Rd.
@@ -1584,6 +1611,7 @@ peephole()
 	pushfold();
 	selfmove();
 	extsbdead();
+	extdup();
 	incmem();
 	popmerge();
 	retvoidok = 0;		/* a cross jump may run a value return through a mark */

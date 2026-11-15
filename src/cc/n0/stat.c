@@ -14,6 +14,8 @@
 #include "cc0.h"
 #endif
 
+TREE	*rnarrow();
+
 /*
  * Compile one statement.
  * On entry, 's' contains the first symbol of the new statement.
@@ -311,6 +313,9 @@ loop:
 				mustbe(SEMI);
 				break;
 			}
+			if (lp->t_dp == NULL && cfsym->s_width != lp->t_type
+			 && (cfsym->s_width == T_CHAR || cfsym->s_width == T_UCHAR))
+				tp = rnarrow(tp, cfsym->s_width);
 			if (bitcompat(tltype(lp), tltype(tp))
 			 && !((tp->t_op==DIV||tp->t_op==REM||tp->t_op==SHR||tp->t_op==ASHR||tp->t_op==ADIV||tp->t_op==AREM
 			    ||((tp->t_op==CAST||tp->t_op==CONVERT) && (tltype(tp->t_lp)==T_FLOAT||tltype(tp->t_lp)==T_DOUBLE)))
@@ -473,6 +478,48 @@ lval_t	v;
 	scp->sc_val = v;
 	scp->sc_lab = here();
 	sbp->sb_ncase += 1;
+}
+
+/*
+ * Narrow the value of a return to the char type `t' its function was
+ * declared with: the function returns the widened type.  A char variable
+ * of the other signedness is read as `t' and a widened char is narrowed
+ * unwidened.  A truth value, an assignment to a `t' and a call of a
+ * function declared with type `t' have the narrowed value already.
+ */
+TREE *
+rnarrow(tp, t)
+register TREE	*tp;
+{
+	register TREE	*cp;
+	register int	op;
+
+	op = tp->t_op;
+	if (tltype(tp) == t)
+		return (tp);
+	if ((op == CONVERT || op == CAST) && tp->t_rp == NULL && tp->t_dp == NULL
+	 && (tltype(tp->t_lp) == T_CHAR || tltype(tp->t_lp) == T_UCHAR))
+		return (rnarrow(tp->t_lp, t));
+	if ((op >= EQ && op <= ULT) || op == ANDAND || op == OROR || op == NOT)
+		return (tp);
+	if ((op == ASSIGN || (op >= AADD && op <= ASHR)) && tp->t_dp == NULL
+	 && tltype(tp->t_lp) == t)
+		return (tp);
+	if (op == CALL && tp->t_lp->t_op == GID && tp->t_dp == NULL
+	 && tp->t_lp->t_sp->s_width == t && tp->t_lp->t_sp->s_type != t)
+		return (tp);
+	if (bitcompat(t, tltype(tp)) && ((op >= LID && op <= PID) || op == STAR)) {
+		adjust(tp, t, NULL, NULL);
+		return (tp);
+	}
+	cp = talloc();
+	cp->t_op = CAST;
+	cp->t_type = t;
+	cp->t_dp = NULL;
+	cp->t_ip = NULL;
+	cp->t_lp = tp;
+	cp->t_rp = NULL;
+	return (cp);
 }
 
 /* end of n0/stat.c */

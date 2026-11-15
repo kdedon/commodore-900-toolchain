@@ -46,7 +46,7 @@ INFO		*ip;
 unsigned long	x2;
 {
 	register DIM	*dp, *xdp;
-	int		af, ff, rf, ft, oc, ot;
+	int		af, ff, rf, ft, oc, ot, rt;
 	unsigned long	value;
 	unsigned	offs;
 
@@ -55,7 +55,10 @@ unsigned long	x2;
 	 * Adjust the return type of functions returning char, short or float.
 	 * If the s_level is wrong, due to missing "extern", check
 	 * for redeclaration.
+	 * A function keeps its declared return type in s_width, which
+	 * only a member uses: a return narrows its value to it.
 	 */
+	rt = t;
 	if (ndp!=NULL && ndp->d_type==D_FUNC) {
 		if (c==C_AUTO || c==C_PAUTO || c==C_SIN
 		|| ((c==C_GDEF || c==C_SEX) && (s==SEMI || s==COMMA)))
@@ -180,6 +183,8 @@ unsigned long	x2;
 	}
 	sp->s_class = c;
 	sp->s_type  = t;
+	if (ndp!=NULL && ndp->d_type==D_FUNC)
+		sp->s_width = rt;
 	dropdim(sp->s_dp);
 	sp->s_dp = ndp;
 	sp->s_dline = line;
