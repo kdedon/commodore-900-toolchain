@@ -73,6 +73,7 @@ int		flex;
 		itp = expr();
 		--ininit;
 		if (tltype(itp)==T_STRUCT && itp->t_ip==sp->s_ip) {
+			stdok(STD_C89, "a structure initialized by an expression");
 			icollect(itp, bo, sp, NULL);
 			itp = NULL;
 			return;
@@ -472,6 +473,7 @@ register SYM	*sp;
 	register IFLEX	*ip, *ep;
 	SYM		sym;
 
+	stdok(STD_C89, "an automatic array sized by its initializer");
 	newtree(sizeof(TREE));
 	iflexp = sp;
 	nflex = 0;

@@ -405,7 +405,7 @@ garglist(aokp, adp) register int *aokp; register DIM **adp;
 	sizeof_t pi;
 
 	pi = 0;
-	if (isproto()) {
+	if (protohere()) {
 		pi = gproto(*aokp == 1);
 		*aokp = 0;
 	} else if (*aokp==1) {
@@ -459,6 +459,23 @@ isproto()
 		return 1;
 	return (s == ID && (sp = reflookup(SL_VAR)) != NULL
 		&& sp->s_class == C_TYPE);
+}
+
+/*
+ * Does a parameter type list start here, at the language level?  Under
+ * K&R, `f(T)' with T a typedef name is a parameter named T, as in the
+ * donor, and a list that starts with a type keyword is an error.
+ */
+protohere()
+{
+	if (!isproto())
+		return 0;
+	if (stdlevel() == STD_KR) {
+		if (s == ID)
+			return 0;
+		stdok(STD_C89, "a function prototype");
+	}
+	return 1;
 }
 
 /*
@@ -945,7 +962,7 @@ DIM	*tdp;
 		dp = NULL;
 		if (s == LPAREN) {
 			lex();
-			if (isproto()) {
+			if (protohere()) {
 				dp = cast2(dp, D_FUNC, gproto(0));
 				mustbe(RPAREN);
 			} else if (s != RPAREN) {
@@ -1006,7 +1023,7 @@ sizeof_t b;
 
 cproto(adp) DIM **adp;
 {
-	*adp = cast2(*adp, D_FUNC, isproto() ? gproto(0) : (sizeof_t)0);
+	*adp = cast2(*adp, D_FUNC, protohere() ? gproto(0) : (sizeof_t)0);
 }
 
 /* end of n0/gdecl.c */

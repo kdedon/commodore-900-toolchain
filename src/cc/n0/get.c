@@ -197,7 +197,8 @@ file_char:
 				ungetc(c, ifp);
 				--line;		/* '\n' will get read again */
 				break;
-			} else if (c == '/' && notvariant(VCPP)) {
+			} else if (c == '/' && notvariant(VCPP)
+			    && (stdlevel() == STD_ALL || stdlevel() >= STD_C99)) {
 				/*
 				 * A C99 line comment.  A backslash-newline
 				 * inside it continues it; its newline is

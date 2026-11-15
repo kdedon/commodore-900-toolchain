@@ -12,11 +12,13 @@
 makvariant(p)
 register char *p;
 {
-	register int i, j;
+	register int i, j, n;
 	unsigned int u;
 	static char digit[] = "0123456789ABCDEF";
 
-	for (i = 0; i < VMAXIM/VGRANU; i += 1) {
+	for (n = VMAXIM/VGRANU; n > VMWRIT/VGRANU && variant[n-1] == 0; --n)
+		;
+	for (i = 0; i < n; i += 1) {
 		for (j = 4; j >= 0; j -= 4) {
 			u = (variant[i] >> j) & 0xF;
 			*p++ = digit[u];

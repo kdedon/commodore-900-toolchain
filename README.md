@@ -30,6 +30,18 @@ The main outputs are:
 
 `host/ccz` is the one-shot compiler driver. Linking a complete program also
 requires headers, startup code, and libraries from the target environment.
+Its usage text lists the options.
+
+## Language level from the environment
+
+`CCZ_LEVEL` gives every `ccz` compile a language level without editing its
+command line: the words `KR`, `C89`, `C99` and `STRICT`, separated by blanks
+or commas, as in `CCZ_LEVEL="KR STRICT"`.  Each word is the matching option
+(`-VKR`, `-VC89`, `-VC99`, `-VSTRICT`), set in whichever base variant string
+the compile uses, so the PIC variant and `CCZ_VAR` keep their bits.  A level
+option on the command line replaces the environment's level; `STRICT` from
+either applies.  Unset or empty, it has no effect; an unknown word is an
+error.
 
 ## Stack-segment symbol
 

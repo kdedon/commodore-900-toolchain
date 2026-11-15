@@ -179,8 +179,10 @@ loop:
 		 || (tt == T_ULONG && mytypes[T_UINT] == mytypes[T_ULONG])) {
 			if (isvariant(VSBOOK))
 				cstrict("switch expression is long");
-		} else if (tt == T_LONG || tt == T_ULONG)
+		} else if (tt == T_LONG || tt == T_ULONG) {
+			stdok(STD_C89, "a switch on a long");
 			lsw = tt;
+		}
 		else if (tt > T_UINT)
 			cerror("switch of non integer");
 		if (tt != T_INT && lsw == 0) {
@@ -233,6 +235,7 @@ loop:
 		newtree(sizeof(TREE));
 		itree = NULL;
 		if ((fdecl = isdecl()) != 0) {
+			stdok(STD_C99, "a declaration in a for");
 			savelocals();	/* `for (int i = 0; ...)': its own scope */
 			++llex;
 			locals();

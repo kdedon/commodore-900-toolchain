@@ -20,6 +20,7 @@
 #include "host.h"
 #include "stream.h"
 #include "var.h"
+#include "varmch.h"
 
 int nerr = 0;             /* Error counter */
 char *passname = NULL;    /* Pass identifier string */
@@ -56,6 +57,16 @@ void cwarn(char *fp, ...)
 
 void cstrict(char *fp, ...)
 {
+#ifdef	VSTRICT
+	if (isvariant(VSTRICT)) {
+		va_list ap;
+		va_start(ap, fp);
+		cmsg(fp, ap, "Strict", 0);
+		va_end(ap);
+		++nerr;
+		return;
+	}
+#endif
 	if (notvariant(VNOWARN)) {
 		va_list ap;
 		va_start(ap, fp);

@@ -185,6 +185,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/linecomment.sh
 	sh tests/mixdecl.sh
 	sh tests/bytearg.sh
+	sh tests/stdlevel.sh
 	sh tests/structinit.sh
 	sh tests/autoarray.sh
 	sh tests/ptrlong.sh

@@ -125,3 +125,19 @@ notbook()
 	if (isvariant(VSBOOK))
 		cstrict("construction not in Kernighan and Ritchie");
 }
+
+/*
+ * Is 'what', an addition of language level 'lev', in the selected level?
+ * If not, it is an error.
+ */
+stdok(lev, what)
+int	lev;
+char	*what;
+{
+	register int	l;
+
+	if ((l = stdlevel()) == STD_ALL || l >= lev)
+		return 1;
+	cerror("%s is not %s", what, l == STD_KR ? "K&R C (-VKR)" : "C89 (-VC89)");
+	return 0;
+}

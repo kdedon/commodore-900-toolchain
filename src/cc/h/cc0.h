@@ -610,6 +610,23 @@ extern	int	dvol;
 extern	SYM	*args[];
 extern	int	incpp;
 extern	int	ininit;
+
+/*
+ * Language level: which additions to the donor's K&R language cc0 takes.
+ * A machine selects it with variant bits VSTD0 and VSTD1; without them
+ * every addition is taken.
+ */
+#define	STD_ALL	0		/* Every addition			*/
+#define	STD_KR	1		/* K&R: none				*/
+#define	STD_C89	2		/* Prototypes, structure initializers,
+				 * sized automatic arrays, long switch	*/
+#define	STD_C99	3		/* C89, `//' comments, declarations
+				 * after statements			*/
+#ifdef	VSTD0
+#define	stdlevel()	(isvariant(VSTD0) + 2*isvariant(VSTD1))
+#else
+#define	stdlevel()	STD_ALL
+#endif
 extern	SYM	*iflexp;
 extern	int	incase;
 extern	short	opdope[];

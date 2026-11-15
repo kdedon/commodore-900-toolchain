@@ -75,12 +75,17 @@ Options
 Variant options:
 
      -VASM           Assembly language output, same as -S
+     -VC89           Language: K&R and C89's prototypes, structure
+                     initializers, sized automatic arrays, long switch
+     -VC99           Language: C89 and C99's // comments and
+                     declarations after statements (a C99 subset)
      -VCOMM          Common data items (default)
      -VCPLUS         Ignore C++ style online //-delimited comments
      -VCPPE          Run cpp in -E mode, same as -E
      -VDB            Debug: generate debug output, same as -g
      -VFLOAT         Floating point output conversion, same as -f
      -VKEEP          Keep intermediate files, same as -K
+     -VKR            Language: K&R only, as the MWC compiler took it
      -VNOOPT         No optimization
      -VNOWARN        No warning messages
      -VPEEP          Peephole optimization (default)
@@ -98,6 +103,8 @@ Variant options:
      -VSPVAL         Strict: pointer value truncation (default)
      -VSRTVC         Strict: risky constructs in truth contexts
      -VSTAT          Statistics on optimization
+     -VSTRICT        Every strict message is an error; turns on
+                     -VSBOOK under -VKR, else -VSVARG
      -VSUREG         Strict: unused registers
      -VSUVAR         Strict: unused variables (default)
      -VSVARG         Strict: int argument in a variable argument list
@@ -105,6 +112,33 @@ Variant options:
      -VWIDEN         Widening of parameter or function value warning
      -VXSTAT         Write static external symbols
      -V3GRAPH        Recognize ANSI trigraphs
+
+Language level.  By default cc takes every addition to the MWC compiler's
+K&R language: function prototypes and ANSI definitions, an automatic
+structure initialized from a structure expression, an automatic array
+sized by its initializer, switch on a long, // comments, and
+declarations after statements and in a for.  -VKR, -VC89 and -VC99 select
+a level; the last one given counts.  A feature above the level is an
+error that names it, and the compile goes on as if it were allowed, so
+one use gives one message.  Two features are refused the way the MWC
+compiler refused them, without a message of their own, because K&R code
+can contain the same text: under -VKR, f(T) with T a typedef name declares
+a parameter named T, and under -VKR and -VC89, // is a division followed by
+whatever comes next.  K&R code compiles to the same object at every level.
+-VC99 is a C99 subset: designated initializers, inline, variadic macros,
+long long and the C99 library are not supported at any level.
+
+Strict errors.  -VSTRICT makes every strict message an error: each
+message the -VS options turn on (those printed "Strict:") counts as an
+error, so the compile fails, and -VNOWARN does not hide it.  It also turns
+on the level's own check, -VSBOOK ("construction not in Kernighan and
+Ritchie") under -VKR and -VSVARG (an int argument in a variable argument
+list) otherwise.  A feature above the level is an error with or without
+-VSTRICT.  The two donor readings above, f(T) and //, stay as they are:
+they are valid K&R.  -VSTRICT is variant bit 48, the first of a seventh
+variant byte; a variant string is twelve hex digits as before unless a
+bit of that byte is set, when it is fourteen, and a pass reads a string
+of either length.
 
 The driver names the i8086 and i386 model and floating-point variants --
 -VSMALL, -VLARGE, -V8087, -VNDP, -VRAM, -VOMF, -V80186, -V80287, -VEMU87,

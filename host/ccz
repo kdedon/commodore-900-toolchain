@@ -25,6 +25,19 @@
 #                the COHERENT native tools cannot read
 #     -VPIC      extern data through slots, for a -c object to be linked
 #                against a shared library (implied when compiling and linking)
+#     -VKR, -VC89, -VC99  cc0's language level (VSTD0/VSTD1, bits 46/47);
+#                the last one given counts
+#     -VSTRICT   every strict message is an error (VSTRICT, bit 48), with
+#                -VSBOOK under -VKR, else -VSVARG, as the cc driver does
+#
+# Environment:
+#   CCZ_VAR    cc0/cc1's base variant string (default 800000020800, and
+#              800000020808 for the PIC variant)
+#   CCZ_LEVEL  words KR, C89, C99 and STRICT, separated by blanks or commas
+#              (CCZ_LEVEL="KR STRICT"): the level options for every compile,
+#              set in whatever base string the compile uses, PIC included.
+#              A level option on the command line replaces the environment's
+#              level; STRICT from either applies.  Unset or empty: no effect.
 #   FILE may be .c, .s, or .o (objects pass straight to the link).
 #
 # Prereq: build-z8001.sh, build-cc2-z8001.sh, build-as.sh, build-ld.sh, build-libc-z8001.sh.
@@ -65,6 +78,17 @@ fi
 VAR="${CCZ_VAR:-800000020800}"			# includes VREADONLY (ctype.h's `readonly')
 # base unset -> ld uses its Coherent userbase (segment 3), producing a real multi-segment
 # C900 binary (CODE seg 3 / DATA in its segment / STACK seg 0).  -R BASE forces a flat link.
+lvl=0; vstrict=0
+envlvl=0; envstrict=0
+for w in $(printf %s "${CCZ_LEVEL:-}" | tr , ' '); do
+	case "$w" in
+	KR) envlvl=1;;
+	C89) envlvl=2;;
+	C99) envlvl=3;;
+	STRICT) envstrict=1;;
+	*) echo "ccz: CCZ_LEVEL: unknown word $w (KR, C89, C99, STRICT)" >&2; exit 2;;
+	esac
+done
 incs=""; defs=""; out=""; compileonly=0; base=""; nostdlib=0; strip=0; sep=""; large=""; files=""; slibc=0; pic=0; lnames=""; slibs=""; lnflag=""
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -98,6 +122,10 @@ while [ $# -gt 0 ]; do
 	-l*) lnames="$lnames ${1#-l}";;
 	-VPIC) pic=1;;
 	-VLNAME) lnflag="-N";;
+	-VKR) lvl=1;;
+	-VC89) lvl=2;;
+	-VC99) lvl=3;;
+	-VSTRICT) vstrict=1;;
 	-s) strip=1;;
 	-*) echo "ccz: unknown option $1" >&2; exit 2;;
 	*) files="$files $1";;
@@ -134,6 +162,24 @@ done
 # extern data through slots in its own data.  ld fills slots for local symbols.
 if [ "$pic" = 1 ] || { [ "$slibc" = 1 ] && [ "$compileonly" = 0 ]; }; then
 	VAR="${CCZ_VAR:-800000020808}"
+fi
+[ "$lvl" != 0 ] || lvl=$envlvl
+[ "$envstrict" = 0 ] || vstrict=1
+# vbit <string> <bit>: the variant string with bit <bit> set (bit n is bit
+# n%8 of byte n/8, two hex digits a byte), lengthened when the byte is past it.
+vbit() {
+	_s=$1; _b=$(($2 / 8))
+	while [ ${#_s} -lt $((2 * _b + 2)) ]; do _s="${_s}00"; done
+	_pre=$(printf %s "$_s" | cut -c1-$((2 * _b)))
+	_byte=$(printf %s "$_s" | cut -c$((2 * _b + 1))-$((2 * _b + 2)))
+	_post=$(printf %s "$_s" | cut -c$((2 * _b + 3))-)
+	printf '%s%02X%s' "$_pre" $((0x$_byte | 1 << ($2 % 8))) "$_post"
+}
+[ $((lvl & 1)) = 0 ] || VAR=$(vbit "$VAR" 46)
+[ $((lvl & 2)) = 0 ] || VAR=$(vbit "$VAR" 47)
+if [ "$vstrict" = 1 ]; then
+	VAR=$(vbit "$VAR" 48)
+	if [ "$lvl" = 1 ]; then VAR=$(vbit "$VAR" 5); else VAR=$(vbit "$VAR" 45); fi
 fi
 # cc2's variant string with VLNAME (VMBASE+10, bit 4 of byte 5) set.
 C2VAR="${PEEP:-0010}"

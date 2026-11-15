@@ -277,6 +277,13 @@ struct option {			/* option table */
 	{ 10,	CCOPT,	"VSPLIM",	VSPLIM	},
 	{ 10,	CCOPT,	"VNOTRAPS",	VNOTRAPS	},
 #endif
+#if	Z8001
+/* Language level: the low bits are VSTD0, VSTD1; -VSTRICT precedes -VS */
+	{ 14,	CCOPT,	"VKR",		1	},
+	{ 14,	CCOPT,	"VC89",		2	},
+	{ 14,	CCOPT,	"VC99",		3	},
+	{ 15,	CCOPT,	"VSTRICT"		},
+#endif
 /* More miscellaneous flags */
 	{ 2,	CCOPT,	"VDB",		VDB	},
 	{ 2,	CCOPT,	"g",		VDB	},
@@ -361,6 +368,7 @@ int	ndots;
 int	partial;			/* Partial link specified */
 #if	Z8001
 int	dynlink;			/* Link names a dynamic shared library */
+int	vstrict;			/* -VSTRICT */
 #endif
 
 #define	aflag	((ccvariant&FLAG_a)!=0)
@@ -632,6 +640,23 @@ main(argc, argv) int argc; char *argv[];
 					/* -? */
 					usage(1);
 					break;
+#if	Z8001
+				case 14:
+					/* -VKR, -VC89, -VC99: the language level */
+					clrvariant(VSTD0);
+					clrvariant(VSTD1);
+					if ((op->o_bits & 1) != 0)
+						setvariant(VSTD0);
+					if ((op->o_bits & 2) != 0)
+						setvariant(VSTD1);
+					p += strlen(op->o_name);
+					continue;
+				case 15:
+					/* -VSTRICT: strict messages are errors */
+					++vstrict;
+					p += strlen(op->o_name);
+					continue;
+#endif
 				default:
 					cquit("options");
 				}
@@ -849,6 +874,17 @@ char *argv[];
 	if (VeryVflag && Vflag)
 		printf("quit pass is %s\n", pass[qpass].p_pln);
 #if	Z8001
+	/*
+	 * -VSTRICT: every strict message is an error, and the level's own
+	 * check is on: what is not in K&R under -VKR, else an int in a `...'.
+	 */
+	if (vstrict) {
+		setvariant(VSTRICT);
+		if (isvariant(VSTD0) && notvariant(VSTD1))
+			setvariant(VSBOOK);
+		else
+			setvariant(VSVARG);
+	}
 	/*
 	 * Shared-library data has no address until exec, so a client reaches it
 	 * through slots (-VPIC).  A bare -c compile must name -VPIC itself.
@@ -1982,12 +2018,21 @@ usage(flag) register int flag;
 		"\t-x\t\tld: remove all local symbols from symbol table\n"
 		"Variant options:\n"
 		"\t-VASM\t\tAssembly language output, same as -S\n"
+#if	Z8001
+		"\t-VC89\t\tLanguage: K&R and C89's prototypes, structure\n"
+		"\t\t\tinitializers, sized automatic arrays, long switch\n"
+		"\t-VC99\t\tLanguage: C89 and C99's // comments and\n"
+		"\t\t\tdeclarations after statements (a C99 subset)\n"
+#endif
 		"\t-VCOMM\t\tCommon data items (default)\n"
 		"\t-VCPLUS\t\tIgnore C++ style online //-delimited comments\n"
 		"\t-VCPPE\t\tRun cpp in -E mode, same as -E\n"
 		"\t-VDB\t\tDebug: generate debug output, same as -g\n"
 		"\t-VFLOAT\t\tFloating point output conversion, same as -f\n"
 		"\t-VKEEP\t\tKeep intermediate files, same as -K\n"
+#if	Z8001
+		"\t-VKR\t\tLanguage: K&R only, as the MWC compiler took it\n"
+#endif
 		"\t-VNDP\t\tUse hardware (80x87) floating point\n"
 		"\t-VNOOPT\t\tNo optimization\n"
 		"\t-VNOWARN\tNo warning messages\n"
@@ -2011,6 +2056,10 @@ usage(flag) register int flag;
 		"\t-VSPVAL\t\tStrict: pointer value truncation (default)\n"
 		"\t-VSRTVC\t\tStrict: risky constructs in truth contexts\n"
 		"\t-VSTAT\t\tStatistics on optimization\n"
+#if	Z8001
+		"\t-VSTRICT\tEvery strict message is an error; turns on\n"
+		"\t\t\t-VSBOOK under -VKR, else -VSVARG\n"
+#endif
 		"\t-VSUREG\t\tStrict: unused registers\n"
 		"\t-VSUVAR\t\tStrict: unused variables (default)\n"
 #if	Z8001

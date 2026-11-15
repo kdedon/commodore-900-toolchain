@@ -29,6 +29,7 @@ body()
 {
 	while (s!=EOF && s!=RBRACE) {
 		if (isdecl()) {
+			stdok(STD_C99, "a declaration after a statement");
 			locals();
 			putautos();
 		} else

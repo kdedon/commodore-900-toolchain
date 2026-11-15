@@ -5,7 +5,7 @@
 /*
  * h/z8001/varmch.h
  * Machine-specific variant bits for the segmented Z8000 (Z8001) compiler.
- * Template: h/i386/varmch.h. Slots VMBASE..VMAXIM (34..47, see h/var.h).
+ * Template: h/i386/varmch.h. Slots VMBASE..VMAXIM (34..55, see h/var.h).
  *
  * The two memory models map onto the Z8000 segmentation:
  *   VSEG  (LARGE)  = segmented: default pointer is a 2-word seg:offset (LPTR),
@@ -36,5 +36,8 @@
 				 * an LF_LNAME object when one is longer
 				 * than the 16-byte l.out name */
 #define	VSVARG	(VMBASE+11)	/* strict: an int argument in a `...' slot */
+#define	VSTD0	(VMBASE+12)	/* language level, low bit:  0 every addition,	*/
+#define	VSTD1	(VMBASE+13)	/* 1 K&R (-VKR), 2 C89 (-VC89), 3 C99 (-VC99)	*/
+#define	VSTRICT	(VMBASE+14)	/* every strict message is an error		*/
 
 /* end of h/z8001/varmch.h */

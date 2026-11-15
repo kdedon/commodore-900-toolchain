@@ -18,7 +18,11 @@
 #endif
 
 #define VMBASE	34		/* Base of machine dependent variants */
-#define VMAXIM	48		/* Least non-inclusive upper bound */
+#define VMAXIM	56		/* Least non-inclusive upper bound */
+#define	VMWRIT	48		/* Bits a variant string always carries: the
+				 * string ends after them when every bit
+				 * above is clear, so it reads as before
+				 * VMAXIM grew from 48 */
 #define VGRANU	8		/* 8 bits per slot */
 #define isvariant(x)	((variant[(x)/VGRANU]&(1<<((x)%VGRANU))) != 0)
 #define notvariant(x)	((variant[(x)/VGRANU]&(1<<((x)%VGRANU))) == 0)

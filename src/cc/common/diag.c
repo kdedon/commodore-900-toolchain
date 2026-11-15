@@ -24,11 +24,13 @@
 #include	"INC$LIB:host.h"
 #include	"INC$LIB:stream.h"
 #include	"INC$LIB:var.h"
+#include	"INC$LIB:varmch.h"
 #else
 #include	"mch.h"
 #include	"host.h"
 #include	"stream.h"
 #include	"var.h"
+#include	"varmch.h"
 #endif
 
 int	nerr	= 0;			/* Error counter */
@@ -70,6 +72,13 @@ char	*fp;
 cstrict(fp, args)
 char	*fp;
 {
+#ifdef	VSTRICT
+	if (isvariant(VSTRICT)) {
+		cmsg(fp, &args, "Strict", 0);
+		++nerr;
+		return;
+	}
+#endif
 	if (notvariant(VNOWARN))
 		cmsg(fp, &args, "Strict", 0);
 }
