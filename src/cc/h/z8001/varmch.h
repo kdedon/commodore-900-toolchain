@@ -35,5 +35,6 @@
 #define	VLNAME	(VMBASE+10)	/* keep externals of up to 127 characters:
 				 * an LF_LNAME object when one is longer
 				 * than the 16-byte l.out name */
+#define	VSVARG	(VMBASE+11)	/* strict: an int argument in a `...' slot */
 
 /* end of h/z8001/varmch.h */

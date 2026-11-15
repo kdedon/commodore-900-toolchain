@@ -51,12 +51,19 @@ int	c, ls;
 	}
 	if (s == LPAREN) {
 		lex();
+		if (pdecl != 0 && (s == RPAREN || isproto())) {
+			sp = NULL;	/* abstract `(int)': function suffix */
+			dp = NULL;
+			garglist(&aok, &dp);
+			mustbe(RPAREN);
+			goto again;
+		}
 		if (gdecl(asp, adp, NULL, c, ls) == 0)
 			return 0;
 		mustbe(RPAREN);
 		sp = *asp;
 		dp = *adp;
-		if (nargs != 0)
+		if (nargs != 0 || pansi)
 			aok = 0;
 	} else if (s == ID) {
 		if (c==C_ARG || c==C_PAUTO || c==C_PREG)
@@ -65,9 +72,14 @@ int	c, ls;
 			ll = LL_EXT;
 		else
 			ll = llex;
-		sp = deflookup(ls, ll);
+		sp = NULL;
+		if (pdecl != 2)
+			sp = deflookup(ls, ll);
 		dp = NULL;
 		lex();
+	} else if (pdecl != 0 && (s == COMMA || s == RPAREN || s == LBRACK)) {
+		sp = NULL;		/* abstract parameter declarator */
+		dp = NULL;
 	} else {
 		cerror("declarator syntax");
 		while (s!=EOF && s!=COMMA && s!=SEMI)
@@ -390,8 +402,13 @@ INFO	**aip;
 garglist(aokp, adp) register int *aokp; register DIM **adp;
 {
 	register SYM *ap;
+	sizeof_t pi;
 
-	if (*aokp==1) {
+	pi = 0;
+	if (isproto()) {
+		pi = gproto(*aokp == 1);
+		*aokp = 0;
+	} else if (*aokp==1) {
 		nargs = 0;
 		if (s != RPAREN)
 			for (;;) {
@@ -412,7 +429,274 @@ garglist(aokp, adp) register int *aokp; register DIM **adp;
 			}
 		*aokp = 0;
 	}
-	*adp = tackdim(*adp, D_FUNC, (sizeof_t)0);
+	*adp = tackdim(*adp, D_FUNC, pi);
+}
+
+/*
+ * Prototypes.  A parameter list is kept as the promoted type of each
+ * parameter -- what the call passes -- in a pool shared by identical lists.
+ * A D_FUNC's d_bound is 0 for `()', else the list's pool index.  A list is
+ * [count][flags][type...] behind a two-byte hash chain link.
+ */
+#define	PCHUNK	512		/* Pool chunk				*/
+#define	NPCHUNK	64		/* Chunks; the index stays in 16 bits	*/
+#define	NPHASH	32		/* Hash chains				*/
+
+int	pdecl;			/* 1: defining parameters, 2: prototype	*/
+int	pansi;			/* This declarator's parameters are ANSI	*/
+static	char	*ppool[NPCHUNK];
+static	unsigned ptop;		/* Pool bytes used			*/
+static	unsigned phash[NPHASH];
+
+/*
+ * Does 's' begin a parameter declaration rather than an identifier list?
+ */
+isproto()
+{
+	register SYM	*sp;
+
+	if ((s >= INT && s <= SIGNED) || s == DOT)
+		return 1;
+	return (s == ID && (sp = reflookup(SL_VAR)) != NULL
+		&& sp->s_class == C_TYPE);
+}
+
+/*
+ * The list at pool index 'pi'.
+ */
+char *
+pproto(pi)
+sizeof_t pi;
+{
+	register unsigned i;
+
+	i = (unsigned)pi - 1;
+	return ppool[i / PCHUNK] + i % PCHUNK + 2;
+}
+
+/*
+ * Intern a list of 'n' types 'k' with flags 'f'; return its index.
+ */
+sizeof_t
+pintern(n, f, k)
+register int	n;
+int		f;
+char		*k;
+{
+	register char	*p;
+	register unsigned i;
+	unsigned	h;
+
+	h = n + f;
+	for (i = 0; i < n; ++i)
+		h = h * 3 + k[i];
+	h %= NPHASH;
+	for (i = phash[h]; i != 0; i = (p[-2]&0377) << 8 | (p[-1]&0377)) {
+		p = pproto((sizeof_t)i);
+		if (p[0] == n && p[1] == f && memcmp(p+2, k, n) == 0)
+			return (sizeof_t)i;
+	}
+	if (ptop % PCHUNK + n + 4 > PCHUNK)
+		ptop += PCHUNK - ptop % PCHUNK;
+	if (ptop / PCHUNK >= NPCHUNK)
+		cfatal("too many prototypes");
+	if (ptop % PCHUNK == 0)
+		ppool[ptop / PCHUNK] = new(PCHUNK);
+	i = ptop + 1;
+	p = pproto((sizeof_t)i);
+	p[-2] = phash[h] >> 8;
+	p[-1] = phash[h];
+	p[0] = n;
+	p[1] = f;
+	memcpy(p+2, k, n);
+	phash[h] = i;
+	ptop += n + 4;
+	return (sizeof_t)i;
+}
+
+/*
+ * The type a parameter of type 't' and dims 'dp' is passed as.
+ */
+pkind(t, dp)
+register int	t;
+DIM		*dp;
+{
+	if (dp != NULL)
+		return T_PTR;
+	switch (t) {
+	case T_CHAR:
+	case T_SHORT:
+	case T_ENUM:
+	case T_FENUM:
+		return T_INT;
+	case T_UCHAR:
+	case T_USHORT:
+		return T_UINT;
+	case T_FLOAT:
+		return T_DOUBLE;
+	case T_FSTRUCT:
+		return T_STRUCT;
+	case T_FUNION:
+		return T_UNION;
+	}
+	return t;
+}
+
+/*
+ * Read a parameter type list; 's' is its first token.  Each name is
+ * declared as a parameter when 'def' says the list may begin a function
+ * definition, and is otherwise scoped to the list.  Return the list's index.
+ */
+sizeof_t
+gproto(def)
+{
+	register int	n;
+	int		c, t, rf, f, i, odv, opd;
+	DIM		*dp, *pdp, *xdp;
+	INFO		*ip;
+	SYM		*sp;
+	char		k[NARGS];
+
+	odv = dvol;
+	opd = pdecl;
+	if (def) {
+		nargs = 0;
+		pansi = 1;
+	}
+	n = f = 0;
+	for (;;) {
+		if (s == DOT) {
+			for (i = 0; i < 3 && s == DOT; ++i)
+				lex();
+			if (i < 3 || n == 0)
+				cerror("parameter list syntax");
+			f = 1;
+			break;
+		}
+		pdecl = 0;
+		dvol = 0;
+		gcandt(&c, &t, &dp, &ip, &rf);
+		if (c == C_REG)
+			c = C_PREG;
+		else {
+			if (c != C_NONE)
+				cerror("bad argument storage class");
+			c = C_PAUTO;
+		}
+		if (t == T_NONE) {
+			cerror("parameter type required");
+			t = T_INT;
+		}
+		pdecl = def ? 1 : 2;
+		if (gdecl(&sp, &pdp, dp, def ? c : C_ARG, SL_VAR)) {
+			if (t == T_VOID && pdp == NULL) {
+				if (n == 0 && sp == NULL && s == RPAREN) {
+					pdecl = 0;
+					break;
+				}
+				cerror("illegal use of \"void\" type");
+				t = T_INT;
+			}
+			if (pdp != NULL && pdp->d_type == D_FUNC) {
+				xdp = pdp;
+				pdp = tackdim(NULL, D_PTR, (sizeof_t)0);
+				pdp->d_dp = xdp;
+			}
+			if (n >= NARGS)
+				cfatal("too many arguments");
+			k[n++] = pkind(t, pdp);
+			if (def && sp != NULL) {
+				sp = declare(sp, C_ARG, T_INT, NULL, NULL, 0);
+				sp = declare(sp, c, t, pdp, ip,
+					     volqual(rf, pdp, dp));
+				args[nargs++] = sp;
+			} else {
+				volqual(rf, pdp, dp);
+				dropdim(pdp);
+			}
+		}
+		pdecl = 0;
+		xdropinfo(t, ip);
+		if (s != COMMA)
+			break;
+		lex();
+	}
+	dvol = odv;
+	pdecl = opd;
+	return pintern(n, f, k);
+}
+
+/*
+ * The token holding the name of 'sp'.
+ */
+TOK *
+symtok(sp)
+register SYM	*sp;
+{
+	register TOK	*tp;
+	register char	*p;
+	register unsigned h;
+	int		i;
+
+	h = 0;
+	for (p = sp->s_id; *p != 0; ++p)
+		h += *p;
+	for (tp = hash0[h % NHASH]; tp != NULL; tp = tp->t_tp)
+		if (tp->t_id == sp->s_id)
+			return tp;
+	for (i = 0; i < NHASH; ++i)
+		for (tp = hash0[i]; tp != NULL; tp = tp->t_tp)
+			if (tp->t_id == sp->s_id)
+				return tp;
+	cbotch("symtok");
+	return NULL;
+}
+
+/*
+ * A prototype in a declaration that is not a definition named its
+ * parameters: remove them.
+ */
+dropargs()
+{
+	register SYM	*sp, **spp;
+	register int	i;
+
+	for (i = 0; i < nargs; ++i) {
+		sp = args[i];
+		for (spp = &symtok(sp)->t_sym; *spp != sp; spp = &(*spp)->s_sp)
+			;
+		*spp = sp->s_sp;
+		if (sp->s_ip != NULL)
+			xdropinfo(sp->s_type, sp->s_ip);
+		dropdim(sp->s_dp);
+		free((char *) sp);
+	}
+	nargs = 0;
+	pansi = 0;
+}
+
+/*
+ * Check the parameters of the definition of 'sp' against its prototype.
+ */
+protochk(sp)
+SYM	*sp;
+{
+	register char	*p;
+	register SYM	*ap;
+	register int	i, n;
+	sizeof_t	pi;
+
+	if ((pi = sp->s_dp->d_bound) == 0)
+		return;
+	p = pproto(pi);
+	n = p[0];
+	i = (nargs == n || (nargs > n && p[1] != 0));
+	while (i != 0 && --n >= 0) {
+		ap = args[n];
+		i = (p[2+n] == pkind(ap->s_type, ap->s_dp));
+	}
+	if (i == 0)
+		cerror("\"%s\" does not match its prototype", sp->s_id);
 }
 
 /*
@@ -661,7 +945,10 @@ DIM	*tdp;
 		dp = NULL;
 		if (s == LPAREN) {
 			lex();
-			if (s != RPAREN) {
+			if (isproto()) {
+				dp = cast2(dp, D_FUNC, gproto(0));
+				mustbe(RPAREN);
+			} else if (s != RPAREN) {
 				dp = cast1(NULL);
 				mustbe(RPAREN);
 			} else {
@@ -719,7 +1006,7 @@ sizeof_t b;
 
 cproto(adp) DIM **adp;
 {
-	*adp = cast2(*adp, D_FUNC, (sizeof_t)0);
+	*adp = cast2(*adp, D_FUNC, isproto() ? gproto(0) : (sizeof_t)0);
 }
 
 /* end of n0/gdecl.c */

@@ -32,6 +32,9 @@ SYM	*hash1[NSHASH];		/* Hash table */
 int	nnsw;			/* Switch nesting level */
 int	nsw[NNSW];		/* Switch label */
 CASES	*cases;			/* Case buffer */
+LCASES	*lcases;		/* Long case buffer */
+int	lqccmp();		/* Signed long compare */
+int	luqccmp();		/* Unsigned long compare */
 
 #if !OVERLAID
 /*
@@ -274,6 +277,29 @@ work1()
 				free((char *)cases);
 			break;
 
+		case LSBODY:
+			if (nnsw <= 0)
+				cbotch("switch underflow");
+			genlab(nsw[--nnsw]);
+			d = iget();
+			n = iget();
+			tt = bget();
+			if (n != 0) {
+				lcases = (LCASES *)malloc(n*sizeof(LCASES));
+				if (lcases == NULL)
+					cfatal("too many cases");
+				for (i=0; i<n; ++i) {
+					lcases[i].c_val = lget();
+					lcases[i].c_lab = iget();
+				}
+				shellsort((char *)lcases, n, sizeof(lcases[0]),
+					  tt ? &luqccmp : &lqccmp);
+			}
+			genlswitch(d, n, tt);
+			if (n != 0)
+				free((char *)lcases);
+			break;
+
 		case FINISH:
 			bput(op);
 			return;
@@ -296,6 +322,22 @@ qccmp(a, b)
 struct cases *a, *b;
 {
 	return (a->c_val - b->c_val);
+}
+
+/*
+ * Compare two long cases, signed and unsigned.
+ */
+lqccmp(a, b)
+struct lcases *a, *b;
+{
+	return (a->c_val < b->c_val ? -1 : a->c_val > b->c_val);
+}
+
+luqccmp(a, b)
+struct lcases *a, *b;
+{
+	return ((ulval_t)a->c_val < (ulval_t)b->c_val ? -1
+	      : (ulval_t)a->c_val > (ulval_t)b->c_val);
 }
 
 /*

@@ -369,6 +369,7 @@ xdef()
 		t = T_INT;
 	for (;;) {
 		nargs = 0;
+		pansi = 0;
 		if (!gdecl(&nsp, &ndp, dp, c, SL_VAR)) {
 			cerror("external syntax");
 			while (s!=EOF && s!=SEMI && s!=LBRACE && s!=RBRACE)
@@ -379,6 +380,9 @@ xdef()
 		}
 		sp = nsp;
 		sp = declare(sp, c, t, ndp, ip, volqual(rf, ndp, dp));
+		if (pansi && (c==C_GREF || sp->s_class==C_GREF
+		 || sp->s_class==C_TYPE || !isfunc(sp)))
+			dropargs();
 		if (c!=C_GREF && sp->s_class!=C_GREF && sp->s_class!=C_TYPE) {
 			if (isfunc(sp)) {
 				xfunc(sp);
@@ -493,6 +497,7 @@ register SYM	*sp;
 		xdropinfo(t, ip);
 		mustbe(SEMI);
 	}
+	protochk(sp);
 	initlocals();
 	bindargs();
 	newseg(SCODE);
@@ -512,8 +517,7 @@ register SYM	*sp;
 	llex = LL_AUTO;
 	locals();
 	putautos();
-	while (s!=EOF && s!=RBRACE)
-		statement();
+	body();
 	if (s != RBRACE)
 		cerror("missing right brace");
 	llex = LL_EXT;

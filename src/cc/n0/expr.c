@@ -488,12 +488,17 @@ conversion:
 			cwarn("implicit '*' added to function call");
 			lp = build(STAR, lp, NULL);
 			gt.t_dp = dp->d_dp->d_dp;
-		} else
+			dp = dp->d_dp;
+		} else {
 			cerror("call of non function");
+			dp = NULL;
+		}
 		if (rp != NULL && rp->t_op != ARGLST) {
 			rp = build(NOP, rp, NULL);
 			rt = tltype(rp);
 		}
+		if (dp != NULL && dp->d_bound != 0)
+			rp = protoargs(rp, dp->d_bound);
 		gt.t_type = lp->t_type;
 		gt.t_ip = lp->t_ip;
 		break;
@@ -662,6 +667,108 @@ conversion:
 }
 
 /*
+ * Convert the arguments 'rp' of a call through prototype 'pi' to the
+ * types of their parameters, as assignment would; the arguments matching
+ * `...' keep the default promotions.
+ */
+TREE *
+protoargs(rp, pi)
+TREE	*rp;
+sizeof_t pi;
+{
+	register TREE	*tp;
+	register char	*p;
+	register int	na;
+
+	p = pproto(pi);
+	na = 0;
+	if (rp != NULL)
+		for (na = 1, tp = rp; tp->t_op == ARGLST; tp = tp->t_lp)
+			++na;
+	if (na < p[0] || (na > p[0] && p[1] == 0)) {
+		cerror("wrong number of arguments");
+		return rp;
+	}
+	if (rp != NULL)
+		rp = protolist(rp, p, na);
+	return rp;
+}
+
+/*
+ * Convert the arguments in list 'tp', whose last is argument 'n'.
+ */
+TREE *
+protolist(tp, p, n)
+register TREE	*tp;
+char		*p;
+{
+	register TREE	*ap;
+
+	if (tp->t_op != ARGLST)
+		return protoarg(tp, p, n);
+	tp->t_lp = protolist(tp->t_lp, p, n-1);
+	tp->t_rp = ap = protoarg(tp->t_rp, p, n);
+	tp->t_type = ap->t_type;
+	tp->t_dp = ap->t_dp;
+	tp->t_ip = ap->t_ip;
+	return tp;
+}
+
+/*
+ * Convert argument 'n', 'tp', for prototype 'p'.
+ */
+TREE *
+protoarg(tp, p, n)
+register TREE	*tp;
+char		*p;
+{
+	register int	k, rt;
+	TREE		gt;
+
+	rt = tltype(tp);
+	if (n > p[0]) {
+#ifdef	VSVARG
+		if (isvariant(VSVARG) && rt >= T_CHAR && rt <= T_UINT)
+			cstrict("int argument %d in a variable argument list", n);
+#endif
+		return tp;
+	}
+	k = p[1+n];
+	if (k == T_PTR) {
+		if (rt == T_PTR)
+			return tp;
+		if (iszero(tp) && rt >= T_CHAR && rt <= T_ULONG) {
+			gt.t_op = CAST;
+			gt.t_type = T_CHAR;
+			gt.t_dp = tdalloc(NULL, D_PTR, (sizeof_t)0);
+			gt.t_ip = NULL;
+			gt.t_rp = NULL;
+			return bcvt(tp, &gt);
+		}
+		cerror("argument %d is not a pointer", n);
+		return tp;
+	}
+	if (k == T_STRUCT || k == T_UNION) {
+		if (rt != T_STRUCT)
+			cerror("argument %d is not a structure", n);
+		return tp;
+	}
+	if (rt == T_PTR || rt == T_STRUCT || rt == T_VOID) {
+		cerror("argument %d is not arithmetic", n);
+		return tp;
+	}
+	if (rt <= T_UINT)
+		rt = (rt & 1) != 0 ? T_INT : T_UINT;
+	else if (rt == T_FLOAT)
+		rt = T_DOUBLE;
+	if (rt == k
+	 || (rt <= T_UINT && k <= T_UINT)
+	 || ((rt == T_LONG || rt == T_ULONG) && (k == T_LONG || k == T_ULONG)))
+		return tp;
+	return bconvert(tp, k, NULL, NULL, NULL);
+}
+
+/*
  * If the first entry in the dimensions of tree "tp" is a
  * MOS array, stomp it into the pointer it truly is.
  */
@@ -698,6 +805,72 @@ iconexpr()
 		return (ival_t)tp->t_zval;
 	cerror("int constant expression required");
 	return (ival_t)0;
+}
+
+/*
+ * Read the constant expression of a case of a long switch, as a long.
+ */
+lval_t
+lconexpr()
+{
+	lval_t	v;
+
+	if (lconval(expr(), &v))
+		return v;
+	cerror("long constant expression required");
+	return (lval_t)0;
+}
+
+/*
+ * Fold integer constant 'tp', with its casts and conversions, into '*vp'.
+ */
+lconval(tp, vp)
+register TREE	*tp;
+lval_t		*vp;
+{
+	lval_t	v;
+
+	switch (tp->t_op) {
+	case ICON:
+		v = tp->t_ival;
+		break;
+	case LCON:
+		v = tp->t_lval;
+		break;
+	case ZCON:
+		v = tp->t_zval;
+		break;
+	case CAST:
+	case CONVERT:
+		if (lconval(tp->t_lp, &v) == 0)
+			return 0;
+		break;
+	default:
+		return 0;
+	}
+	switch (tltype(tp)) {
+	case T_CHAR:
+		v = (v & 0x80) != 0 ? (v | ~0xFFL) : (v & 0xFF);
+		break;
+	case T_UCHAR:
+		v &= 0xFF;
+		break;
+	case T_SHORT:
+	case T_INT:
+		v = (ival_t) v;
+		break;
+	case T_USHORT:
+	case T_UINT:
+		v &= 0xFFFFL;
+		break;
+	case T_LONG:
+	case T_ULONG:
+		break;
+	default:
+		return 0;
+	}
+	*vp = v;
+	return 1;
 }
 
 /*

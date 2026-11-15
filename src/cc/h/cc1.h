@@ -50,6 +50,11 @@ typedef	struct	cases	{
 	int	c_lab;			/* Label */
 }	CASES;
 
+typedef	struct	lcases	{
+	lval_t	c_val;			/* Value */
+	int	c_lab;			/* Label */
+}	LCASES;
+
 /*
  * Code patterns.
  * There is an array of these for
@@ -387,6 +392,7 @@ extern	int	oflag;
 extern	int	sflag;
 #endif
 extern	CASES	*cases;
+extern	LCASES	*lcases;
 extern	PREGSET	curbusy;
 extern	ival_t	curtemp;
 extern	PREGSET	curxreg;

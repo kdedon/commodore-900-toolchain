@@ -396,12 +396,13 @@ typedef	struct {
  */
 typedef struct {
 	int	sc_lab;			/* Label number			*/
-	ival_t	sc_val;			/* Value			*/
+	lval_t	sc_val;			/* Value			*/
 } SCASE;
 
 typedef struct {
 	int	sb_ncase;		/* # of cases			*/
 	int	sb_dlab;		/* Default label		*/
+	int	sb_long;		/* T_LONG or T_ULONG switch, or 0	*/
 	SCASE	sb_case[];		/* Adjustable array		*/
 }	SBLOCK;
 
@@ -553,6 +554,7 @@ extern	long	fieldalign();
 extern	int	salign();
 extern	int	subwordparm();
 extern	ival_t	iconexpr();
+extern	lval_t	lconexpr();
 extern	sizeof_t ssize();
 extern	sizeof_t tsize();
 extern	sizeof_t sdsize();
@@ -560,6 +562,13 @@ extern	sizeof_t tidsize();
 extern	sizeof_t psize();
 extern	sizeof_t getbound();
 extern	TREE	*cast();	/* cast declarator reader	*/
+extern	sizeof_t gproto();	/* prototype parameter list	*/
+extern	sizeof_t pintern();
+extern	char	*pproto();
+extern	TOK	*symtok();
+extern	TREE	*protoargs();
+extern	TREE	*protolist();
+extern	TREE	*protoarg();
 /* mch/bind.c */
 extern	TREE	*transform();
 extern	sizeof_t szcheck();
@@ -594,6 +603,8 @@ extern unsigned char ct[];
 extern	int	nerr;
 extern	char	*passname;
 extern	int	nargs;
+extern	int	pdecl;
+extern	int	pansi;
 extern	int	dvol;
 extern	SYM	*args[];
 extern	int	incpp;

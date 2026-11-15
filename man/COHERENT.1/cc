@@ -100,6 +100,7 @@ Variant options:
      -VSTAT          Statistics on optimization
      -VSUREG         Strict: unused registers
      -VSUVAR         Strict: unused variables (default)
+     -VSVARG         Strict: int argument in a variable argument list
      -VVERSION       Print compiler version number
      -VWIDEN         Widening of parameter or function value warning
      -VXSTAT         Write static external symbols

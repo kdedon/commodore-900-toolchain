@@ -37,7 +37,11 @@ register s;
 	if (c != MFLOW) {
 		s = ANYR;
 		if (c == MSWITCH) {
+#ifdef	swreg
+			s = swreg(ap->t_type);
+#else
 			s = SWREG;
+#endif
 			c = MRVALUE;
 		}
 		if (c == MRETURN) {

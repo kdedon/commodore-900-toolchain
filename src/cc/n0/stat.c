@@ -26,8 +26,9 @@ statement()
 	TREE 		*lp, *rp;
 	TREE 		*itree, *ctree, *stree;
 	SBLOCK		*ssbp;
-	int 		i, sclab, sblab, tt;
+	int 		i, sclab, sblab, tt, lsw, fdecl;
 	ival_t		v;
+	lval_t		lv;
 
 loop:
 	dbstat(s, line);
@@ -47,8 +48,7 @@ loop:
 		++llex;
 		locals();
 		putautos();
-		while (s!=EOF && s!=RBRACE)
-			statement();
+		body();
 		mustbe(RBRACE);
 		--llex;
 		downlex();
@@ -76,13 +76,20 @@ loop:
 		lex();
 		newtree(sizeof(TREE));
 		++incase;
+		if (sbp != NULL && sbp->sb_long != 0) {
+			lv = lconexpr();
+			--incase;
+			mustbe(COLON);
+			newcase(lv);
+			goto loop;
+		}
 		v = iconexpr();
 		--incase;
 		mustbe(COLON);
 		if (sbp == NULL)
 			cerror("case not in a switch");
 		else
-			newcase(v);
+			newcase((lval_t) v);
 		goto loop;
 
 	case DEFAULT:
@@ -167,13 +174,16 @@ loop:
 		lex();
 		tp = pexpr();
 		tt = tltype(tp);
+		lsw = 0;
 		if ((tt == T_LONG  && mytypes[T_INT]  == mytypes[T_LONG])
 		 || (tt == T_ULONG && mytypes[T_UINT] == mytypes[T_ULONG])) {
 			if (isvariant(VSBOOK))
 				cstrict("switch expression is long");
-		} else if (tt > T_UINT)
+		} else if (tt == T_LONG || tt == T_ULONG)
+			lsw = tt;
+		else if (tt > T_UINT)
 			cerror("switch of non integer");
-		if (tt != T_INT) {
+		if (tt != T_INT && lsw == 0) {
 			rp = NULL;
 			if (tt == T_PTR)
 				rp = bzcon(psize(tp));
@@ -184,6 +194,7 @@ loop:
 		sbp = (SBLOCK *) new(sizeof(SBLOCK));
 		sbp->sb_dlab = 0;
 		sbp->sb_ncase = 0;
+		sbp->sb_long = lsw;
 		sblab = cblab;
 		cblab = newlab();
 		statement();
@@ -192,12 +203,23 @@ loop:
 			cwarn("empty switch");
 		if (sbp->sb_dlab == 0)
 			sbp->sb_dlab = cblab;
+		if (lsw != 0) {
+			bput(LSBODY);
+			iput((ival_t) sbp->sb_dlab);
+			iput((ival_t) sbp->sb_ncase);
+			bput(lsw == T_ULONG);
+			for (i=0; i<sbp->sb_ncase; ++i) {
+				lput(sbp->sb_case[i].sc_val);
+				iput((ival_t) sbp->sb_case[i].sc_lab);
+			}
+		} else {
 		bput(SBODY);
 		iput((ival_t) sbp->sb_dlab);
 		iput((ival_t) sbp->sb_ncase);
 		for (i=0; i<sbp->sb_ncase; ++i) {
 			iput((ival_t) sbp->sb_case[i].sc_val);
 			iput((ival_t) sbp->sb_case[i].sc_lab);
+		}
 		}
 		label(cblab);
 		cblab = sblab;
@@ -210,9 +232,17 @@ loop:
 		mustbe(LPAREN);
 		newtree(sizeof(TREE));
 		itree = NULL;
+		if ((fdecl = isdecl()) != 0) {
+			savelocals();	/* `for (int i = 0; ...)': its own scope */
+			++llex;
+			locals();
+			putautos();
+			newtree(sizeof(TREE));
+		} else {
 		if (s != SEMI)
 			itree = expr();
 		mustbe(SEMI);
+		}
 		ctree = NULL;
 		if (s != SEMI) {
 			ctree = expr();
@@ -245,6 +275,11 @@ loop:
 		label(cblab);
 		cclab = sclab;
 		cblab = sblab;
+		if (fdecl != 0) {
+			--llex;
+			downlex();
+			restlocals();
+		}
 		break;
 
 	case RETURN:
@@ -397,7 +432,7 @@ dogoto()
  * adjusting the size of the switch block if necessary and possible.
  */
 newcase(v)
-ival_t	v;
+lval_t	v;
 {
 	SBLOCK *ssbp;
 	register SCASE *scp, *ocp;
@@ -419,6 +454,7 @@ ival_t	v;
 		sbp = new(sizeof(SBLOCK) + (i+32) * sizeof(SCASE));
 		sbp->sb_ncase = ssbp->sb_ncase;
 		sbp->sb_dlab = ssbp->sb_dlab;
+		sbp->sb_long = ssbp->sb_long;
 		scp = sbp->sb_case;
 		ocp = ssbp->sb_case;
 		while (--i >= 0) {

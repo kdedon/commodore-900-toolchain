@@ -9,6 +9,34 @@
 #endif
 
 /*
+ * Does 's' begin a declaration?  A typedef name followed by ':' is a label.
+ */
+isdecl()
+{
+	register SYM	*sp;
+
+	if ((s >= INT && s <= SIGNED) || s == READONLY || s == ALIEN)
+		return 1;
+	return (s == ID && (sp = reflookup(SL_VAR)) != NULL
+		&& sp->s_class == C_TYPE && !spnextis(':'));
+}
+
+/*
+ * The statements of a block, with declarations among them; each name is
+ * in scope from its declarator to the end of the block.
+ */
+body()
+{
+	while (s!=EOF && s!=RBRACE) {
+		if (isdecl()) {
+			locals();
+			putautos();
+		} else
+			statement();
+	}
+}
+
+/*
  * Read local variables.
  * The correct lexic level is in "llex".
  * The first token of the locals is in "s".

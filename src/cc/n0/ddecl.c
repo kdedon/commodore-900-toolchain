@@ -170,6 +170,13 @@ unsigned long	x2;
 		++rf;
 	if (oc != C_NONE && oc != C_ARG && (sp->s_flag&ronlyf) != ronlyf)
 		++rf;
+	if (ndp!=NULL && ndp->d_type==D_FUNC && (isdefn(oc) || oc==C_CXT)
+	 && (dp=sp->s_dp)!=NULL && dp->d_type==D_FUNC) {
+		if (ndp->d_bound == 0)
+			ndp->d_bound = dp->d_bound;
+		else if (dp->d_bound != 0 && dp->d_bound != ndp->d_bound)
+			++rf;
+	}
 	sp->s_class = c;
 	sp->s_type  = t;
 	dropdim(sp->s_dp);

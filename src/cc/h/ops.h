@@ -48,6 +48,7 @@
 #define DLABEL	27		/* Debug label item */
 				/* Segment guess, withdrawn */
 #define UREFER	29		/* Undefined reference for floating printf */
+#define LSBODY	30		/* Long switch body */
 
 /*
  * Symbolic segments. The "SANY" code is

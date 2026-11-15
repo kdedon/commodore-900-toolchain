@@ -197,6 +197,26 @@ file_char:
 				ungetc(c, ifp);
 				--line;		/* '\n' will get read again */
 				break;
+			} else if (c == '/' && notvariant(VCPP)) {
+				/*
+				 * A C99 line comment.  A backslash-newline
+				 * inside it continues it; its newline is
+				 * left to end the line, or a #define.
+				 */
+				while ((c = getc(ifp)) >= 0 && c != '\n') {
+					if (c != '\\')
+						continue;
+					while ((c = getc(ifp)) == '\r')
+						;
+					if (c == '\n')
+						++line;
+					else if (c >= 0)
+						ungetc(c, ifp);
+				}
+				if (c >= 0)
+					ungetc(c, ifp);
+				c = ' ';
+				break;
 			} else if (c != '*') {
 				ungetc(c, ifp);
 				c = '/';

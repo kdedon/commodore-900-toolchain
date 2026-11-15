@@ -177,6 +177,10 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/vdebug.sh
 	sh tests/symlen.sh
 	sh tests/lname.sh
+	sh tests/proto.sh
+	sh tests/lswitch.sh
+	sh tests/linecomment.sh
+	sh tests/mixdecl.sh
 	sh tests/bytearg.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and

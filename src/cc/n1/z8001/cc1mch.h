@@ -48,6 +48,9 @@ typedef	char	INDEX;		/* Index type				*/
 #define	NBPCH	8		/* # of bits in a char (out.c)		*/
 #define	NSWITCH	4		/* # cases in a switch coded as conditionals */
 
+/* A long switch value is evaluated into RR0, whose low word is R1. */
+#define	swreg(t)	((t) == S32 || (t) == U32 ? RR0 : SWREG)
+
 /* Split a 32-bit long into its 16-bit halves (big-endian: hi word first). */
 #define	upper(n)	((ival_t)((unsigned long)(n) >> 16))
 #define	lower(n)	((ival_t)(n))

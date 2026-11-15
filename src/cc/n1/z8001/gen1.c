@@ -490,6 +490,15 @@ pmfunc()
 			for (n = 2*pmicpy(); n > 0 && !pmbad; --n)
 				pmicpy();
 			break;
+		case LSBODY:
+			pmicpy();
+			n = pmicpy();
+			pmbyte();
+			for (; n > 0 && !pmbad; --n) {
+				pmzcpy();
+				pmicpy();
+			}
+			break;
 		case EPILOG:
 			return (!pmbad);
 		default:
@@ -727,6 +736,84 @@ genswitch(def, n)
 		else
 			genri(ZCP, A_WR|SWREG, l);		/* CP SWREG,#l */
 		gencbr(EQ, cases[i].c_lab);
+	}
+	genubr(def);
+}
+
+/*
+ * A long switch, its value in RR0 and its cases sorted, signed or 'uns'
+ * unsigned.  A dense range dispatches through the same table as genswitch,
+ * indexed by R1 once the rebased value is known to be in range:
+ *
+ *	SUBL	RR0,#lo
+ *	CPL	RR0,#hi-lo
+ *	JR	UGT,default
+ *	ADD	R1,R1	...	as genswitch, with R1 for R0
+ *
+ * 26 bytes, 6 more to rebase, and a word per value.  A case otherwise costs a
+ * CPL and a JR, 8 bytes, and the table is taken only when it is smaller.  The
+ * compares are a binary search: CPL against the middle case, JR EQ to it and
+ * JR LT (ULT) to the lower half, down to runs of four compared in turn.
+ */
+genlswitch(def, n, uns)
+{
+	register int i;
+	lval_t lo, span;
+	int tab;
+
+	if (n > 0) {
+		lo = lcases[0].c_val;
+		span = (ulval_t)lcases[n-1].c_val - (ulval_t)lo;
+		if ((ulval_t)span < 0x4000
+		 && 26 + 2*(span+1) + (lo != 0 ? 6 : 0) < 8L*n + 2) {
+			if (lo != 0)
+				genril(ZSUBL, A_WR|R0, lo);
+			genril(ZCPL, A_WR|R0, span);
+			gencbr(UGT, def);
+			genrr(ZADD, A_WR|R1, A_WR|R1);
+			tab = newlab();
+			bput(CODE);
+			bput(ZLDAR);
+			iput(A_WR|R2);
+			iput(A_LID|A_DIR);
+			iput(tab);
+			genrr(ZADD, A_WR|R3, A_WR|R1);
+			genrr(ZADD, A_WR|R3, A_IR|R2);
+			genr(ZJP, A_IR|R2);
+			genlab(tab);
+			for (i = 0; i < n; ++i) {
+				while (lo != lcases[i].c_val) {
+					genl(ZSWREL, def);
+					++lo;
+				}
+				genl(ZSWREL, lcases[i].c_lab);
+				++lo;
+			}
+			return;
+		}
+	}
+	genlsearch(0, n, def, uns);
+}
+
+/* Search lcases[lo..hi-1] for the value in RR0, else go to 'def'. */
+genlsearch(lo, hi, def, uns)
+{
+	register int i, mid;
+	int l;
+
+	while (hi - lo > 4) {
+		mid = (lo + hi) / 2;
+		genril(ZCPL, A_WR|R0, lcases[mid].c_val);
+		gencbr(EQ, lcases[mid].c_lab);
+		l = newlab();
+		gencbr(uns ? ULT : LT, l);
+		genlsearch(mid+1, hi, def, uns);
+		genlab(l);
+		hi = mid;
+	}
+	for (i = lo; i < hi; ++i) {
+		genril(ZCPL, A_WR|R0, lcases[i].c_val);
+		gencbr(EQ, lcases[i].c_lab);
 	}
 	genubr(def);
 }
@@ -1028,6 +1115,18 @@ genri(op, r, i)
 	iput(r);
 	iput(A_OFFS|A_IMM);
 	iput(i);
+}
+
+/* op + register pair + 32-bit immediate. */
+genril(op, r, l)
+lval_t	l;
+{
+	bput(CODE);
+	bput(op);
+	iput(r);
+	iput(A_OFFS|A_IMML);
+	iput(upper(l));
+	iput(lower(l));
 }
 
 /* op + local label. */

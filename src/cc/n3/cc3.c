@@ -64,7 +64,8 @@ char	*ilonames[] = {
 	"",	/* DLOCAT */
 	"",	/* DLABEL */
 	"segment guess",
-	"undefined reference"
+	"undefined reference",
+	"long switch body"
 };
 
 #if	!OVERLAID
@@ -235,6 +236,25 @@ work3()
 				cvalue = iget();
 				clabel = iget();
 				fprintf(ofp, "\t\t" I_FMT "\tL" I_FMT "\n", cvalue, clabel);
+			}
+			fprintf(ofp, "\t\tdef\tL" I_FMT "\n", deflab);
+			break;
+		}
+
+		case LSBODY:
+		{
+			register ival_t deflab, ncases, clabel;
+			int uns;
+			lval_t lvalue;
+
+			deflab = iget();
+			ncases = iget();
+			uns = bget();
+			fprintf(ofp, "%s%s\n", ilonames[op], uns ? ", unsigned" : "");
+			while (ncases--) {
+				lvalue = lget();
+				clabel = iget();
+				fprintf(ofp, "\t\t%ld\tL" I_FMT "\n", (long)lvalue, clabel);
 			}
 			fprintf(ofp, "\t\tdef\tL" I_FMT "\n", deflab);
 			break;

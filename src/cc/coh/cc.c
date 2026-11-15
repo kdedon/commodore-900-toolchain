@@ -215,6 +215,9 @@ struct option {			/* option table */
 	{ 0,	CCOPT,	"VSLCON",	VSLCON	},
 	{ 0,	CCOPT,	"VSPVAL",	VSPVAL	},
 	{ 0,	CCOPT,	"VSCCON",	VSCCON	},
+#if	Z8001
+	{ 0,	CCOPT,	"VSVARG",	VSVARG	},
+#endif
 /*
  * Debug.
  * The -VDB option turns on all of these;
@@ -2010,6 +2013,9 @@ usage(flag) register int flag;
 		"\t-VSTAT\t\tStatistics on optimization\n"
 		"\t-VSUREG\t\tStrict: unused registers\n"
 		"\t-VSUVAR\t\tStrict: unused variables (default)\n"
+#if	Z8001
+		"\t-VSVARG\t\tStrict: int argument in a variable argument list\n"
+#endif
 		"\t-VVERSION\tPrint compiler version number\n"
 		"\t-VWIDEN\t\tWidening of parameter or function value warning\n"
 		"\t-VXSTAT\t\tWrite static external symbols\n"
