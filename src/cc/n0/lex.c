@@ -393,9 +393,11 @@ getid(ch) int ch;
 		unget(c);
 		if (idhide == -1)
 			idhide = SET0;	/* Empty */
-		*p++ = 0;
-		*p++ = 0;
-		*p++ = 0;
+		*p++ = 0;		/* the padding stays inside id[] */
+		if (p < &id[NCSYMB])
+			*p++ = 0;
+		if (p < &id[NCSYMB])
+			*p++ = 0;
 	}
 	{
 		register TOK *tp, **tpp;

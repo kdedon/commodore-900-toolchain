@@ -492,6 +492,51 @@ chkf 'int f(n) int n; { char fr[8]; return (int)(~(long)&fr[n] + (long)&fr[0]) *
 chkf 'int f(n) int n; { char fr[8]; long top; top = (long)fr + (long)&fr[n]; return (int)(top - (long)&fr[0] - (long)&fr[1]); }' 6 0 5
 chkf 'int f(n) int n; { char fr[8]; return 3 + ((long)&fr[n] > (long)&fr[1]) * 4 + ((long)fr == (long)&fr[n]) * 8; }' 4 0 7
 chkf 'int f(n) int n; { char fr[8]; char *p; p = fr; return ((long)&fr[1] < (long)(p + n)) * 5 + ((long)(p + n) & (long)&fr[n]) - (long)&fr[n]; }' 3 0 5
+# A far-pointer subtract, op-assign or increment converted to an integer: dropping
+# the conversion relabeled it an integer operator over a pointer operand, which no
+# rule takes (EDFA69).  The conversion stays a node and shares the pointer's pair.
+chkf 'int f(x,y) int x,y; { char b[4]; char *p; long v; p = b + x; v = (long)p++; return (int)(v - (long)b) * 10 + (int)(p - b); }' 2 0 23
+chkf 'int f(x,y) int x,y; { char b[8]; char *p; long v; p = b + x; v = (long)p--; return (int)(v - (long)b) * 10 + (int)(p - b); }' 5 0 54
+chkf 'int f(x,y) int x,y; { int b[4]; int *p; long v; p = b; v = (long)++p; return (int)(v - (long)b) * 10 + (int)(p - b); }' 0 0 21
+chkf 'int f(x,y) int x,y; { char b[8]; register char *p; long v; p = b + x; v = (long)(p -= y); return (int)(v - (long)b) * 10 + (int)(p - b); }' 7 3 44
+chkf 'int f(x,y) int x,y; { char b[8]; char *p; long v; p = b; v = (long)(p += y); return (int)(v - (long)b) * 10 + (int)(p - b); }' 0 3 33
+chkf 'int f(x,y) int x,y; { char b[16]; long a[1]; a[0] = (long)(b + x - 2 * y); return (int)(a[0] - (long)b); }' 9 3 3
+chkf 'long g(s,n) char *s; int n; { return 1L + (long)(s - n); } int f(x,y) int x,y; { char b[8]; return (int)(g(b + x, y) - (long)b); }' 6 2 5
+chkf 'unsigned long g(s,n) char *s; int n; { return (unsigned long)(s - n); } int f(x,y) int x,y; { char b[8]; return (int)(g(b + x, y) - (unsigned long)b); }' 6 2 4
+chkf 'long g(p) char *p; { return (long)p++; } int f(x,y) int x,y; { char b[8]; return (int)(g(b + x) - (long)b); }' 3 0 3
+chkf 'long g(v) long v; { return v; } int f(x,y) int x,y; { char b[8]; char *p; long v; p = b + x; v = g((long)p++); return (int)(v - (long)b) * 10 + (int)(p - b); }' 4 0 45
+# A byte cast converted to long (`*p = (unsigned char)c', p an unsigned long *): the
+# byte -> long rules take only a byte in memory, and the cast was a byte computed in a
+# register, which no rule took (EDFA69).  A cast of a widened byte loads the byte itself.
+chkf 'int f(x,y) int x,y; { unsigned long l; char c; c = x; { unsigned long *p; p = &l; *p = (unsigned char)c; } return (int)(l >> 4); }' -2 0 15
+chkf 'int f(x,y) int x,y; { unsigned long l[2]; char s[2]; char *q; s[0] = x; q = s; l[1] = (unsigned char)*q; return (int)l[1] + (int)(l[1] >> 16); }' -3 0 253
+chkf 'struct T { char c; }; int f(x,y) int x,y; { struct T t, *tp; long l; t.c = x; tp = &t; l = (unsigned char)tp->c; return (int)l + (l < 0); }' -1 0 255
+chkf 'int f(x,y) int x,y; { long l; unsigned char u; u = x; l = (signed char)u; return (int)l + (int)(l >> 16) * 1000; }' 200 0 -1056
+chkf 'int f(x,y) int x,y; { unsigned long l; char c; c = x; l = (unsigned char)(c + y); return (int)l; }' 127 2 129
+chkf 'int f(x,y) int x,y; { long g, l; g = x * 65536L + y; l = (unsigned char)g; return (int)l + (int)(g >> 16) * 1000; }' 3 511 3255
+chkf 'int f(x,y) int x,y; { long l; l = 7; l += (unsigned char)(char)x; return (int)l; }' -1 0 262
+chkf 'int f(x,y) int x,y; { long l; char c; c = x; l = (signed char)(c + y); return (int)l; }' 127 1 -128
+# The reported form loads the byte zero-extended, as for an unsigned char c: no EXTSB.
+chkdis 'f(p, c) unsigned long *p; char c; { *p = (unsigned char)c; }' 'extsb' no
+chkdis 'f(p, c) unsigned long *p; char c; { *p = (unsigned char)c; }' 'clrb' yes
+# `(long)q == (long)fr + 1' with fr a frame array: the cast dropped, the ADD
+# re-derived a far pointer right of a long, which no rule takes (EDFA55).
+chkf 'int f(x,y) int x,y; { char fr[8]; char *q; q = fr + x; return ((long)q == (long)fr + 1) + ((long)q < (long)fr + 3) * 2; }' 1 0 3
+chkf 'int f(x,y) int x,y; { char fr[8]; char *q; long v; q = fr + x; v = (long)q != (long)fr - 1 + y; return (int)v; }' 2 3 0
+# The frame top (`buf + sizeof(buf)', `&buf[64]' with buf the first local) folds to
+# the bare frame register, one near word with no pair half.  Narrowed to an int or
+# a byte it took [LO] of R13 and gave cc2 an empty operand (2C59); a truth test
+# TESTL'd it as a pair (F70A149).  Narrowed, it is LD Rd,R13, rebased by cc2.
+chkf 'int f(x,y) int x,y; { char buf[64]; char *p; p = buf + x; return buf + sizeof(buf) - p; }' 10 0 54
+chkf 'int f(x,y) int x,y; { char buf[64]; char *p; p = buf + x; return &buf[64] - p; }' 63 0 1
+chkf 'int f(x,y) int x,y; { char buf[64]; char *p; p = buf + x; return p - (buf + 64); }' 4 0 -60
+chkf 'int f(x,y) int x,y; { int a[4]; return (int)(a + 4) - (int)(a + x); }' 1 0 6
+chkf 'int f(x,y) int x,y; { char buf[64]; return (unsigned char)(buf + 64) == (unsigned char)((int)buf + 64); }' 0 0 1
+chkf 'int f(x,y) int x,y; { char buf[64]; return (char)(buf + 64) == (char)((int)buf + 64); }' 0 0 1
+chkf 'int f(x,y) int x,y; { char buf[64]; if (buf + 64) return 3; return 4; }' 0 0 3
+chkf 'int f(x,y) int x,y; { char buf[64]; return !(buf + 64) + ((buf + 64) != 0) * 2; }' 0 0 2
+# No worse than `(buf - ptr) + 64': the offset word straight from LDA, no pair.
+chklist 'int f(ptr) char *ptr; { char buf[64]; return buf + sizeof(buf) - ptr; }' 'ld r[0-9]*, r14' no
 # 2D CHAR array indexed by two register vars (banner.c `font[*s-' '][i]').  cc0 left-
 # associates a[i][j] (scale-1 inner index) as (i*scale + base) + j, leaving the scaled term
 # folded against the static base -- a scaled address gencoll can't encode.  modoper rotates
@@ -750,6 +795,14 @@ chkf 'int sq(n) int n; { return n*n; } int dbl(n) int n; { return n+n; } int f(x
 chkf 'int g1() { return 10; } int g2() { return 20; } int f(i) int i; { int (*t[2])(); t[0]=g1; t[1]=g2; return (*t[i])(); }' 0 0 10
 chkf 'int g1() { return 10; } int g2() { return 20; } int f(i) int i; { int (*t[2])(); t[0]=g1; t[1]=g2; return (*t[i])(); }' 1 0 20
 chkf 'int a(x,y) int x,y; { return x+y; } int m(x,y) int x,y; { return x*y; } int f(i) int i; { int (*t[2])(); t[0]=a; t[1]=m; return (*t[i])(3,4); }' 1 0 12
+# a call target computed inline from a pointer held in a REGISTER, the library-vector
+# form `(*(fp)((char *)lib - 6))(lib)'.  The STAR over `rr - 6' is itself addressable
+# (@RRn-6), but the call operand is the pointer under it, so selection must store that
+# pointer as it does for a parameter; it once skipped it and cc1 stopped ("no patp").
+chkf 'typedef int (*fp)(); int g(n) int n; { return n+40; } int f(x) int x; { char *lib; lib = (char *)g + 6; return (*(fp)(lib - 6))(x); }' 2 0 42
+chkf 'typedef int (*fp)(); int g(n) int n; { return n+40; } int f(x) int x; { register char *lib; lib = (char *)g + 6; return (*(fp)(lib - 6))(x); }' 3 0 43
+chkf 'typedef int (*fp)(); int g(n) int n; { return n+40; } int f(x) int x; { char *lib; lib = (char *)g - 4; return (*(fp)(lib + 4))(x); }' 4 0 44
+chkf 'typedef int (*fp)(); int g(n) int n; { return n+40; } int c(lib,x) char *lib; int x; { return (*(fp)(lib - 6))(x); } int f(x) int x; { return c((char *)g + 6, x); }' 5 0 45
 # RR0 is barred from ADDRESSING, not from holding a pointer.  The Z8000 rule is
 # "register R0 (or the double register RR0 in segmented mode) cannot be used as an
 # indirect register, base register, index register, or software stack pointer" (Z8000 CPU
@@ -1875,6 +1928,43 @@ chkdiag 'char *p; int f() { return *p + p[1]; }' 'void' no
 chkdiag 'void *a; void *b; int f() { return a == b || a != 0; }' 'void' no
 chkdiag 'void **pp; int f() { char *q; q = *pp; return 0; }' 'void' no
 chkdiag 'void g2(); int f() { g2(); return 0; }' 'void' no
+
+# A long operator with no far-pointer rule (shifts, multiply, xor, unary,
+# op-assigns, inc-dec) cast to a pointer: as an argument, an assignment and a
+# return value.  Each returns the pointer's two words xored.
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << 8), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 13586
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << 16), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 4661
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << 23), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 6784
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << 24), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 13568
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << 25), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 27136
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << 31), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 -32768
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((unsigned long)x << y), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 20 9040
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)((long)x << 24), 0L); return (int)(r >> 16) ^ (int)r; }' -3 0 -768
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long r; r = h((APTR)(x << 4), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 9040
+chkf 'typedef char *APTR; APTR gp; int f(x,y) int x; int y; { long r; gp = (APTR)((unsigned long)x << 24); r = (long)gp; return (int)(r >> 16) ^ (int)r; }' 53 0 13568
+chkf 'typedef char *APTR; APTR gp; APTR g(s) int s; { return (APTR)((unsigned long)s << 24); } int f(x,y) int x; int y; { long r; r = (long)g(x); return (int)(r >> 16) ^ (int)r; }' 53 0 13568
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(l * (long)y), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 257 18215
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(l ^ ((long)y << 16)), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 119 4674
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(~l), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 4661
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(-l), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 0 4660
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(l += (long)y << 16), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 3 4662
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(++l), 0L); return (int)(r >> 16) ^ (int)r; }' -1 0 0
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(l <<= y), 0L); return (int)(r >> 16) ^ (int)r; }' 4661 12 20771
+chkf 'typedef char *APTR; long h(p,z) APTR p; long z; { return (long)p ^ z; } int f(x,y) int x; int y; { long l, r; l = x; r = h((APTR)(y ? (unsigned long)x << 24 : 0L), 0L); return (int)(r >> 16) ^ (int)r; }' 53 1 13568
+
+# A macro argument of 30 lines, used twice: cc0 holds it three times over while it
+# substitutes, and the donor's 1024-byte expansion buffer stopped it with "macro
+# expansion buffer overflow" at about 300 characters.
+src='#define TWICE(s)	{ s } { s }
+int f(x,y) int x,y; { int n; n = 0; TWICE(n += x;'
+i=1; while [ $i -le 30 ]; do src="$src
+	    if (n > $i) n -= y; else n += $i;"; i=$((i+1)); done
+chkf "$src) return n; }" 3 1 35
+# Identifiers of 254 characters and of 300, which cc0 truncates to 255: the
+# names differing only past the limit are one name.  The padding after the
+# stored name once ran two bytes past id[] into the input FILE pointer.
+v=$(printf 'v%.0s' $(seq 254)); w=$(printf 'w%.0s' $(seq 300))
+chkf "int f(x,y) int x,y; { int $v; int ${w}1; $v = x; ${w}2 = y; return $v * 10 + ${w}3; }" 4 2 42
 
 # Every assertion in this file runs in every checkout, so the totals are the whole
 # story and the summary line says only what happened.  There was a skip counter

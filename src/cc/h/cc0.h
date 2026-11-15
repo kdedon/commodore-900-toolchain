@@ -43,7 +43,9 @@
 #define	NDBUF	8192		/* Size of the define buffer		*/
 #else
 #define NDLEV	128		/* DSTACK size				*/
+#ifndef	NDBUF
 #define	NDBUF	1024		/* Size of the define buffer		*/
+#endif
 #endif
 #define ARG0	0200		/* Base of formals in define bodies	*/
 #define SET0	(ARG0+NARGS)	/* Base of hide set indices in text	*/

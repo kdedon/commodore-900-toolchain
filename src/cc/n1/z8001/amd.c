@@ -203,6 +203,12 @@ TREE		*ptp;
 					flag |= T_DIR;
 		}
 		flag |= T_OFS;
+		/* A called STAR is not addressable unless the pointer under it is:
+		 * outcall emits the CALL from that pointer, so selection must
+		 * prepare it (`(*(fp)(lib - 6))(lib)' with lib in a pair). */
+		if (ptp != NULL && ptp->t_op == CALL && ptp->t_lp == tp
+		 && !isadr(tp->t_lp->t_flag))
+			flag &= ~T_DIR;
 	}
 	/* Preserve the modoper-set fold markers across amd's flag recompute, so they
 	 * survive every pass and reach findoffs (which runs before amd in modleaf). */

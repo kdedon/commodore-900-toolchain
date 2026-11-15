@@ -120,6 +120,17 @@ UGE:
 / Null check MEMORY-direct: a far pointer already in memory (`*p == 0' / `*p != 0',
 / `argv[i] == 0') is TESTL'd in place (one op) instead of LDL-into-a-temp-then-TESTL.
 / Must precede the TREG rule; a register/computed pointer falls through to it.
+/ The bare frame register is a REG, so it would match ADR, but it is one near word,
+/ not a pair: build the pair (segment R14, offset R13, which cc2 rebases to the frame
+/ top) and test that.
+%	PEREL
+	*		PAIR	*	*	TEMP
+		SREG|MMX	LPTX
+		0|MMX		*
+			[ZLD]	[LO R],[AL]
+			[ZLD]	[HI R],[REGNO R14]
+			[ZTESTL]	[R]
+			[REL0]	[LAB]
 %	PEREL
 	*		NONE	*	*	NONE
 		ADR		LPTX

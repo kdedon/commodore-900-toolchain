@@ -882,6 +882,8 @@ register INS	*ip;
  *	LD Rd,R13	-> LDA Rd,frame-top(R13), folding a following constant
  *			   add/subtract on Rd into the same displacement
  *	ADD Rd,R13	-> the same add, plus the frame size
+ *	CLR Rd; ADD Rd,R13 -> LD Rd,R13, plus the frame size (the frame top as a
+ *			   word: an LDA would write the pair, and so Rd's neighbour)
  *
  * Any other use of R13 as a register operand has no rebasing rule and is a botch
  * rather than a silently wrong address.
@@ -903,6 +905,13 @@ framerebase()
 			cbotch("frame register operand, op=%d", ip->i_op);
 		d = ip->i_af[0].a_mode & A_REGM;
 		if (ip->i_op == ZADD) {			/* index + frame base */
+			np = ip->i_bp;
+			if (np != &ins && np->i_type == CODE && np->i_op == ZCLR
+			 && np->i_naddr == 1 && np->i_af[0].a_mode == (unsigned)(A_WR|d)) {
+				np->i_bp->i_fp = ip;
+				ip->i_bp = np->i_bp;
+				ip->i_op = ZLD;
+			}
 			np = newn(2);
 			np->i_type = CODE;
 			np->i_naddr = 2;

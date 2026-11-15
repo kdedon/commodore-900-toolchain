@@ -170,6 +170,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/volmem.sh
 	sh tests/initvol.sh
 	sh tests/vdebug.sh
+	sh tests/bytearg.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it

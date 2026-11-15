@@ -65,6 +65,16 @@ LEAF:
 / terminates the selfix<->iselect fixup loop (otherwise FIXUP(LONG|LPTR) in MEQ
 / recurses to a stack overflow -- the same gap for both 32-bit pair types).
 / EQUALITY (==0/!=0/if/while): TESTL sets Z (parity/overflow-independent) -- 1 insn.
+/ The bare frame register is one near word, not a pair: build the pair (segment R14,
+/ offset R13, which cc2 rebases to the frame top) and test that.
+%	PEREL
+	LPTX		ANYR	*	*	TEMP
+		SREG|MMX	LPTX
+		*		*
+			[ZLD]	[LO R],[AL]
+			[ZLD]	[HI R],[REGNO R14]
+			[ZTESTL]	[R]
+			[REL0]	[LAB]
 %	PEREL
 	LONG|LPTX	NONE	*	*	NONE
 		ADR		LONG|LPTX
@@ -448,6 +458,35 @@ LEAF:
 /////////
 / Narrow long -> word: grab the low word.
 /////////
+/ The bare frame register (`&local[N]' whose displacement folds to zero, as in
+/ `buf + sizeof(buf)') is one NEAR word register, not a pair, so it has no [LO]
+/ half: its offset word is R13 plus the frame size.  cc2 adds the frame size to
+/ `ADD Rd,R13'.  Not `LD Rd,R13': cc2 makes that an LDA, which writes the whole
+/ pair and so the word next to Rd.  SREG|MMX must precede the ADR rules, which
+/ take a REG.
+%	PRVALUE
+	WORD		ANYR	*	*	TEMP
+		SREG|MMX	LPTX
+		*		*
+			[ZCLR]	[R]
+			[ZADD]	[R],[AL]
+
+%	PRVALUE
+	FS8		ANYR	*	*	TEMP
+		SREG|MMX	LPTX
+		*		*
+			[ZCLR]	[R]
+			[ZADD]	[R],[AL]
+			[ZEXTSB]	[R]
+
+%	PRVALUE
+	FU8		ANYR	*	*	TEMP
+		SREG|MMX	LPTX
+		*		*
+			[ZCLR]	[R]
+			[ZADD]	[R],[AL]
+			[ZCLRB]	[HI R]
+
 %	PRVALUE
 	WORD		ANYR	*	*	TEMP
 		ADR|IMM		LONG|LPTX
@@ -562,6 +601,13 @@ LEAF:
 		ADR|IMM		LONG|LPTX
 		*		*
 			[ZLDL]	[R],[AL]
+
+/ `(char *)(u << 24)': a long built in its temp pair is the pointer's bits.
+%	PRVALUE|P_SLT
+	LPTX		ANYR	ANYR	*	TEMP
+		TREG		LONG
+		*		*
+			;
 
 /////////
 / TODO (parity with the i8086 original):

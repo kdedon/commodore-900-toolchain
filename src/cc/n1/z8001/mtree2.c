@@ -310,6 +310,44 @@ register TREE *ptp;
 }
 
 /*
+ * True if no rule gives operator `op' a far-pointer result.
+ */
+static
+noptrop(op)
+register int op;
+{
+	if (op >= MUL && op <= ASHR)
+		return op != AND && op != OR;
+	return op == NEG || op == COM || (op >= INCBEF && op <= DECAFT);
+}
+
+/*
+ * True if `tp' is a byte read from memory or a register, whose signedness
+ * only selects how it is extended.
+ */
+static
+isbyteval(tp)
+register TREE *tp;
+{
+	while (tp->t_op == LEAF)
+		tp = tp->t_lp;
+	return tp->t_op == STAR || tp->t_op == REG || tp->t_op == AID
+	    || tp->t_op == PID || tp->t_op == GID || tp->t_op == LID;
+}
+
+/*
+ * True if operator `op' with a far-pointer result has no rule once relabeled
+ * to an integer.
+ */
+static
+isptrupd(op)
+register int op;
+{
+	return op == SUB || op == AADD || op == ASUB
+	    || (op >= INCBEF && op <= DECAFT);
+}
+
+/*
  * `*(p + k)' through a far pointer, k constant: k can fold into @RRn+disp.
  */
 static
@@ -361,6 +399,17 @@ TREE		*tp;
 	       && (ptp->t_rp->t_op == ICON || ptp->t_rp->t_op == LCON)
 	       && !foldimm(tp, ptp->t_rp))
 	      || ptp->t_op == CONVERT || ptp->t_op == CAST);
+}
+
+/*
+ * Does `ptp' (or a truth test) read the flags of the instruction that takes
+ * its operand?
+ */
+static
+readsflags(ac, ptp)
+register TREE	*ptp;
+{
+	return ac == MFLOW || (ptp != NULL && isrelop(ptp->t_op));
 }
 
 /*
@@ -527,12 +576,24 @@ TREE		*ptp;
 	 * bit-field op -- so findoffs (amd.c) FOLDS k into the @RRn+disp addressing (LD/LDL
 	 * @RRn+disp exist), saving the materialize ADD.  An unmarked far field stays
 	 * materialized (@RRn disp 0), because those ops have no @RRn+disp memory form.
+	 *
+	 * A deref marked as the base load of an outer deref keeps its mark when the
+	 * ADDR-STAR cancellation of an offset-0 member re-parents it, except under a
+	 * compare or truth test: `&p->a[i]->first' then leaves a[i]'s deref as a CP
+	 * operand, which cc2 brackets with an INC/DEC of the pair, and the DEC sets
+	 * the flags the branch reads.  Elsewhere (`p->font->head.wide') the deref is
+	 * still loaded into a register and the folded LDL is correct.
 	 */
-	if (op == STAR && foldstar(tp) && foldok(ac, ptp, tp)) {
-		tp->t_flag |= T_FOLDOFS;
-		if (ptp != NULL && ptp->t_op == ASSIGN && ptp->t_lp == tp
-		 && ptp->t_rp->t_op == ICON)
-			ptp->t_rp->t_flag |= T_FOLDIMM;
+	if (op == STAR && foldstar(tp)) {
+		if (foldok(ac, ptp, tp)) {
+			tp->t_flag |= T_FOLDOFS;
+			if (ptp != NULL && ptp->t_op == ASSIGN && ptp->t_lp == tp
+			 && ptp->t_rp->t_op == ICON)
+				ptp->t_rp->t_flag |= T_FOLDIMM;
+		} else if ((tp->t_flag & T_FOLDOFS) != 0 && readsflags(ac, ptp)) {
+			tp->t_flag &= ~T_FOLDOFS;
+			walk(tp, amd);		/* its addressing flags were computed folded */
+		}
 	}
 	/*
 	 * Selection may pass a memory operand through a CONVERT/CAST, so judge
@@ -1031,6 +1092,16 @@ TREE		*ptp;
 			rp->t_type = lt;
 			return (tp);
 		}
+		/* `(long)q == (long)fr + 1': far-pointer arithmetic right of a
+		 * long, the cast dropped and the ADD re-derived a pointer.  No
+		 * rule takes a pointer right of a long, and retyping the ADD
+		 * loops, so convert it to the long: iskeptptrcvt keeps the
+		 * CONVERT, and leaves.t's LONG <- LPTX identity shares the pair. */
+		if (isptrarith(rp) && islong(rt)
+		&& !ispoint(lt) && (lt == S32 || lt == U32)) {
+			tp->t_rp = leftnode(CONVERT, rp, lt);
+			return (tp);
+		}
 		break;
 
 	case FIELD:
@@ -1159,6 +1230,35 @@ TREE		*ptp;
 	case CONVERT:
 	case CAST:
 		/*
+		 * `*p = (unsigned char)c', *p a long: a long conversion of a byte
+		 * cast.  The byte -> long rules take only a byte in memory, and the
+		 * cast is a byte computed in a register, which no rule takes
+		 * (EDFA69).  A cast of a widened byte, `(unsigned char)(int)c', is
+		 * c's own byte read with the cast's signedness: load that, as for
+		 * an unsigned char c.  An unsigned byte of a word is the word & 0xFF.
+		 * Otherwise widen the byte to a word first, as the return
+		 * conversion does.
+		 */
+		if (islong(tt) && !ispoint(tt)
+		 && (lp->t_op == CAST || lp->t_op == CONVERT) && isbyte(lp->t_type)) {
+			tp1 = lp->t_lp;
+			if (iswiden(tp1) && isbyte(tp1->t_lp->t_type)
+			 && isbyteval(tp1->t_lp)) {
+				for (tp1 = tp1->t_lp, tp->t_lp = tp1; ; tp1 = tp1->t_lp) {
+					tp1->t_type = lp->t_type;
+					if (tp1->t_op != LEAF)
+						break;
+				}
+			} else if (isuns(lp->t_type) && isword(tp1->t_type)) {
+				lp->t_op = AND;
+				lp->t_type = U16;
+				lp->t_rp = ivalnode((ival_t)0xFF);
+			} else
+				tp->t_lp = leftnode(CONVERT, lp,
+					isuns(lp->t_type) ? U16 : S16, 2);
+			return (tp);
+		}
+		/*
 		 * `top - (long)&fr[0]', `top & (long)fr': pointer arithmetic (a far
 		 * pointer ADD/SUB, here the frame address) converted to an integer
 		 * where no far-pointer rule takes it (iskeptptrcvt).  KEEP the node:
@@ -1166,6 +1266,17 @@ TREE		*ptp;
 		 * leaves.t's LONG <- LPTX identity shares its pair.
 		 */
 		if (!ispoint(tt) && isptrarith(lp) && iskeptptrcvt(tp, ptp))
+			break;
+		/* `(char *)(u << 24)': only ADD, SUB, AND and OR have far-pointer
+		 * rules, so relabeling any other long operator to a pointer leaves
+		 * it unmatched.  Keep the cast; leaves.t shares the pair. */
+		if (ispoint(tt) && !ispoint(lp->t_type) && noptrop(lp->t_op))
+			break;
+		/* `(long)(s - n)', `(long)p++': a far-pointer SUB, op-assign or
+		 * increment relabeled to an integer is an integer operator over a
+		 * pointer operand, which no rule takes (only fixaddtype re-derives
+		 * an ADD).  Keep the cast; leaves.t shares the pair. */
+		if (!ispoint(tt) && isfarptr(lp) && isptrupd(lp->t_op))
 			break;
 		if (modkind(tt) == modkind(lp->t_type)) {
 			/*
@@ -1708,7 +1819,76 @@ TREE		*ptp;
 #endif
 		return (modtree(tp, MRVALUE, ptp));
 	}
-	return (modtree(tp, MFNARG, ptp));
+	tp = modtree(tp, MFNARG, ptp);
+	argbcon(tp);
+	return (tp);
+}
+
+/*
+ * A byte constant argument (a folded `(unsigned char)5'), alone, as the
+ * value of a comma expression or as an arm of a conditional, is pushed as
+ * the word it promotes to, an immediate.  Left a byte, the promotion reads
+ * it from memory, and its one-byte pool entry puts every later entry at an
+ * odd address.  A zero is cleared in a register and never pooled, so it is
+ * left alone, except as an arm of a conditional whose arms are all
+ * constants: that conditional becomes a word, as `?:' of int arms is.
+ */
+argbcon(tp)
+register TREE	*tp;
+{
+	register TREE	*cp;
+	register int	l, r;
+
+	if (!isbyte(tp->t_type))
+		return (0);
+	if (tp->t_op == ICON) {
+		tp->t_ival = (ival_t)constcvt(tp->t_type, (lval_t)tp->t_ival);
+		if (tp->t_ival == 0)
+			return (0);
+	} else if (tp->t_op == COMMA) {
+		if (!argbcon(tp->t_rp))
+			return (0);
+	} else if (tp->t_op == QUEST) {
+		cp = tp->t_rp;
+		l = argbcon(cp->t_lp);
+		r = argbcon(cp->t_rp);
+		if ((!l && !argbzero(cp->t_lp, 0))
+		 || (!r && !argbzero(cp->t_rp, 0))
+		 || (!l && !r))
+			return (0);
+		argbzero(cp->t_lp, 1);
+		argbzero(cp->t_rp, 1);
+		argbword(cp);
+	} else
+		return (0);
+	argbword(tp);
+	return (1);
+}
+
+/*
+ * Is tp a byte zero, alone or as the value of a comma expression?
+ * If so and set, make it a word.
+ */
+argbzero(tp, set)
+register TREE	*tp;
+{
+	if (!isbyte(tp->t_type))
+		return (0);
+	if (tp->t_op == COMMA) {
+		if (!argbzero(tp->t_rp, set))
+			return (0);
+	} else if (tp->t_op != ICON || tp->t_ival != 0)
+		return (0);
+	if (set)
+		argbword(tp);
+	return (1);
+}
+
+argbword(tp)
+register TREE	*tp;
+{
+	tp->t_type = isuns(tp->t_type) ? U16 : S16;
+	tp->t_size = 2;
 }
 
 /*

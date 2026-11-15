@@ -36,4 +36,14 @@ typedef	unsigned char	BIG[NBIG];	/* Unsigned, holds 64 bits	*/
 /* This macro determines which bit field base types are promoted. */
 #define doalign(t)		0
 
+/*
+ * The macro expansion buffer.  An argument is held three times over while it
+ * is substituted -- as collected, as expanded, and the expansion being built --
+ * and an identifier in each copy carries a hide-set byte, so an argument may
+ * be about a third of the buffer.  The donor's 1024 bytes stop at a condition
+ * of a dozen clauses; 4096 takes about 1400 characters for 3 K of cc0's 64 K
+ * data segment.
+ */
+#define	NDBUF	4096
+
 /* end of h/i386/cc0mch.h */
