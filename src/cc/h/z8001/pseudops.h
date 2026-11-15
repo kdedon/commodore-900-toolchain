@@ -22,6 +22,7 @@
 #define	ZLPTR	(ZPSEUDO_BASE+2)	/* emit a long (segmented seg:off) pointer */
 #define	ZGPTR	(ZPSEUDO_BASE+3)	/* emit a global pointer		*/
 #define	ZSWREL	(ZPSEUDO_BASE+4)	/* switch-table word: label minus its own address */
+#define	ZRETV	(ZPSEUDO_BASE+5)	/* no code: a word register the epilogue returns */
 
 /*
  * Conditional relative-jump band.  cc1 emits a branch as one opcode byte ZJREL|cc

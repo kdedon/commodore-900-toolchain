@@ -238,6 +238,8 @@ typedef	char	INDEX;		/* Index type				*/
 #if	!YATC
 extern	char	tinfo[];	/* n1/z8001/table1.c	*/
 extern	PREGSET	regbusy;	/* n1/z8001/gen1.c	*/
+extern	int	retreg;
+extern	int	retlab;
 extern	PREGSET	maxbusy;
 extern	PREGSET	curbusy;
 extern	PREGSET	curxreg;

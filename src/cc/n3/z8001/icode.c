@@ -301,6 +301,10 @@ icode()
 		fprintf(ofp, "\t.word\tL" I_FMT "-.\n", iget());
 		return;
 	}
+	if (op == ZRETV) {			/* a return register: no code */
+		iget();
+		return;
+	}
 	if (op < 0 || op >= (int)(sizeof(ins)/sizeof(ins[0]))
 	 || ins[op].i_name == NULL) {
 		fprintf(ofp, "\tbad opcode %d\n", op);

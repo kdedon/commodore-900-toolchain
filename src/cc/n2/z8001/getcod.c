@@ -10,6 +10,8 @@
  *   0xC0..0xC3  data directives (ZBYTE/ZWORD/ZLPTR/ZGPTR) -- these flow through the
  *               normal CODE path (opinfo op_naddr 1, OF_*_ data style drives emit).
  *   0xC4        ZSWREL, a switch-table word -- becomes an LLLINK node.
+ *   0xC5        ZRETV, a word register the return statement whose JP follows
+ *               leaves for the epilogue -- no node; see getautos.
  *   0xD0..0xDF  the conditional relative-jump band (ZJREL|cc) -- becomes a JUMP node
  *               whose i_rel carries the 4-bit Z8000 condition code.
  *
@@ -23,6 +25,15 @@
 #endif
 
 #define	CC_ALWAYS	8		/* Z8000 condition code T (always)	*/
+
+SYM	retvoid;			/* i_sp of a JUMP that returns no value	*/
+int	retmask;			/* bit n: a return leaves a value in Rn	*/
+int	retvoidok;			/* the marks below still hold		*/
+int	fallvoid;			/* the body ends without returning a value */
+INS	*lastins, *lastpred;		/* its last instruction, and the one before */
+static SYM	retval;			/* i_sp of a JUMP that returns a value	*/
+static int	retvregs;		/* retmask of the function being read	*/
+#define	NRUN	8			/* labels kept at the end of a body	*/
 
 /*
  * Build a span-dependent JUMP node for a branch with condition code `cc'.  cc1
@@ -59,10 +70,22 @@ getcode()
 	register OPINFO	*opp;
 	register int	i;
 	register int	opcode;
+	register int	retv;
 
 	opcode = bget();
-	if (opcode >= ZJREL && opcode <= (ZJREL|0xF))
-		return (jumpnode(opcode & 0xF, iget()));	/* conditional JR cc */
+	retv = 0;
+	while (opcode == ZRETV) {
+		retvregs |= 1 << (iget() & A_REGM);
+		if (bget() != CODE)
+			cbotch("return register");
+		opcode = bget();
+		retv = 1;
+	}
+	if (opcode >= ZJREL && opcode <= (ZJREL|0xF)) {	/* conditional JR cc */
+		ip = jumpnode(opcode & 0xF, iget());
+		ip->i_sp = &retvoid;
+		return (ip);
+	}
 	if (opcode == ZSWREL) {				/* switch-table word */
 		ip = jumpnode(CC_ALWAYS, iget());
 		ip->i_type = LLLINK;
@@ -71,8 +94,11 @@ getcode()
 	opp = &opinfo[opcode];
 	if (opp->op_style == OF_JP) {
 		i = iget();
-		if (i == (A_LID|A_DIR))
-			return (jumpnode(CC_ALWAYS, i));	/* JP -> relaxed relative jump */
+		if (i == (A_LID|A_DIR)) {		/* JP -> relaxed relative jump */
+			ip = jumpnode(CC_ALWAYS, i);
+			ip->i_sp = retv ? &retval : &retvoid;	/* see getautos */
+			return (ip);
+		}
 		ip = newn(1);				/* JP @RRn: a switch dispatch */
 		ip->i_af[0].a_mode = i & (A_AMOD|A_REGM);
 		ip->i_af[0].a_sp = NULL;
@@ -96,12 +122,54 @@ getcode()
 }
 
 /*
- * Read in an AUTOS item that appears in a function body.  All it does is read the
- * size of the stack frame into the global cell `framesize', used by genprolog to
- * put out the function prolog.  The register field (the second ival_t) is unused.
+ * Read in the AUTOS item that ends a function body: the size of the stack frame
+ * and the callee-saved register mask, used by genprolog to put out the function
+ * prolog.
  */
 getautos()
 {
+	register INS	*ip;
+	register int	i, seg, nrun;
+	int		run[NRUN];
+
 	framesize = iget();
 	framemask = iget();	/* callee-saved register-variable mask (cc0) */
+	/*
+	 * The record ends the body.  The labels after its last instruction are
+	 * where a return jumps and where the body runs off its end.  A jump there
+	 * that no ZRETV preceded returns no value: on that path the epilogue reads
+	 * no register.  The body runs off its end without a value unless its last
+	 * instruction is a return's jump.  Every other jump loses its mark.
+	 */
+	seg = SCODE;
+	nrun = 0;
+	lastins = lastpred = NULL;
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type == ENTER)
+			seg = ip->i_seg;
+		else if (seg != SCODE)
+			;
+		else if (ip->i_type == CODE || ip->i_type == JUMP || ip->i_type == LLLINK) {
+			lastpred = lastins;
+			lastins = ip;
+			nrun = 0;
+		} else if (ip->i_type == LLABEL && nrun >= 0) {
+			if (nrun < NRUN)
+				run[nrun++] = ip->i_labno;
+			else
+				nrun = -1;		/* too many: keep no mark */
+		}
+	}
+	fallvoid = lastins == NULL || lastins->i_type != JUMP || lastins->i_sp != &retval;
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != JUMP || ip->i_sp == NULL)
+			continue;
+		for (i = 0; i < nrun && run[i] != ip->i_labno; ++i)
+			;
+		if (ip->i_sp != &retvoid || i >= nrun)
+			ip->i_sp = NULL;
+	}
+	retmask = retvregs;
+	retvregs = 0;
+	retvoidok = 1;
 }

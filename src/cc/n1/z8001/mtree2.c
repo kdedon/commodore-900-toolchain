@@ -446,6 +446,10 @@ TREE		*ptp;
 	c = ac;
 	if (c==MRETURN || c==MSWITCH || c==MINIT)
 		c = MRVALUE;
+	if (ptp == NULL) {			/* a statement: remember a return's register */
+		retreg = (ac == MRETURN) ? pertype[tp->t_type].p_frreg : -1;
+		retlab = labgen;
+	}
 
 	/*
 	 * Break up cc0's DAG, once per statement.  A NULL parent is the

@@ -37,6 +37,8 @@ ival_t	curtemp;		/* Current temp */
 PREGSET	regbusy;		/* Busy flags */
 PREGSET	maxregbusy;		/* Union of regbusy over the whole function: the callee-saved
 				 * registers cc2 (n2) must save/restore in the prolog/epilog. */
+int	retreg = -1;		/* Return register of the return statement being coded */
+int	retlab;			/* First cc1 label of that statement */
 
 /*
  * Register -> addressing-mode table, indexed by 'real' register number
@@ -623,6 +625,7 @@ doprolog()
 	mdtcoded = 1;
 	maxtemp = 0;
 	maxregbusy = 0;
+	retreg = -1;
 	promote();
 }
 
@@ -649,9 +652,24 @@ doautos()
 	maxregbusy |= regbusy;
 }
 
-/* Unconditional jump. */
+/*
+ * Unconditional jump.  The jump that ends a return statement names a cc0
+ * label, below the labels cc1 made while coding the value.  Before it, tell
+ * cc2 which registers the epilogue returns: ZRETV reads them and emits no code.
+ */
 genubr(n)
 {
+	register int	r;
+
+	if (retreg >= 0 && n < retlab) {
+		for (r = R0; r <= R3; ++r)
+			if ((reg[retreg].r_phys & BREG(r)) != 0) {
+				bput(CODE);
+				bput(ZRETV);
+				iput(A_WR|r);
+			}
+		retreg = -1;
+	}
 	genl(ZJP, n);
 }
 

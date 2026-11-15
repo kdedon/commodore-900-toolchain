@@ -579,10 +579,19 @@ quadhit(op, r)
  * bytes of the pair still holding the copied value); a byte-load that rewrites a half before
  * it is read makes it dead (the byte-loop scratch case).  Follows JUMP targets (conditional
  * -> both successors); a CALL clobbers the caller-saved pairs (d<6) unless it reads @RRd;
- * running off the end reaches the epilogue RET; a block move is opaque -> NOT dead.  i_pc
+ * the epilogue reads the registers a return statement left a value in, except on a
+ * return without one (getautos); a block move is opaque -> NOT dead.  i_pc
  * carries a per-call visited stamp + the union of masks seen (mask-union worklist, so loops
  * terminate); genfunc rewrites i_pc afterward. */
 #define	NDDSTK	1024
+extern SYM	retvoid;			/* getcod.c */
+extern int	retmask, retvoidok, fallvoid;
+extern INS	*lastins, *lastpred;
+static INS	*exitrun;			/* the labels before the epilogue */
+
+/* does p run off the end of a body that returns no value there? */
+#define	fallsvoid(p, d)	(retvoidok && fallvoid && (d) < 4 && (p)->i_fp == exitrun \
+			 && ((p) == lastins || (p) == lastpred))
 static INS	*ddstk[NDDSTK];
 static int	ddmsk[NDDSTK];
 static long	ddgen;
@@ -606,6 +615,12 @@ register INS	*start;
 		m = ddmsk[sp];
 		if (p == &ins)
 			continue;			/* off the end -> reached the RET, dead */
+		if (p->i_type == EPILOG) {		/* the return value is read */
+			if (((m & 0x3) && (retmask >> d & 1))
+			 || ((m & 0xC) && (retmask >> (d+1) & 1)))
+				return (0);
+			continue;
+		}
 		if (p->i_pc / 16 == ddgen) {		/* visited this query: union the masks */
 			seen = (int)(p->i_pc % 16);
 			if ((m & ~seen) == 0)
@@ -617,8 +632,14 @@ register INS	*start;
 			tg = labtarget(p->i_labno);
 			if (tg == NULL || sp >= NDDSTK-1)
 				return (0);
-			ddstk[sp] = tg; ddmsk[sp] = m; ++sp;
-			if (p->i_type == LLLINK || (p->i_rel & 0xF) != 8) {	/* conditional: also the fall-through */
+			km = m;
+			if (p->i_sp == &retvoid && retvoidok && d < 4)
+				km = 0;			/* a return without a value */
+			if (km != 0) {
+				ddstk[sp] = tg; ddmsk[sp] = km; ++sp;
+			}
+			if ((p->i_type == LLLINK || (p->i_rel & 0xF) != 8)	/* conditional: also the fall-through */
+			 && !fallsvoid(p, d)) {
 				ddstk[sp] = p->i_fp; ddmsk[sp] = m; ++sp;
 			}
 			continue;
@@ -650,7 +671,7 @@ register INS	*start;
 			if (rm & m)
 				return (0);
 			m &= ~wm;
-			if (m == 0)
+			if (m == 0 || fallsvoid(p, d))
 				continue;
 			if (sp >= NDDSTK) return (0);
 			ddstk[sp] = p->i_fp; ddmsk[sp] = m; ++sp;
@@ -677,7 +698,7 @@ register INS	*start;
 			}
 			m &= ~km;
 		}
-		if (m == 0)
+		if (m == 0 || fallsvoid(p, d))
 			continue;			/* fully redefined on this path -> dead */
 		if (sp >= NDDSTK) return (0);
 		ddstk[sp] = p->i_fp; ddmsk[sp] = m; ++sp;	/* fall through */
@@ -1525,6 +1546,22 @@ framefarptr()
 
 peephole()
 {
+	register INS	*ip;
+
+	if (retvoidok) {		/* the marks getautos left, as fixbr left the body */
+		for (ip = ins.i_bp; ip != &ins && ip->i_type != CODE && ip->i_type != JUMP
+		     && ip->i_type != LLLINK; ip = ip->i_bp)
+			;
+		exitrun = ip->i_fp;
+		for (ip = ins.i_fp; ip != &ins && ip != lastins; ip = ip->i_fp)
+			;
+		if (ip == &ins)
+			lastins = NULL;
+		for (ip = ins.i_fp; ip != &ins && ip != lastpred; ip = ip->i_fp)
+			;
+		if (ip == &ins)
+			lastpred = NULL;
+	}
 	framefarptr();
 	incexpand();
 	subdec();
@@ -1537,4 +1574,5 @@ peephole()
 	extsbdead();
 	incmem();
 	popmerge();
+	retvoidok = 0;		/* a cross jump may run a value return through a mark */
 }

@@ -138,6 +138,9 @@ $(B)/slgen: src/slgen/slgen.c
 #
 # tests/symlen.sh: cc2 names the externals the 16-byte l.out symbol truncates.
 #
+# tests/asgval.sh: the value of an assignment through a pointer reaches the
+# return register at every width.
+#
 # tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
 # ld, ld -r, the native ar's index, loutid, loutdis and nlist().
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
@@ -185,6 +188,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/structinit.sh
 	sh tests/autoarray.sh
 	sh tests/ptrlong.sh
+	sh tests/asgval.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it
