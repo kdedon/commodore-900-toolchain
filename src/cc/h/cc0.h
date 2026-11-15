@@ -621,7 +621,9 @@ extern	int	ininit;
 #define	STD_C89	2		/* Prototypes, structure initializers,
 				 * sized automatic arrays, long switch,
 				 * the address of an array, offsetof()
-				 * as a constant			*/
+				 * as a constant; readonly and alien
+				 * are identifiers; an unsigned char
+				 * promotes to int			*/
 #define	STD_C99	3		/* C89, `//' comments, declarations
 				 * after statements			*/
 #ifdef	VSTD0

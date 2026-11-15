@@ -20,6 +20,8 @@ int	blkflab;
 int	isfarbase();	/* amd.c: base of an address node is a FAR (segmented) pointer */
 TREE	*dupnode();	/* deep tree copy (defined below, before modlfld) */
 TREE	*mdtempnode();	/* altemp.c: modify-phase stack temporary */
+static TREE *modopasg();
+static opasgtype();
 
 static	char	modoptab[] = {
 	'i',	'u',	'i',	'u',	'l',	'v',	'f',
@@ -916,6 +918,17 @@ TREE		*ptp;
 	if ((op==SHR || op==ASHR) && rp!=NULL && rp->t_op==ICON && rp->t_ival > 0)
 		rp->t_ival = -rp->t_ival;
 	/*
+	 * A compound divide or remainder whose operands balance to another type
+	 * than the left's: cc0 hands `i /= u' the right operand unsigned, as the
+	 * divide must be.  The adiv and arem rules divide in the node's type, so
+	 * write it `i = (int)((unsigned)i / u)' and let the binary rules do it.
+	 * So with `i /= l', whose right operand cc0 leaves long.  A word divisor
+	 * this pass widened below (`u /= w') is not such a case.
+	 */
+	if ((op==ADIV || op==AREM) && rp != NULL && opasgtype(tt, rt) != tt
+	&& !(tt==U16 && rt==U32 && rp->t_op==CONVERT && rp->t_lp->t_type==U16))
+		return (modopasg(tp, lp, rp, opasgtype(tt, rt)));
+	/*
 	 * Unsigned divide/remainder by a CONSTANT with its top bit set: the signed
 	 * Z8000 DIV/DIVL reads such a divisor as negative, but the quotient is just
 	 * 0 or 1 (the dividend < 2^N < 2*C).  x / C -> (x >= C); x % C -> (x >= C) ?
@@ -1234,6 +1247,14 @@ TREE		*ptp;
 	case CONVERT:
 	case CAST:
 		/*
+		 * `(long)uc' at -VC89, where an unsigned char promotes to int: the
+		 * int holds 0..255, so its long is the zero extension the unsigned
+		 * int's would be.  Call the int unsigned and convert as before.
+		 */
+		if (islong(tt) && !ispoint(tt) && lp->t_type == S16
+		 && (lp->t_op == CONVERT || lp->t_op == CAST) && lp->t_lp->t_type == U8)
+			lp->t_type = U16;
+		/*
 		 * `*p = (unsigned char)c', *p a long: a long conversion of a byte
 		 * cast.  The byte -> long rules take only a byte in memory, and the
 		 * cast is a byte computed in a register, which no rule takes
@@ -1447,6 +1468,64 @@ register TREE	*tp;
 	if (op < ADD)			/* leaf: t_lp/t_rp are not children */
 		return (0);
 	return (nonrepeat(tp->t_lp) || nonrepeat(tp->t_rp));
+}
+
+/*
+ * The type `x op= y' is computed in, for a node of type `tt' with a right
+ * operand of type `rt': the unsigned form of a signed `tt' when cc0 left the
+ * right operand so, a long right operand's type over a word or byte, else
+ * `tt'.
+ */
+static
+opasgtype(tt, rt)
+register int	tt, rt;
+{
+	if ((tt == S16 && rt == U16) || (tt == S32 && rt == U32))
+		return (rt);
+	if (islong(rt) && !islong(tt) && !ispoint(rt) && !isflt(rt))
+		return (rt);
+	return (tt);
+}
+
+/*
+ * `x op= y' as `x = (x's type)((gt)x op y)'.  The lvalue is read twice, so a
+ * non-repeatable one (`*p++ /= u') has its address bound to a temporary
+ * first.  A byte lvalue under a word node keeps the node's type for the value.
+ */
+static TREE *
+modopasg(tp, lp, rp, gt)
+register TREE	*tp, *lp, *rp;
+int		gt;
+{
+	register TREE	*bin, *as;
+	TREE		*pre;
+	int		xt, gs;
+
+	pre = NULL;
+	xt = lp->t_type;
+	gs = pertype[gt].p_size;
+	if (nonrepeat(lp)) {
+		register TREE	*proto, *ptmp;
+
+		proto = makenode(GID, LPTR);
+		proto->t_size = pertype[LPTR].p_size;
+		ptmp = mdtempnode(proto);
+		pre = leftnode(ASSIGN, copynode(ptmp), LPTR, proto->t_size);
+		pre->t_rp = leftnode(ADDR, lp, LPTR, proto->t_size);
+		lp = leftnode(STAR, copynode(ptmp), xt, pertype[xt].p_size);
+	}
+	bin = leftnode(tp->t_op - (AADD - ADD), leftnode(CONVERT, dupnode(lp), gt, gs), gt, gs);
+	bin->t_rp = rp;
+	as = leftnode(ASSIGN, lp, xt, pertype[xt].p_size);
+	as->t_rp = leftnode(CONVERT, bin, xt, pertype[xt].p_size);
+	if (xt != tp->t_type)
+		as = leftnode(CONVERT, as, tp->t_type, tp->t_size);
+	if (pre != NULL) {
+		bin = leftnode(COMMA, pre, as->t_type, as->t_size);
+		bin->t_rp = as;
+		as = bin;
+	}
+	return (as);
 }
 
 /*

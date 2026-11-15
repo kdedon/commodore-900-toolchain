@@ -110,13 +110,13 @@ int main(void){ printf("initialiser elements = %d, _CTYPEN = %d, %s\n",
 	sizeof(probe)==_CTYPEN ? "match" : "MISMATCH"); 
 	return sizeof(probe)!=_CTYPEN; }
 EOF
-# `readonly' is this compiler's const; gcc lacks it.
+# `readonly' and `__readonly' are this compiler's; gcc lacks them.
 
-gcc -std=gnu89 -w -Dreadonly= -I"$H/src/include" -o "$T/probe" "$T/probe.c" || exit 2
+gcc -std=gnu89 -w -Dreadonly= -D__readonly= -I"$H/src/include" -o "$T/probe" "$T/probe.c" || exit 2
 "$T/probe" || rc=1
 
 echo "== host =="
-gcc -std=gnu89 -w -DEOFVAL=-1 -Dreadonly= -I"$H/src/include" -o "$T/hostt" "$T/t.c" "$H/src/libc/gen/ctype.c" || exit 2
+gcc -std=gnu89 -w -DEOFVAL=-1 -Dreadonly= -D__readonly= -I"$H/src/include" -o "$T/hostt" "$T/t.c" "$H/src/libc/gen/ctype.c" || exit 2
 "$T/hostt" || rc=1
 
 N2="${N2:-$(sh "$H/host/runner.sh" 2>/dev/null)}"

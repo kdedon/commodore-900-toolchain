@@ -24,8 +24,8 @@ driver knows by that name has no program to exec here.
 The Model
 This is a segmented machine and the segmented model is the default: a
 pointer is a two-word segment:offset.  cc sets it for every compilation,
-along with the readonly keyword the system headers use, so neither has to
-be asked for.  -VSMALL asks instead for the non-segmented Z8002 model, one
+along with the readonly keyword (and __readonly, which the system headers
+use), so neither has to be asked for.  -VSMALL asks instead for the non-segmented Z8002 model, one
 word to a pointer, and clears the segmented bit; the two are one variant
 slot apart and are never both set.
 
@@ -77,7 +77,8 @@ Variant options:
      -VASM           Assembly language output, same as -S
      -VC89           Language: K&R and C89's prototypes, structure
                      initializers, sized automatic arrays, long switch,
-                     & of an array, offsetof() as a constant
+                     & of an array, offsetof() as a constant; readonly
+                     and alien are identifiers
      -VC99           Language: C89 and C99's // comments and
                      declarations after statements (a C99 subset)
      -VCOMM          Common data items (default)
@@ -129,7 +130,10 @@ can contain the same text: under -VKR, f(T) with T a typedef name declares
 a parameter named T, and under -VKR and -VC89, // is a division followed by
 whatever comes next.  Under -VKR, & of an array is "lvalue required", the
 MWC compiler's error, and offsetof() is not a constant expression, as
-there.  K&R code compiles to the same object at every level.
+there.  The MWC keywords readonly and alien (-VALIEN) are keywords by
+default and under -VKR; under -VC89 and -VC99 they are identifiers, as in
+standard C.  __readonly is readonly at every level, and <ctype.h> spells
+it so.  K&R code compiles to the same object at every level.
 The members an automatic aggregate's initializer leaves out are zero, as
 a static's are, at every level.
 -VC99 is a C99 subset: designated initializers, inline, variadic macros,

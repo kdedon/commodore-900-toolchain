@@ -608,7 +608,17 @@ conversion:
  */
 			if ((cv & CVRA) != 0) {
 				if ((op == ADIV || op == AREM)
-				 && issgnint(gt.t_type) && isunsint(rt)) {
+				 && ((cv & GOAL) == T_LONG || (cv & GOAL) == T_ULONG)
+				 && gt.t_type != T_LONG && gt.t_type != T_ULONG) {
+					/* `i /= l': the divide is long */
+					int	lt0;
+
+					lt0 = gt.t_type;
+					gt.t_type = cv & GOAL;
+					rp = bcvt(rp, &gt);
+					gt.t_type = lt0;
+				} else if ((op == ADIV || op == AREM)
+				 && issgnint(gt.t_type) && isunsint(cv & GOAL)) {
 					gt.t_type = sgn2uns(gt.t_type);
 					rp = bcvt(rp, &gt);
 					gt.t_type = uns2sgn(gt.t_type);

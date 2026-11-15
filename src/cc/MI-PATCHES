@@ -25,7 +25,7 @@
 # with a space.
 
 patch: expr-func-decay-null
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 fix: `d_dp != NULL` guard before `d_dp->d_type == D_FUNC`
 why: NULL deref on every `arr[i]` decay; survivable only because Coherent mapped page 0
 
@@ -35,7 +35,7 @@ fix: signedness guard on `bitcompat()` for DIV/REM/SHR/ASHR (+ op-assign)
 why: mixed-signedness divide/shift skipped the conversion that selects signed vs unsigned instructions
 
 patch: setfname-terminate
-file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
+file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 fix: `file[NFNAME-1] = 0` after `strncpy` in `setfname()`
 why: strncpy leaves the name unterminated at exactly NFNAME; `sput()` then scans past the buffer
 
@@ -45,7 +45,7 @@ fix: terminal-EOF guard: NULL `ifp` after `fclose`, return EOF on re-entry
 why: use-after-free + double `fclose` when error recovery pulls tokens past EOF
 
 patch: keyword-inline-id
-file: n0/cc0key.c ea111c92d5b9244ed29e09f9655df11819fe523fed6992585ab6f625293b82bd
+file: n0/cc0key.c 3487058226b2afdc90106b1a0b0a1355dee592de66693701db08ac14fc24b57a
 fix: keyword tokens wrapped in `{TOK t; char id[];}` with inline storage
 why: the bare-TOK form relies on link-order adjacency of the id string -- an ABI accident, not a guarantee; the wrapper is layout-identical where the accident held and correct everywhere
 
@@ -71,7 +71,7 @@ fix: the SUB->ADD constant canonicalization keeps the node's own type (donor sta
 why: the stamp writes junk signedness over the C type (`u - 1` labeled signed, `p - c` labeled non-pointer); the Z8001 MD selects signed-vs-unsigned divide/shift by node type, and the MD `fixaddtype` now preserves node signedness through reassociation (FUZZ-5), so the stamp must not lie. Donor i386 relied on the re-derive repairing it each pass
 
 patch: cast-signedness-keep
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 fix: LPAREN cast: don't collapse a bit-compatible cast that CHANGES signedness onto a DIV/REM/SHR/ASHR/ADIV/AREM node -- keep the CAST node
 why: the collapse retypes the op in place, making `(int)(u/d) >> k` and `(int)((u/d) >> k)` the same tree with opposite correct shifts (FUZZ-20); the surviving node is the only disambiguator. Same guard the `n0/stat.c` return-coerce row already carries; cc1 selects the kept convert at zero cost (leaves.t same-kind identity)
 
@@ -83,7 +83,7 @@ why: the native putc fast path returns the stored CHAR (`*_cp++ = c`), so byte 0
 patch: struct-member-align
 file: n0/z8001/bind.c
 file: h/z8001/mch.h
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: word-align structure members: `fieldalign()` rounds a normal member up to its natural alignment (1 for a byte object, 2 for any wider type/pointer) via new `memalign()`; new `salign()` gives the struct itself the alignment of its widest member; `saligntype()` macro -> `salign()`; `extern int salign()` declared
 why: the donor i8086 template packs members to byte offsets, which the i8086 tolerates (unaligned word/dword access); the Z8000 does NOT -- a word/long/far-pointer read at an odd address returns the wrong bytes. getty's `struct stable` put `char *s_lmsg` at odd offset 5, so `LDL 5(Rn)` loaded a garbage far pointer -> strlen SIGSEGV (the login-prompt blocker). Aligning is a hardware requirement, so the original MWC Z8001 compiler must do the same. Codegen cost: field access is still one load and array indexing still one MULT/scale -- only the displacement/size *immediate* changes, so no instruction-count change; the sole effect is a few padding bytes in mixed sub-word/word structs, which the original ABI also carries. Efficiency parity vs the original is an OPEN follow-up, to be A-B'd against the original HD-extracted binaries by disassembly (NOT a self-comparison). All difftest generators (struct/bitfield/2darr/strptr/torture) still match gcc
 
@@ -113,7 +113,7 @@ fix: `(unsigned) tp->t_ival` -> `(uival_t) tp->t_ival`
 why: `unsigned` is the HOST's width; `uival_t` is the IR's. Casting a target constant through host `unsigned` truncates it on any host wider than the target
 
 patch: oldmachine-macro
-file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
+file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 file: h/z8001/cppmch.h
 fix: new `OLDMACHINE` ("Z8001"), predefined beside `MACHINE` ("_Z8001")
 why: the June 1985 compiler's standalone cpp predefines the target unprefixed, and the COHERENT 3.2 sources select on that spelling: `<l.out.h>` takes the **n.out object layout** under `#ifdef Z8001`, `sbrk()` its segment-crossing arithmetic, `exec()` its shared-library arms. A compiler that defines only `_Z8001`/`__Z8001__` builds the wrong layout silently, so this is a target-macro requirement, not a convenience. Guarded by `#ifdef`, so a machine layer that does not define it is unchanged
@@ -158,7 +158,7 @@ why: the C900's C model is the segmented one -- a pointer is a two-word seg:offs
 
 patch: char-parameter-address
 file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: n0/z8001/bind.c
 fix: a parameter declared `char'/`unsigned char' KEEPS that type instead of being retyped to `int': `declare()`'s C_ARG arm asks the machine layer's new `subwordparm()` first, and skips `fixtype()` when it answers yes (`extern int subwordparm()` declared in cc0.h). The machine layer then binds such a parameter at the LOW-ORDER byte of its word slot -- `bindargs()` gives it `offset+1` and still advances by 2, so every later parameter keeps its address
 why: A FRONT-END EDIT MADE ON PURPOSE, owner-decided (TASK #321), because no machine layer can express the fix: after `fixtype()` retypes the parameter to `int` the fact that it was a byte object is GONE, and `&c` can only name the whole word. K&R promotes a char ARGUMENT to int at the call, so the parameter does occupy a word (unchanged: callers still push one, and the ABI is untouched) -- but the parameter is still a one-byte object, and on this BIG-ENDIAN machine the caller's byte is the second byte of that word. The donor handed out the word's own address, which is the low-order byte only because the i8086 it descends from is little-endian; here it named the HIGH byte, zero for every ASCII character, so `write(fd,&c,1)` inside `f(c) char c;` wrote a NUL -- libcurses `waddch` drew NULs while the cursor advanced, and kermit could not send a character (#324). `subwordparm()` answers from `mysizes[]`, so a machine whose char is a word gets the donor's promotion unchanged, and short/float are unaffected (a short IS a word; float is promoted to double by both sides). Reading the parameter's value now takes a byte load plus the extend the declared type asks for, where the promoted word allowed one word load; that is the price of the object having an address at all, and it is also what K&R says the object is -- `f(c) char c; c = 300;` now truncates, and a caller passing 200 into a signed `char' parameter reads -56 back, both of which every conforming compiler does (the differential oracle, gcc, agrees on all 18 generators). Code that wants the wider value must say `int' or `unsigned char', as it must anywhere else. Measured cost: over the 315 objects of this compiler's own self-host build, the ONLY two that change are the two files edited here; over 108 COHERENT userland commands the total is +76 bytes, 0.014%, in exactly the five objects that have a byte parameter -- and `units.o' gets SMALLER, because a byte compare no longer widens first. A byte parameter never reaches a register: `grabreg()` takes word types only and the promotion pass offers no parameter at all, so it stays addressable and correct. Six value assertions through cc0->cc1->cc2->ld->run cover both byte types, both directions and the second parameter's placement (tests/regress.sh, promoted from expected-fail); the byte-identity fixpoint cannot see this class at all, since a compiler reading the wrong byte agrees with itself about it
@@ -262,8 +262,8 @@ why: userland programs and the libc objects come out byte-identical
 patch: void-pointer
 file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: `void *' is `char *'.  A new `isvoidptr()' (n0/ddecl.c) answers whether a
 fix: `void' declarator chain ends in a pointer -- the last dim is the one next
 fix: to the base type -- and `declare()' and `cast()' take T_CHAR when it does.
@@ -293,7 +293,7 @@ why: Pleban's, from his own build of this compiler; the stamp and the two
 why: refusals are ours.
 
 patch: volatile-local
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: n0/gcandt.c fcb06fac89760c8c5ed36b65cf1ddee1f84e89582058cd715ba8e0b2f358a70d
 file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
 file: n0/z8001/bind.c
@@ -302,9 +302,9 @@ why: the keyword was parsed and thrown away. While nothing held a local anywhere
 
 patch: volatile-memory
 file: h/ops.h dcf446daf7e26941b4187f7234e2294c993448028a35ea42eed396bc5fe3c48b
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: h/cc1.h ad9eaee22669a51462c1027abede6574b6ae9b24206679793c6c4d9c2430e171
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n1/tree0.c 4e05e7114ccc76adcd5bd3d0f78a1f27cf369fd7368e8933eb672a21ad59ae7d
 file: n1/out.c 516d8b7c37baf86c44cc8c0c83f3a5471095f5f3b843ac9afbb7ef84fe0a4ca4
@@ -317,12 +317,12 @@ fix: the qualifier rides the tree node from the identifier, the member or the po
 why: this is what a driver writes to say that reading a device register twice means two reads. Nothing carried the qualifier past the front end, so the back end forwarded the second read out of the register still holding the first and the accesses the source ordered did not happen -- wrong exactly where the qualifier was asked for. The member form and the device-register form `*(volatile char *)0xF000' had become hard errors once the front end began returning the flag, so both are taken here. An access without the qualifier is collected and optimized as before
 
 patch: volatile-level
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
-file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
+file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: n0/gcandt.c fcb06fac89760c8c5ed36b65cf1ddee1f84e89582058cd715ba8e0b2f358a70d
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 fix: the qualifier is placed at the declarator level it was written at. `volatile' after a `*' is read rather than skipped, and a typedef hands on the flags it was declared with. The object itself volatile is `S_VOLAT', as before; a pointer, array of pointers or function reaching volatile storage is the new `S_VTARG', which marks its identifier, member or cast `V_TARG' so only the indirection is volatile. `volqual()' sets both where each declarator is declared
 why: `int * volatile p' and a `volatile' typedef lost the qualifier, so the object was promoted to a register and its accesses optimized -- wrong exactly where the qualifier was asked for. `volatile int *p' was the reverse: the flag sat on the symbol, so p itself was kept out of a register though only `*p' is volatile. A declaration with neither form compiles as before
 
@@ -337,7 +337,7 @@ fix: the type byte's volatile bit is masked before the type is named, and printe
 why: the front end marks a volatile access on the type byte; indexing the name table with the bit set printed garbage, and a volatile block type then skipped its size and read the rest of the file out of step
 
 patch: ndbuf-machine-size
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: h/z8001/cc0mch.h
 fix: the small-model NDBUF is `#ifndef' guarded so the machine layer can size the macro expansion buffer; h/z8001/cc0mch.h sets 4096
 why: a machine sizing hook, not a defect: the donor already sizes NDBUF per target (8192 under `_I386'), and cc0mch.h, the one machine header cc0 reads, is included before the constant is defined, so no machine layer can set it without this guard. A target that does not define NDBUF keeps 1024. On the Z8001 an argument is held three times over while `substitute()' expands it -- as collected, as expanded by `argexpand()', and the expansion it pushes -- and every identifier in each copy carries a hide-set byte, so the donor's 1024 bytes stopped cc0 with "macro expansion buffer overflow" at an argument of about 300 characters: a test's `CHECK' of a dozen clauses over a few lines. The buffer cannot grow in place, since the dstack and the hide machinery hold pointers into it, so it is sized: 4096 takes an argument of about 1400 characters for 3 K more BSS in the native cc0, whose static data is about 15.5 K of its one 64 K data segment. The overflow stays the same fatal error with the buffer full. The constant reaches nothing but the bound tests, so no program that compiled before compiles differently; NDLEV is unchanged
@@ -348,20 +348,20 @@ fix: `getid()' writes the second and third NUL after an identifier only while th
 why: a defect on every target, since id[] is NCSYMB bytes and NCSYMB is machine-independent: an identifier is stored up to NCSYMB-1 (255) characters and then followed by three NULs, so one of 254 or more characters wrote one or two bytes past id[] -- into `ifp', the input FILE pointer declared after it in n0/cc0.c, on the host and on the native C900 alike; the host cc0 then faulted on the next read. `newtoken()' copies the name plus one or two NULs to an even length, at most NCSYMB bytes, so every byte it copies is still written. An identifier under 254 characters gets the same three NULs as before, so no program that compiled before compiles differently
 
 patch: ansi-prototypes
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
-file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/intuition port). Function prototypes and ANSI definitions: `garglist()' and `cproto()' read a parameter type list wherever a function declarator appears -- declarations, definitions, typedefs, casts, sizeof, struct members, nested function-pointer parameters -- with named or abstract parameters, `(void)' and a trailing `...'. The list is kept as each parameter's promoted type, interned in a pool of 512-byte chunks, and a D_FUNC's d_bound holds its index (0 is `()', as before). An ANSI definition declares its parameters exactly as the K&R form does; the names of any other prototype are scoped to it (`dropargs()'). A call through a prototype converts each fixed argument as assignment would (int to long, a constant 0 to a 32-bit null, no integer/pointer mixing) and checks the count; `...' arguments keep the default promotions; under -VSVARG (record vsvarg-variant) an int in a `...' slot warns. `declare()' keeps a prototype across a `()' or K&R redeclaration and calls conflicting ones a redeclaration; `xfunc()' checks a K&R definition against an earlier prototype
 why: additive: every new path is entered only by a parameter list that starts with a type, which the donor rejected as a syntax error, or by a D_FUNC whose d_bound is nonzero, which nothing but such a list creates; nothing reaches cc1 but ordinary trees, so an unprototyped program compiles byte-identical (shown over libc, libm, libc.1, the kernel and drivers, the userland and Exec900). No ABI change on the C900: a parameter is still passed as its promoted type (char/short/int a word, long and pointers two, float as double), so prototyped and K&R objects call each other and an ANSI definition compiles to exactly its K&R object. Bounded for the native cc0: a list costs 4 bytes plus one per parameter, once per distinct list, in at most 32 K of pool; 64 bytes of stack per list being read
 
 patch: long-switch
 file: h/ops.h dcf446daf7e26941b4187f7234e2294c993448028a35ea42eed396bc5fe3c48b
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: h/cc1.h ad9eaee22669a51462c1027abede6574b6ae9b24206679793c6c4d9c2430e171
 file: n0/stat.c d10a870857a501013ec1e4cfa233277b7904b7b275a6f792ecd0eeec793c1743
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 file: n1/cc1.c 0abdeced26fc7bb48bebfa0935d9d75288d70d35d0f6ab2659a799bad1feebe9
 file: n1/code.c 747566dae0a5a81d9c31afcef4616d0376bf40f107ad3340dbf05e3637affc41
 file: n3/cc3.c 5d60e32ad09cbe7eb361999939e592fb429a190511a5eae8d9950c1da2f4e46e
@@ -378,12 +378,12 @@ why: additive: `//' outside a string was not C before -- the second `/' was alwa
 patch: mixed-declarations
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: n0/stat.c d10a870857a501013ec1e4cfa233277b7904b7b275a6f792ecd0eeec793c1743
-file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
+file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/intuition port). Declarations after statements: a block's statements are read by `body()', which hands a statement that starts with a declaration specifier or a typedef name (not a label) to `locals()' and then `putautos()', exactly as the declarations at the head of the block are read, so a name is in scope from its declarator to the end of the block and its initializer runs where it stands. `for (T i = e; ...)' reads the declaration in a scope of its own, opened as a nested block's is and closed after the loop. A jump past a declaration is not checked, as C99 allows without VLAs
 why: additive: before this, a declaration after a statement was a syntax error, so a block whose declarations are all at its head takes the same path as before and compiles byte-identical (libc, libm, libc.1, the kernel and drivers, the userland and Exec900). On the C900 a later declaration takes the next frame slots below the block's earlier ones, announced by the same AUTOS record a nested block's entry emits, and the block's exit restores the frame as before, so the frame is bounded by the deepest nesting as it was; no data is added to cc0
 
 patch: vsvarg-variant
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 file: coh/cc.c 0364333a706756c33c00fa901778851151d7e01e1f6926754ed37bcf1ef5346f
 file: h/z8001/varmch.h
 fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/intuition port). The ansi-prototypes warning of an int in a `...' slot is read under its own variant, VSVARG, instead of VSRTVC, and `protoarg()' reads it only `#ifdef VSVARG'. h/z8001/varmch.h defines VSVARG as VMBASE+11; the driver's strict rows carry `-VSVARG' and its usage line under `#if Z8001', so `-VS' still sets it. Default off
@@ -391,8 +391,8 @@ why: VSRTVC is the donor's "risky things in truth contexts" and also warns of ev
 
 patch: auto-struct-init
 file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/AROS port). An automatic structure or union may be initialized from a structure expression, as C89 allows: `init()' reads the initializer of an automatic structure that does not start with `{', `}' or a string as one expression, and when it is a structure of the same type (the same INFO) it emits the assignment `o = e' that `iassign()' builds for any automatic item, and returns. Otherwise the tree is kept in `itp' and the first scalar member takes it in place of reading its own expression -- `init()' at its leaf, `bfinit()' through the new `iconval()', the folding half of `iconexpr()' -- so the brace-less member list (`struct R o = 1, 2;') reads as before. A member of a brace list may be initialized the same way. A structure of another type is a type clash, as before
 why: additive: a structure-valued initializer was a type clash before, in every position, and every other initializer reaches the same member code in the same order: the expression is read with the same `newtree()', `ininit' and LINE record the member read emitted, and nothing is output between the two points, so the brace lists, member lists and static initializers compile byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects). No ABI or data change on the C900: the initialization is the structure assignment cc1 already generates for `o = e', block move and all, and is object-identical to `struct R o; o = e;' (tests/structinit.sh); cc0 gains one static pointer
 
@@ -404,10 +404,10 @@ why: the MINIT context is what tells a machine layer that an address in an initi
 
 patch: auto-array-size
 file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
 file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/AROS port). An automatic array declared without a bound takes it from its initializer, as C89 allows: `declare()' refuses such an array only without an initializer, and `locals()' hands it to `iflex()', which reads the initializer with `init()' as for a static array, keeping each item (the member's type, dimensions, offset and tree) and each LINE record that `expr()' would have written, in order, with the tree space kept until they are written; then it binds the array, writes its AUTOS record and writes the kept records as `iassign()' and `expr()' would have. A structure element of an automatic array goes through `init()', so it too may be initialized whole from a structure expression (record auto-struct-init)
 why: additive: before this, an automatic array without a bound was an error (`cannot declare flexible automatic array'), and every other declaration takes the path it took; an element of a static array of structures still goes to `sinit()' directly, and an automatic one reaches `sinit()' through `init()' with the same braces, so the brace lists compile byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects). The kept records are the records the bounded array writes, in its order, so `long a[] = { 1, 2 };' is object-identical to `long a[2] = { 1, 2 };' (tests/autoarray.sh). On the C900 the array takes the frame slots its size needs, as before; the items are kept in one malloc'd list, about 16 bytes an item on the native compiler and reused by the next such array, and the trees of one initializer stay in the tree space until it is written
 
@@ -418,7 +418,7 @@ file: n0/get.c cc75dea4ec472417119bd3ab6b0e8e4653a48c3db679785be9133d75caff17cd
 file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: n0/stat.c d10a870857a501013ec1e4cfa233277b7904b7b275a6f792ecd0eeec793c1743
 file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 file: coh/cc.c 0364333a706756c33c00fa901778851151d7e01e1f6926754ed37bcf1ef5346f
 file: h/z8001/varmch.h
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/AROS port). Language levels: h/cc0.h reads a level from a machine's variant bits VSTD0 and VSTD1 (h/z8001/varmch.h: VMBASE+12 and +13), 0 when a machine has none: 0 every addition, 1 K&R, 2 C89 (prototypes, structure initializers, sized automatic arrays, long switch), 3 C99 (C89, `//', declarations after statements and in a `for'). Each addition's entry point asks `stdok()' (n0/etc.c), which below its level is the error "<feature> is not K&R C (-VKR)" or "... C89 (-VC89)" and the addition then goes on as if allowed, so one use is one message. Two are refused the donor's way, as K&R code can hold the same text: under K&R, `protohere()' reads `f(T)' with T a typedef name as a parameter named T, and under K&R and C89 `get()' reads `//' as a division. The driver's -VKR, -VC89 and -VC99 set the two bits, the last one winning, and -VSTRICT turns on -VSBOOK under -VKR, else -VSVARG, all under `#if Z8001'; the man page and usage text describe them
@@ -434,14 +434,14 @@ fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/AROS port).
 why: additive: VMAXIM sizes only the VARIANT array and the driver's string buffers, every slot keeps its number, every twelve-digit string written by hand, a Makefile or ccz reads as before (its seventh byte zero), and the driver writes the same twelve digits for every command without -VSTRICT, so every object is byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects). The machine-independent slots 0..33 and the machine slots 34..47 were full. On the C900 each pass's variant array grows by one byte; with VSTRICT clear `cstrict()' is the donor's
 
 patch: address-of-array
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/AROS port). `&' of an array is a pointer to the array, as C89 defines it: unary `&' in `term()' (n0/expr.c) takes an operand of array type (D_ARRAY, or D_MOSAR for a member array) and gives the tree `charray()' gives the decayed array, &a[0], with the type pointer to the array (D_PTR over the D_ARRAY), so arithmetic scales by the array's size and `*' gives the array back. offsetof() of an array member works the same way. Under -VKR (STD_KR) it is `build(ADDR)' as before, whose error is the donor's "lvalue required", which is also what the June 1985 MWC cc0 says; h/cc0.h lists it among the C89 additions
 why: additive: before this, `&' of an array was the error "lvalue required", and every other operand of `&' still goes to `build(ADDR)'. The tree is the one the decayed array gives, so `(T *)&a' compiles to the object of `(T *)a' for a static, automatic, member and string array (tests/addrarray.sh), and the values of the pointer arithmetic, comparisons, dereferences and sizeof on the pointer match the host compiler's. No ABI or data change on the C900; cc0 gains a few instructions in `term()'
 
 patch: offsetof-constant
-file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
-file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
 fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/AROS port). offsetof() is an integer constant expression, as C89 requires: above -VKR (STD_KR), a cast to int or unsigned of the address of a member or element at a constant offset from a null pointer, `(size_t)&((T *)0)->m' as include/stddef.h spells it, folds to that offset in `term()' (n0/expr.c, `nullofs()'), through members, nested members, member arrays and constant indexes (an index is a CONVERT scaled by its ZCON), so it is an array bound, a case label or a static initializer. Any other cast is as before, and under -VKR every cast is, so there offsetof() is not a constant, as in the donor and the June 1985 MWC cc0; h/cc0.h lists it among the C89 additions
 why: the folded constant is the value the cast had: the null pointer's offset word is 0 and the member offsets and scaled indexes are byte counts, so the int is their sum, which is what cc1 already computed at run time. So code that used it at run time compiles to the same object at every level, though cc0's output differs above -VKR (the library, kernel, driver, userland, Exec900 and Workbench objects; tests/stdlevel.sh compiles such a source at all four levels and compares the objects, and tests/addrarray.sh checks the constant forms against the host compiler and the -VKR refusals). No ABI or data change on the C900; cc0 gains one small function
 
@@ -454,3 +454,32 @@ file: n1/tables/blkmv.t
 file: h/z8001/mch.h
 fix: the members an automatic aggregate's initializer leaves out are zeroed, as a static's are. `locals()' hands an automatic array, structure or union to `iauto()', which keeps its items as `iflex()' does for an array sized by its initializer (`ikeep()'); where `init()' and `sinit()' write a static's BLOCK of zeros, the trailing elements, the rest of a string's array and the trailing members, they keep a gap instead, merged with the one before it when no item lies between. With no gap the kept records are written as before. Otherwise each gap is written where it fell as an assignment of the constant 0 to an aggregate of its size, or, when the machine's `zcost()' prices that higher, one such assignment of the whole object comes first and the items storing a constant 0 are dropped. The Z8001 `modsasg()' (n1/z8001/mtree2.c `blkzero()') does an assignment from a constant as a clear: CLRB for an odd first or last byte, a word CLR each through ten bytes, beyond that a CLR of the first word and an LDIR from it along the rest (blkmv.t, a BLKMOVE typed U16 counting words, through RR4, RR2 and a scratch count, so no callee-saved register is taken)
 why: wrong code on every target: C89 3.5.7 zeroes the members a brace list leaves out, at any storage duration, and K&R 8.6 pads an aggregate with zeros, while the donor and the June 1985 cc0 store the listed items and leave the rest of the frame slot as whatever the stack held, so `struct N n[] = { { 1, (char *)10, 0, 3 }, { 2 } };' handed gadtools a garbage `nm_CommKey', and `struct MsgPort port = { 0 };' a garbage name and flags. At every level, as the 1985 compiler's garbage is no dialect a program can rely on. An aggregate its initializer fills compiles byte-identical (the library, kernel, driver, Exec900 and Workbench objects that have no gap); every object that differs has a gap (tests/autozero.sh checks the values against the host compiler at the default level, -VKR and -VC89, and that a few gaps compile as the stores of zero they mean). On the C900 the clear costs only code: no ABI or data change; the items of one automatic aggregate's initializer are kept until it is written, as an array sized by it already was (record auto-array-size), about 20 bytes an item on the native compiler
+
+patch: readonly-level
+file: n0/cc0key.c 3487058226b2afdc90106b1a0b0a1355dee592de66693701db08ac14fc24b57a
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
+fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/AROS port). Under -VC89 and -VC99 (STD_C89 and above) `kinit()' does not enter the MWC keywords `readonly' and `alien', so they are identifiers, as in standard C; by default and under -VKR they are keywords as before, `alien' only under VALIEN. `__readonly', a name reserved to the implementation, is entered as READONLY wherever VREADONLY is set, at every level, and include/ctype.h spells `_ctype''s declaration with it, so the header parses at every level; h/cc0.h says so beside STD_C89
+why: additive: the default level and -VKR enter the keywords they entered, so the corpus, which spells `readonly' as a keyword (the C library's ctype.c, crypt.c, mtype.c, signame.c, strerror.c and sys_err.c, the kernel's shared-library tests, the userland's yacc tables and egrep), compiles byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects). `__readonly' was no identifier a conforming program may declare, and gives the object `readonly' gives (tests/stdlevel.sh, which also compares, at -VC89 and -VC99, a source using both names as identifiers with the same source renamed, and leaves the six library sources that spell `readonly' to -VKR in its corpus). No ABI or data change on the C900; the keyword table gains one entry
+
+patch: long-uint-balance
+file: n0/dope.c 6964ef8da868f22dbec4a64a42f9e0e96bb17e47f3e81bdbd1fd7b7cd11c8e9b
+fix: the conversion table `cvdope[]' (n0/dope.c) balances a long with an unsigned char, unsigned short or unsigned int, in either order, to long: goal T_LONG, the narrower operand converted, no unsigned relation (UREL), as `long :: int' already is. The donor's six entries made the pair unsigned long, both operands converted, compared unsigned. Constant folding (`fold()', n0/fold.c) reads the same table through `goaltype()', so a folded expression keeps the run-time type
+why: wrong code on every target where long is wider than int, at every level: K&R (Appendix A 6.6) converts to long before it looks at unsigned, and C89 3.2.1.5 converts an unsigned int to long when long can hold all its values, which with the C900's 16-bit int and 32-bit long it does, so `l / u', `l % u', `l < u', `(l + u) / 3L', `c ? l : u' and `(dx * 0xFFFF) / 7L' are signed. The donor's entries are C89's only for an int as wide as long (its i386); the June 1985 MWC cc0 types the pair unsigned long too, its listings show, and divides signed only where a retyped return hides it. As unsigned long, `-100L / 49u' was 87652391 and an intuition prop knob dragged before its container's start jumped to the far end. An unsigned long with any int or long stays unsigned long. Every object that differs holds such a pair in a sign-sensitive place (the library, kernel, driver, userland, Exec900 and Workbench objects; tests/longuns.sh checks 459 expressions over three sets of values against C89's rules at the default level, -VKR and -VC89, and the divide and branch shapes). No ABI or data change on the C900
+
+patch: opasg-balanced
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+fix: `build()' (n0/expr.c) keeps the right operand of `x /= y' and `x %= y' unsigned when the type the operands balance to is unsigned, `isunsint(cv & GOAL)', where it tested the right operand's own type, `isunsint(rt)'. The Z8001 cc1 (n1/z8001/mtree2.c `modopasg()') then divides in that type: `x = (x's type)((T)x op y)', the lvalue's address bound to a temporary when it is not repeatable
+why: wrong code on every target: C89 3.3.16.2 makes `x op= y' `x = x op y' with x evaluated once, so `i /= u' divides unsigned and -3 /= 2u stores 32766, where the Z8001 adiv and arem rules divided in the left operand's type, signed, and stored -1; `l /= ul' likewise. The front-end test differs from the donor's only where the record long-uint-balance made a long with an unsigned char, short or int balance to long: there `l /= u' must divide signed, and kept unsigned the right operand would have made it unsigned. Every object that differs divides such a pair (the library, kernel, driver, userland, Exec900 and Workbench objects; tests/opasg.sh checks /= and %= over integer pairs and five kinds of lvalue against C89's rules). No ABI or data change on the C900
+
+patch: opasg-long
+file: n0/expr.c f70c0c0df31e8fa1e65990b5558d5a3e5d54c011097824855d54185f99d20c9b
+fix: `build()' (n0/expr.c) converts the right operand of `x /= y' and `x %= y' to the long or unsigned long the operands balance to when x is narrower, where it converted it to x's type. The Z8001 cc1 (record opasg-balanced's `modopasg()') divides in that long type and converts the quotient back
+why: wrong code wherever long is wider than int, at every level: C89 3.3.16.2 and K&R 7.14 make `x op= y' `x = x op y', so `i /= l' is a long divide, but the donor cut l to an int first and 30000 /= 70000L stored 6, `u /= l' divided by l's low word, unsigned, and `i /= ul' and `u /= ul' likewise. On a target whose int is as wide as long the conversion is the same width and changes nothing. No corpus source has such a pair (the library, kernel, driver, userland, Exec900 and Workbench objects compile byte-identical); tests/opasg.sh checks the eight pairs over five kinds of lvalue against C89's rules. No ABI or data change on the C900
+
+patch: value-preserving
+file: n0/dope.c 6964ef8da868f22dbec4a64a42f9e0e96bb17e47f3e81bdbd1fd7b7cd11c8e9b
+file: n0/cc0.c fbadd964f6c02843a78a7c8a81a86c086a84c3c8118d4cab1be9789ba9b9b3c4
+file: h/cc0.h a85a70b4465582609f01ebcb7d6be765a7be6ecb8d4022e13f930f65cb6e0577
+file: n1/z8001/mtree2.c
+fix: FEATURE ADDITION, not a defect fix (C89's promotion, requested for the Workbench/AROS port). At -VC89 and -VC99 (STD_C89 and above) an unsigned char promotes to int, as C89 3.2.1.1 says: `dopeinit()' (n0/dope.c), called by `main()' (n0/cc0.c) after the variant is read, gives the conversion table's unsigned char row and column the char's, and the unsigned short's the short's where an unsigned short is narrower than int (on the C900 it is not, so it promotes to unsigned int at every level, as C89 also says). By default and under -VKR the table is the donor's unsigned-preserving rule, unsigned char to unsigned int. h/cc0.h lists it among the C89 changes. The Z8001 cc1 converts `(long)uc''s int as the unsigned int it holds (n1/z8001/mtree2.c), so a cast to long is the zero extension it was
+why: additive: the table is changed only when the level is C89 or C99, so the default level and -VKR compile byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects, all at the default level), and K&R had no unsigned char to have a rule for. At C89 `uc < i' with i = -1 is false and `uc - 1 < 0' true, where they were true and false. The cc1 change applies only to an int converted from an unsigned byte, whose value is 0..255. tests/longuns.sh checks unsigned char with int, unsigned and unsigned short at all four levels against both rules; tests/stdlevel.sh checks the relations' code at the four levels and that the C library compiles to the same objects at every level. No ABI or data change on the C900

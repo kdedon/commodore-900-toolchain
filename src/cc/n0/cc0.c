@@ -162,6 +162,7 @@ main(argc, argv) int argc; char *argv[];
 	strcpy(argv2, argv[2]);		/* impure copy for source directory */
 	vinit();
 	kinit();
+	dopeinit();
 	time(&curtime);
 	newtree(sizeof(TREE));
 

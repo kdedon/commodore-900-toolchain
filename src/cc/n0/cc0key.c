@@ -132,6 +132,8 @@ static struct { TOK t; char id[sizeof "volatile"]; } cvolatile = {{NULL,NULL}, "
 #ifdef READONLY
 static struct { TOK t; char id[sizeof "readonly"]; } creadonly = {{NULL,NULL}, "readonly"};
 #define treadonly (creadonly.t)
+static struct { TOK t; char id[sizeof "__readonly"]; } c_readonly = {{NULL,NULL}, "__readonly"};
+#define t_readonly (c_readonly.t)
 #endif
 #ifdef ALIEN
 static struct { TOK t; char id[sizeof "alien"]; } calien = {{NULL,NULL}, "alien"};
@@ -202,6 +204,7 @@ static KEYSYM ktab[] = {
 	NULL,	SL_KEY,		VOLATILE,
 #ifdef READONLY
 	NULL,	SL_KEY,		READONLY,
+	NULL,	SL_KEY,		READONLY,
 #endif
 #ifdef ALIEN
 	NULL,	SL_KEY,		ALIEN
@@ -271,6 +274,7 @@ static TOK *ktok[] = {
 	&tvolatile,
 #ifdef READONLY
 	&treadonly,
+	&t_readonly,
 #endif
 #ifdef ALIEN
 	&talien
@@ -297,6 +301,16 @@ kinit()
 		if (kp->s_value==READONLY && notvariant(VREADONLY))
 			continue;
 #endif
+		/*
+		 * Standard C has neither keyword: at -VC89 and -VC99 the
+		 * names are identifiers, and `__readonly' is readonly.
+		 */
+		if (stdlevel() >= STD_C89 && (kp->s_value==ALIEN
+#ifdef READONLY
+		 || tp == &treadonly
+#endif
+		 ))
+			continue;
 		p = tp->t_id;
 		idhash = 0;
 		while (c = *p++)

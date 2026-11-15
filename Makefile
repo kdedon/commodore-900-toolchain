@@ -192,6 +192,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/addrarray.sh
 	sh tests/ptrlong.sh
 	sh tests/asgval.sh
+	sh tests/longuns.sh
+	sh tests/opasg.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it

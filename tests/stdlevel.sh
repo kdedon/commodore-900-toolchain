@@ -7,12 +7,13 @@
 # same object at every level: the C library's sources are the corpus.  The
 # driver maps each option onto VSTD0/VSTD1, and -VSTRICT sets VSTRICT, which
 # makes every strict message an error.  ccz takes the same levels from
-# CCZ_LEVEL.
+# CCZ_LEVEL.  `readonly' and `alien' are identifiers at -VC89 and -VC99, and
+# `__readonly' is `readonly' at every level.
 set -e
 H="$(cd "$(dirname "$0")/.." && pwd)"
 HERE="$H/host"; . "$H/host/publish.sh"	# $BUILD
 . "$H/host/coherent-os.sh"		# $COHERENT_OS
-CC0="$BUILD/z8001/cc0-z8001"
+CC0="$BUILD/z8001/cc0-z8001"; CC1="$BUILD/z8001/cc1-z8001"; CC2="$BUILD/z8001/cc2-z8001"; DIS="$BUILD/tools/loutdis"
 DEF=800000020800; KR=800000020840; C89=800000020880; C99=8000000208C0
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 fail=0
@@ -69,6 +70,71 @@ feature 'declaration in a for' 'a declaration in a for is not' C99 \
 feature 'f(T) is a K&R parameter' - KRONLY \
 	'typedef int T; int f(T) int T; { return T + 1; }'
 
+# `readonly' and `alien' are keywords by default and under -VKR, and
+# identifiers under -VC89 and -VC99, -VALIEN or not; `__readonly' is
+# `readonly' at every level, as <ctype.h> spells it.
+AL=03; DEFA=800000${AL}0800; KRA=800000${AL}0840; C89A=800000${AL}0880; C99A=800000${AL}08C0
+printf 'struct S { char readonly; int alien; };\nf(p) struct S *p; { int readonly = p->readonly; return readonly + p->alien; }\n' > "$T/r.c"
+bad=0
+for lv in DEF KR C89 C99 DEFA KRA C89A C99A; do
+	eval v=\$$lv
+	case $lv in C89*|C99*) want=ok ;; *) want=refused ;; esac
+	if "$CC0" $v "$T/r.c" "$T/r.z0" > "$T/r.err" 2>&1; then got=ok; else got=refused; fi
+	[ "$got" = "$want" ] || { echo "  readonly, alien as names at $lv: $got, want $want FAIL"; cat "$T/r.err"; bad=1; }
+done
+mkdir "$T/u1"; sed 's/readonly/rdonly/g; s/alien/alier/g' "$T/r.c" > "$T/u1/r.c"
+for lv in C89 C99; do
+	eval v=\$$lv
+	(cd "$T" && "$CC0" $v r.c r.z0 && "$CC1" $v r.z0 r.z1 && "$CC2" 0012 r.z1 r.o r.scr 0) >/dev/null 2>&1 &&
+	(cd "$T/u1" && "$CC0" $v r.c r.z0 && "$CC1" $v r.z0 r.z1 && "$CC2" 0012 r.z1 r.o r.scr 0) >/dev/null 2>&1 &&
+	cmp -s "$T/r.o" "$T/u1/r.o" || { echo "  readonly, alien at $lv: not the object of other names FAIL"; bad=1; }
+done
+[ "$bad" = 0 ] && echo "  readonly, alien are names at -VC89 and -VC99 PASS" || fail=1
+printf 'alien f() { return 1; }\n' > "$T/al.c"
+if "$CC0" $DEFA "$T/al.c" "$T/al.z0" >/dev/null 2>&1 && "$CC0" $KRA "$T/al.c" "$T/al.z0" >/dev/null 2>&1 &&
+   ! "$CC0" $C89A "$T/al.c" "$T/al.z0" >/dev/null 2>&1; then
+	echo "  -VALIEN alien a keyword by default and under -VKR PASS"
+else
+	echo "  -VALIEN alien FAIL"; fail=1
+fi
+printf 'readonly char t[2] = { 1, 2 };\nf(i) { return t[i]; }\n' > "$T/ro.c"
+mkdir "$T/u"; sed 's/^readonly/__readonly/' "$T/ro.c" > "$T/u/ro.c"
+(cd "$T" && "$CC0" $DEF ro.c ro.z0)
+bad=0
+for lv in DEF KR C89 C99; do
+	eval v=\$$lv
+	(cd "$T/u" && "$CC0" $v ro.c ro.z0 2>/dev/null) && cmp -s "$T/ro.z0" "$T/u/ro.z0" ||
+		{ echo "  __readonly at $lv FAIL"; bad=1; }
+done
+[ "$bad" = 0 ] && echo "  __readonly is readonly at every level PASS" || fail=1
+printf '#include <ctype.h>\nf(c) { return isdigit(c); }\n' > "$T/ct.c"
+bad=0
+for lv in DEF KR C89 C99; do
+	eval v=\$$lv
+	"$CC0" $v "$T/ct.c" "$T/ct.z0" -I"$H/src/include" >/dev/null 2>&1 || { echo "  <ctype.h> at $lv FAIL"; bad=1; }
+done
+[ "$bad" = 0 ] && echo "  <ctype.h> at every level PASS" || fail=1
+
+# An unsigned char promotes to int at -VC89 and -VC99 (C89 3.2.1.1), so
+# `uc < i' compares signed and `uc - 1' can be negative; by default and under
+# -VKR it promotes to unsigned int, as before.  An unsigned short is as wide as
+# int here and promotes to unsigned int at every level.
+printf 'f(c, i) unsigned char c; { return c < i; }\ng(c) unsigned char c; { return c - 1 < 0; }\nh(s, i) unsigned short s; { return s < i; }\n' > "$T/vp.c"
+for lv in DEF KR C89 C99; do
+	eval v=\$$lv
+	"$CC0" $v "$T/vp.c" "$T/vp$lv.z0" && "$CC1" $v "$T/vp$lv.z0" "$T/vp$lv.z1" &&
+	"$CC2" 0012 "$T/vp$lv.z1" "$T/vp$lv.o" "$T/vp.scr" 0 || { echo "  promotion: compile at $lv FAIL"; fail=1; }
+done
+rel() { "$DIS" -v -fn $1 "$T/vp$2.o" 2>/dev/null | grep -Eo ' JR +[A-Z]+' | sed -n 1p | tr -s ' '; }
+got="$(rel f_ DEF)/$(rel f_ KR)/$(rel f_ C89)/$(rel f_ C99) $(rel g_ DEF)/$(rel g_ C89) $(rel h_ DEF)/$(rel h_ C89)"
+if [ "$got" = " JR UGE/ JR UGE/ JR GE/ JR GE  JR UGE/ JR GE  JR UGE/ JR UGE" ]; then
+	echo "  unsigned char promotes to int at -VC89 and -VC99 only PASS"
+else
+	echo "  unsigned char promotion FAIL: [$got]"; fail=1
+fi
+cmp -s "$T/vpDEF.o" "$T/vpKR.o" && cmp -s "$T/vpC89.o" "$T/vpC99.o" &&
+	echo "  default = -VKR, -VC89 = -VC99 objects PASS" || { echo "  promotion objects FAIL"; fail=1; }
+
 # The C89 message names C89 under -VC89.
 printf 'f() { int a; a = 1; int b = a; return b; }\n' > "$T/c.c"
 if "$CC0" $C89 "$T/c.c" "$T/c.z0" 2>&1 | grep -q 'is not C89 (-VC89)'; then
@@ -87,7 +153,8 @@ fi
 # K&R code: the same code at every level.  cc0's output is the same, except
 # that above -VKR offsetof() folds to its constant; where the output differs,
 # the objects must not.  The C library's sources are the corpus, with one
-# that uses offsetof() at run time.
+# that uses offsetof() at run time; a source that spells `readonly' is not
+# standard C and is compared under -VKR alone.
 cat > "$T/ofs.c" <<'EOF'
 #include <stddef.h>
 struct S { short x; char c; short a[4]; };
@@ -95,15 +162,16 @@ static unsigned so = offsetof(struct S, c);
 f(p, n) char *p; { return *(short *)(p + offsetof(struct S, x)) + n * offsetof(struct S, c) + so; }
 g() { return (int)&((struct S *)0)->c; }
 EOF
-CC1="$BUILD/z8001/cc1-z8001"; CC2="$BUILD/z8001/cc2-z8001"
 obj() { "$CC1" $1 "$2" "$2.z1" >/dev/null 2>&1 && "$CC2" 0012 "$2.z1" "$2.o" "$2.scr" 0 >/dev/null 2>&1; }
-n=0; nz=0; diff=""
+n=0; nz=0; nr=0; diff=""
 for c in "$COHERENT_OS"/libc/*/*.c "$T/ofs.c"; do
 	b=$(basename "$c" .c)
 	I="-I$COHERENT_OS/include -I$COHERENT_OS/include/sys"
 	[ "$c" = "$T/ofs.c" ] && I="-I$H/src/include"
 	"$CC0" $DEF "$c" "$T/def.z0" $I >/dev/null 2>&1 || continue
-	for lv in KR C89 C99; do
+	lvs="KR C89 C99"
+	grep -qw readonly "$c" && { lvs=KR; nr=$((nr+1)); }
+	for lv in $lvs; do
 		eval v=\$$lv
 		if ! "$CC0" $v "$c" "$T/lv.z0" $I >/dev/null 2>&1; then
 			diff="$diff $b($lv)"
@@ -116,7 +184,7 @@ for c in "$COHERENT_OS"/libc/*/*.c "$T/ofs.c"; do
 	n=$((n+1))
 done
 if [ -z "$diff" ] && [ "$n" -gt 100 ] && [ "$nz" -gt 0 ]; then
-	echo "  $n sources, the same code at every level ($nz cc0 outputs differ, their objects do not) PASS"
+	echo "  $n sources, the same code at every level ($nz cc0 outputs differ, their objects do not; $nr spell readonly) PASS"
 else
 	echo "  K&R code at the levels ($n sources, $nz cc0 outputs differ): differ:$diff FAIL"; fail=1
 fi

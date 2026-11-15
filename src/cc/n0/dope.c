@@ -117,7 +117,7 @@ short	cvdope[] = {
 	T_UINT  + CVL + CVR        + UREL,		/* uc ::  i */
 	T_UINT  + CVL       + CVRA + UREL,		/* uc :: ui */
 	GTR     + CVL       + CARA + UREL,		/* uc ::  p */
-	T_ULONG + CVL + CVR + CVRA + UREL,		/* uc ::  l */
+	T_LONG  + CVL       + CVRA,			/* uc ::  l */
 	T_ULONG + CVL       + CVRA + UREL,		/* uc :: ul */
 	T_DOUBLE+ CVL + CVR + CVRA,			/* uc ::  f */
 	T_DOUBLE+ CVL       + CVRA,			/* uc ::  d */
@@ -145,7 +145,7 @@ short	cvdope[] = {
 	T_UINT  + CVL + CVR + CVRA + UREL,		/* us ::  i */
 	T_UINT  + CVL              + UREL,		/* us :: ui */
 	GTR     + CVL       + CARA + UREL,		/* us ::  p */
-	T_ULONG + CVL + CVR + CVRA + UREL,		/* us ::  l */
+	T_LONG  + CVL       + CVRA,			/* us ::  l */
 	T_ULONG + CVL       + CVRA + UREL,		/* us :: ul */
 	T_DOUBLE+ CVL + CVR + CVRA,			/* us ::  f */
 	T_DOUBLE+ CVL       + CVRA,			/* us ::  d */
@@ -173,7 +173,7 @@ short	cvdope[] = {
 	T_UINT        + CVR + CVRA + UREL,		/* ui ::  i */
 	T_UINT                     + UREL,		/* ui :: ui */
 	GTR     + CVL       + CARA + UREL,		/* ui ::  p */
-	T_ULONG + CVL + CVR + CVRA + UREL,		/* ui ::  l */
+	T_LONG  + CVL       + CVRA,			/* ui ::  l */
 	T_ULONG + CVL       + CVRA + UREL,		/* ui :: ul */
 	T_DOUBLE+ CVL + CVR + CVRA,			/* ui ::  f */
 	T_DOUBLE+ CVL       + CVRA,			/* ui ::  d */
@@ -195,11 +195,11 @@ short	cvdope[] = {
 	0,						/*  p ::  t */
 		
 	T_LONG        + CVR + CVRA,			/*  l ::  c */
-	T_ULONG + CVL + CVR + CVRA + UREL,		/*  l :: uc */
+	T_LONG        + CVR + CVRA,			/*  l :: uc */
 	T_LONG        + CVR + CVRA,			/*  l ::  s */
-	T_ULONG + CVL + CVR + CVRA + UREL,		/*  l :: us */
+	T_LONG        + CVR + CVRA,			/*  l :: us */
 	T_LONG        + CVR + CVRA,			/*  l ::  i */
-	T_ULONG + CVL + CVR + CVRA + UREL,		/*  l :: ui */
+	T_LONG        + CVR + CVRA,			/*  l :: ui */
 	GTR     + CVL       + CARA + UREL,		/*  l ::  p */
 	T_LONG,						/*  l ::  l */
 	T_ULONG + CVL       + CVRA + UREL,		/*  l :: ul */
@@ -278,5 +278,37 @@ short	cvdope[] = {
 	0,						/*  t ::  v */
 	GTL						/*  t ::  t */
 };
+
+/*
+ * Value-preserving promotion (C89 3.2.1.1) at -VC89 and -VC99: an unsigned
+ * char becomes an int, so it balances as a char does, and so does an unsigned
+ * short narrower than int.  Other levels keep the donor's unsigned-preserving
+ * rule, which makes them unsigned int.
+ */
+static	dopecopy();
+
+dopeinit()
+{
+	if (stdlevel() < STD_C89)
+		return;
+	dopecopy(T_UCHAR, T_CHAR);
+	if (mysizes[T_USHORT] < mysizes[T_INT])
+		dopecopy(T_USHORT, T_SHORT);
+}
+
+/*
+ * Give type `u' the column and then the row of type `s'.
+ */
+static
+dopecopy(u, s)
+{
+	register short	*p, *q;
+	register int	n;
+
+	for (p = &cvdope[u-T_CHAR], q = &cvdope[s-T_CHAR], n = 13; n-- > 0; p += 13, q += 13)
+		*p = *q;
+	for (p = &cvdope[13*(u-T_CHAR)], q = &cvdope[13*(s-T_CHAR)], n = 13; n-- > 0; )
+		*p++ = *q++;
+}
 
 /* end of  n0/dope.c */
