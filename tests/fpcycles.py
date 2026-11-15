@@ -54,8 +54,8 @@ def mode(o):
     if re.fullmatch(r"R[RQHL]?\d+", o): return "R"
     if o.startswith("#"): return "IM"
     if o.startswith("@"): return "IR"
-    if re.fullmatch(r"0x[0-9A-F]{2}:0x[0-9A-F]{4}", o): return "DA"
-    if re.fullmatch(r"0x[0-9A-F]{2}:0x[0-9A-F]{4}\(R\d+\)", o): return "X"
+    if re.fullmatch(r"0x[0-9A-F]{2}:0x[0-9A-F]{2}(?:[0-9A-F]{2})?", o): return "DA"
+    if re.fullmatch(r"0x[0-9A-F]{2}:0x[0-9A-F]{2}(?:[0-9A-F]{2})?\(R\d+\)", o): return "X"
     if re.fullmatch(r"0x[0-9A-F]{4}\(R\d+\)", o): return "BA"
     if re.fullmatch(r"R\d+\(R\d+\)", o): return "BX"
     return "R"
@@ -74,16 +74,18 @@ def cost(pc, mn, ops, regs, taken):
         ms = ms[1:]                     # the stack pointer is not the mode
     elif mn in ("POP", "POPL"):
         ms = ms[:1]
-    if mn in ("JR", "CALR", "DJNZ", "DBJNZ"):
+    if mn in ("JR", "CALR", "DJNZ", "DBJNZ", "LDR", "LDRB", "LDRL", "LDAR"):
         md = "RA"
     else:
         md = next((m for m in ms if m not in ("R", "IM")), "IM" if "IM" in ms else "R")
     if not ops or mn in ("SETFLG", "RESFLG", "COMFLG"):
-        md = "IR" if mn in ("MULTL", "DIVL", "MULT", "DIV") else "-"
-    if md == "IM" and re.fullmatch(r"(BIT|SET|RES|INC|DEC)B?", mn):
+        md = "-"
+    if md == "IM" and re.fullmatch(r"(BIT|SET|RES|INC|DEC)B?|LDK", mn):
         md = "R"
     lng = md in ("DA", "X") and word(pc + (4 if mn == "LDM" else 2)) & 0x8000 != 0
     if mn in ("LD", "LDB", "LDL") and md in ("IR", "DA", "X", "BA", "BX") and ms[0] == md:
+        mn += "<"
+    if mn in ("LDR", "LDRB", "LDRL") and ops[0].startswith("0x"):
         mn += "<"
     if mn == "RET":
         return 13 if taken else 7
@@ -94,6 +96,9 @@ def cost(pc, mn, ops, regs, taken):
     if mn in ("RLC", "RRC", "RL", "RR", "RLCB", "RRCB", "RLB", "RRB"):
         return 7 if w0 & 2 else 6
     if re.fullmatch(r"S[LR][LA][BL]?", mn):
+        if w0 >> 8 == 0xB2:             # byte: 0 | +-b8, signed in bit 7
+            n = w1 & 0xFF
+            return 13 + 3 * abs(n - 0x100 if n & 0x80 else n)
         return 13 + 3 * abs(w1 - 0x10000 if w1 & 0x8000 else w1)
     if re.fullmatch(r"SD[LA][BL]?", mn):
         c = regs[(w1 >> 8) & 15]

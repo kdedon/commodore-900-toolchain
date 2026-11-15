@@ -14,10 +14,9 @@ stand.
 Nothing in this directory is compiled. It is the ISA reference the encoder was
 built *from* and is checked *against*. The tables the compiler actually compiles
 are `src/cc/generated/{opcode.h,OF_styles.h}` — one copy, next to the source
-that includes them. `genz8001tab` generates a third artifact from the same
-decoder, `tools/loutdis/z8ktab.h`: the operand templates the disassembler
-compiles, which carry what an inventory row cannot — which varying bits produce
-which operand text.
+that includes them. The disassembler's table, `tools/loutdis/z8ktab.h`, is not
+from this decoder: `tools/loutdis/gentab.py` generates it from the assembler's
+own tables (`make loutdis-table`).
 
 ## Files
 

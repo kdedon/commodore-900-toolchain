@@ -1,9 +1,8 @@
 /*
- * The Z8001 decode core: it walks the generated table in z8ktab.h and nothing
- * else.  No opcode, no field position and no register name is written here --
- * all of that is in the table, which the generator read out of a verified
- * decoder.  This file only knows how to APPLY a table row: match the form,
- * render its pieces, and compute the length.
+ * The Z8001 decode core.  Every opcode, field position and name is in the
+ * generated table z8ktab.h, which gentab.py derives from the assembler's own
+ * tables; this file finds the form a word belongs to and renders its operands
+ * by kind.
  *
  * K&R C, 16-bit int safe: every instruction word and address is carried in an
  * unsigned long.
@@ -14,140 +13,283 @@
 #include "z8kdis.h"
 #include "z8ktab.h"
 
-static char *
-zappend(p, s)
-char *p, *s;
+/* the words of the instruction being decoded */
+static unsigned long *zw;
+static int znw;			/* words available */
+static int zseg, zlong;		/* address word, and whether it is long */
+
+/* the word at index k of the instruction itself, or -1 */
+static long
+zraw(k)
+int k;
 {
-	while (*s)
-		*p++ = *s++;
-	*p = '\0';
-	return p;
+	return k < znw ? (long)(zw[k] & 0xFFFFL) : -1L;
 }
 
-/* the word a src code names: 0..3 directly, ZSRC_POST1/2 the word after a
- * segmented address, which is one or two words long. */
-static int
-zwordidx(src, w, nw)
-int src;
-unsigned long *w;
-int nw;
+/* word k of the instruction as the table counts it (all addresses short),
+ * or -1 when it is past the words available. */
+static long
+zword(k)
+int k;
 {
-	switch (src) {
-	case ZSRC_POST1:
-		if (nw > 1 && (w[1] & 0x8000L))
-			return 3;
-		return 2;
-	case ZSRC_POST2:
-		if (nw > 2 && (w[2] & 0x8000L))
-			return 4;
-		return 3;
-	}
-	return src;
+	if (zseg && k > zseg && zlong)
+		k++;
+	return zraw(k);
 }
 
 static unsigned long
-zwordval(idx, w, nw)
-int idx;
-unsigned long *w;
-int nw;
+zfield(p)
+struct zop *p;
 {
-	if (idx < 0 || idx >= nw || idx >= 4)
-		return 0L;
-	return w[idx] & 0xFFFFL;
+	long w;
+
+	w = zword((int)p->word);
+	if (w < 0)
+		w = 0;
+	return ((unsigned long)w >> p->shift) & ((1L << p->width) - 1);
 }
 
 static char *
-zsegtarget(p, addr)
-char *p;
-unsigned long addr;
+zreg(o, kind, r)
+char *o;
+int kind;
+unsigned long r;
 {
-	sprintf(p, "0x%02lX:0x%04lX", (addr >> 16) & 0x7FL, addr & 0xFFFFL);
-	return p + strlen(p);
-}
-
-static char *
-zstyle(p, style, src, w0, w, nw, pc)
-char *p;
-int style, src;
-unsigned long w0, *w;
-int nw;
-unsigned long pc;
-{
-	int k;
-	long d;
-	unsigned long a;
-
-	k = zwordidx(src, w, nw);
-	switch (style) {
-	case ZS_HEX4:
-		sprintf(p, "0x%04lX", zwordval(k, w, nw));
+	switch (kind) {
+	case ZK_RB:
+		sprintf(o, "R%c%d", r < 8 ? 'H' : 'L', (int)(r & 7));
 		break;
-	case ZS_HEX2HI:
-		sprintf(p, "0x%02lX", zwordval(k, w, nw) >> 8);
+	case ZK_RR:
+		sprintf(o, "RR%d", (int)r);
 		break;
-	case ZS_HEX2LO:
-		sprintf(p, "0x%02lX", zwordval(k, w, nw) & 0xFFL);
+	case ZK_RQ:
+		sprintf(o, "RQ%d", (int)r);
 		break;
-	case ZS_HEX8:
-		sprintf(p, "0x%08lX",
-			(zwordval(k, w, nw) << 16) | zwordval(k + 1, w, nw));
+	case ZK_IR:
+		sprintf(o, "@R%d", (int)r);
 		break;
-	case ZS_DECS:
-		d = (long)zwordval(k, w, nw);
-		if (d >= 0x8000L)
-			d -= 0x10000L;
-		sprintf(p, "%ld", d);
+	case ZK_IRR:
+		sprintf(o, "@RR%d", (int)r);
 		break;
-	case ZS_SEGADDR:
-		if (k >= nw) {
-			strcpy(p, "?");
-			break;
-		}
-		a = w[k] & 0xFFFFL;
-		if (a & 0x8000L) {
-			if (k + 1 >= nw)
-				sprintf(p, "0x%02lX:?", (a >> 8) & 0x7FL);
-			else
-				sprintf(p, "0x%02lX:0x%04lX", (a >> 8) & 0x7FL,
-					zwordval(k + 1, w, nw));
-		} else
-			sprintf(p, "0x%02lX:0x%04lX", (a >> 8) & 0x7FL, a & 0xFFL);
-		break;
-	case ZS_PCREL16:
-		d = (long)zwordval(k, w, nw);
-		if (d >= 0x8000L)
-			d -= 0x10000L;
-		sprintf(p, "0x%04lX", ((unsigned long)((long)pc + d + 4)) & 0xFFFFL);
-		break;
-	case ZS_PCREL8:
-		d = (long)(w0 & 0xFFL);
-		if (d & 0x80L)
-			d -= 0x100L;
-		return zsegtarget(p, (unsigned long)((long)pc + 2 + (d << 1)));
-	case ZS_PCREL12:
-		d = (long)(w0 & 0xFFFL);
-		if (d & 0x800L)
-			d -= 0x1000L;
-		return zsegtarget(p, (unsigned long)((long)pc - (d << 1) + 2));
-	case ZS_DJNZ:
-		d = (long)(w0 & 0x7FL);
-		return zsegtarget(p, (unsigned long)((long)pc - (d << 1) + 2));
 	default:
-		strcpy(p, "?style");
+		sprintf(o, "R%d", (int)r);
 		break;
 	}
-	return p + strlen(p);
+	return o + strlen(o);
+}
+
+/* a segmented address at table word k: 0xSS:0xOO short, 0xSS:0xOOOO long */
+static char *
+zaddr(o, k)
+char *o;
+int k;
+{
+	long a, b;
+
+	a = zraw(k);
+	if (a < 0) {
+		strcpy(o, "?");
+		return o + 1;
+	}
+	if (a & 0x8000L) {
+		b = zraw(k + 1);
+		if (b < 0)
+			sprintf(o, "0x%02lX:?", (a >> 8) & 0x7FL);
+		else
+			sprintf(o, "0x%02lX:0x%04lX", (a >> 8) & 0x7FL, b);
+	} else
+		sprintf(o, "0x%02lX:0x%02lX", (a >> 8) & 0x7FL, a & 0xFFL);
+	return o + strlen(o);
+}
+
+/* a relative target: the offset wraps within pc's segment */
+static char *
+ztarget(o, pc, d)
+char *o;
+unsigned long pc;
+long d;
+{
+	sprintf(o, "0x%02lX:0x%04lX", (pc >> 16) & 0x7FL,
+		(unsigned long)((long)(pc & 0xFFFFL) + d) & 0xFFFFL);
+	return o + strlen(o);
+}
+
+/* the names of the bits of an n-bit field that equal `set', high bit first */
+static char *
+zlist(o, names, n, bits, set)
+char *o;
+unsigned short *names;
+int n;
+unsigned long bits;
+int set;
+{
+	int i, any;
+
+	any = 0;
+	for (i = 0; i < n; i++)
+		if ((int)((bits >> (n - 1 - i)) & 1) == set) {
+			if (any)
+				*o++ = ',';
+			strcpy(o, zstr[names[i]]);
+			o += strlen(o);
+			any = 1;
+		}
+	*o = '\0';
+	return o;
+}
+
+/* the signed count of a static shift; a byte shift's is in the low byte */
+static long
+zcount(p)
+struct zop *p;
+{
+	long v;
+
+	v = zword((int)p->word);
+	if (v < 0)
+		return 0L;
+	if (p->width == 8) {
+		v &= 0xFFL;
+		if (v & 0x80L)
+			v -= 0x100L;
+	} else if (v & 0x8000L)
+		v -= 0x10000L;
+	return v;
+}
+
+static char *
+zoperand(o, p, pc)
+char *o;
+struct zop *p;
+unsigned long pc;
+{
+	unsigned long f;
+	long v, d;
+	int r;
+
+	f = zfield(p);
+	r = (int)((zw[0] >> p->shift) & 0xFL);
+	switch (p->kind) {
+	case ZK_R:
+	case ZK_RB:
+	case ZK_RR:
+	case ZK_RQ:
+	case ZK_IR:
+	case ZK_IRR:
+		return zreg(o, (int)p->kind, f);
+	case ZK_IM8:
+		/* a byte operand repeats in both halves of its word */
+		v = zword((int)p->word);
+		if (v < 0)
+			strcpy(o, "#?");
+		else
+			sprintf(o, "#0x%02lX", p->aux ? v & 0xFFL : (v >> 8) & 0xFFL);
+		break;
+	case ZK_IM16:
+		v = zword((int)p->word);
+		if (v < 0)
+			strcpy(o, "#?");
+		else
+			sprintf(o, "#0x%04lX", v);
+		break;
+	case ZK_PORT:
+		v = zword((int)p->word);
+		if (v < 0)
+			strcpy(o, "?");
+		else
+			sprintf(o, "0x%04lX", v);
+		break;
+	case ZK_IM32:
+		v = zword((int)p->word);
+		d = zword((int)p->word + 1);
+		if (v < 0 || d < 0)
+			strcpy(o, "#?");
+		else
+			sprintf(o, "#0x%04lX%04lX", v, d);
+		break;
+	case ZK_NUM:
+		sprintf(o, "#%ld", (long)f + (long)p->aux);
+		break;
+	case ZK_SHIFT:
+		v = zcount(p);
+		sprintf(o, "#%ld", v < 0 ? -v : v);
+		break;
+	case ZK_DA:
+		return zaddr(o, (int)p->word);
+	case ZK_X:
+		o = zaddr(o, (int)p->word);
+		sprintf(o, "(R%d)", r);
+		break;
+	case ZK_BA:
+		v = zword((int)p->word);
+		if (v < 0)
+			sprintf(o, "?(R%d)", r);
+		else
+			sprintf(o, "0x%04lX(R%d)", v, r);
+		break;
+	case ZK_BX:
+		sprintf(o, "R%d(R%d)", (int)((zw[0] >> p->aux) & 0xFL), (int)f);
+		break;
+	case ZK_RA16:
+		v = zword((int)p->word);
+		if (v < 0) {
+			strcpy(o, "?");
+			break;
+		}
+		if (v & 0x8000L)
+			v -= 0x10000L;
+		sprintf(o, "0x%04lX", (unsigned long)((long)(pc & 0xFFFFL) + 4 + v) & 0xFFFFL);
+		break;
+	case ZK_RA8:
+		d = (long)f;
+		if (d & 0x80L)
+			d -= 0x100L;
+		return ztarget(o, pc, 2 + 2 * d);
+	case ZK_RA12:
+		d = (long)f;
+		if (d & 0x800L)
+			d -= 0x1000L;
+		return ztarget(o, pc, 2 - 2 * d);
+	case ZK_RA7:
+		return ztarget(o, pc, 2 - 2 * (long)f);
+	case ZK_CC:
+		strcpy(o, zstr[zcc[(int)f]]);
+		break;
+	case ZK_FLG:
+		return zlist(o, zflg, 4, f, 1);
+	case ZK_INT:
+		return zlist(o, zint, 2, f, 0);
+	case ZK_LIT:
+		strcpy(o, zstr[p->aux]);
+		break;
+	default:
+		strcpy(o, "?");
+		break;
+	}
+	return o + strlen(o);
 }
 
 static struct zform *
-zmatch(w0)
+zmatch(w0, w1)
 unsigned long w0;
+long w1;
 {
-	int i;
+	struct zform *f;
+	int i, k;
 
-	for (i = 0; i < ZNFORM; i++)
-		if ((w0 & zform[i].mask) == zform[i].val)
-			return &zform[i];
+	for (i = 0; i < ZNFORM; i++) {
+		f = &zform[i];
+		if ((w0 & f->mask) != f->val)
+			continue;
+		for (k = 0; k < 16; k += 4)
+			if (((f->nz >> k) & 1) && ((w0 >> k) & 0xFL) == 0)
+				break;
+		if (k < 16)
+			continue;
+		if (f->m1 && (w1 < 0 || ((unsigned long)w1 & f->m1) != f->v1))
+			continue;
+		return f;
+	}
 	return (struct zform *)0;
 }
 
@@ -159,11 +301,9 @@ unsigned long pc;
 char **mnem, *ops;
 {
 	struct zform *f;
-	struct zvar *v;
-	struct zpiece *p;
-	unsigned long field, word;
+	struct zop *p;
 	char *o;
-	int i, wc, idx, lf;
+	int i;
 
 	*mnem = "ILLEGAL";
 	ops[0] = '\0';
@@ -171,46 +311,24 @@ char **mnem, *ops;
 		return 1;
 	if (nw > 4)
 		nw = 4;
-	f = zmatch(w[0] & 0xFFFFL);
+	zw = w;
+	znw = nw;
+	zseg = 0;
+	f = zmatch(w[0] & 0xFFFFL, nw > 1 ? (long)(w[1] & 0xFFFFL) : -1L);
 	if (f == (struct zform *)0)
 		return 1;
-	/* the long form of a segmented address at w[1] is a second word, and so
-	 * a different template, not a different field value. */
-	lf = (nw > 1 && (w[1] & 0x8000L)) ? 1 : 0;
-	v = &zvar[zvidx[f->var0 + (nw - 1) * 2 + lf]];
-	if (v->mtab >= 0)
-		*mnem = zstr[ztab[v->mtab + (int)(zwordval(1, w, nw) & 0xFL)]];
-	else
-		*mnem = zstr[v->mnem];
-
+	zseg = f->segw;
+	zlong = zseg && zseg < nw && (w[zseg] & 0x8000L);
+	*mnem = zstr[f->mnem];
 	o = ops;
-	for (i = 0; i < (int)v->npiece; i++) {
-		p = &zpiece[v->piece + i];
-		switch (p->kind) {
-		case ZP_LIT:
-			o = zappend(o, zstr[p->arg]);
-			break;
-		case ZP_TAB:
-			if (p->src == 0)
-				word = w[0] & 0xFFFFL;
-			else {
-				idx = zwordidx((int)p->src, w, nw);
-				word = zwordval(idx, w, nw);
-			}
-			field = (word >> p->shift) & ((1L << p->width) - 1);
-			o = zappend(o, zstr[ztab[p->arg + (int)field]]);
-			break;
-		case ZP_FMT:
-			o = zstyle(o, (int)p->arg, (int)p->src, w[0] & 0xFFFFL,
-				   w, nw, pc);
-			break;
-		}
+	for (i = 0; i < (int)f->nop; i++) {
+		p = &zop[f->op + i];
+		if (i)
+			*o++ = ',';
+		o = zoperand(o, p, pc);
+		if (f->alt && p->kind == ZK_SHIFT && zcount(p) < 0)
+			*mnem = zstr[f->alt];
 	}
-
-	wc = f->wc;
-	if ((f->flags & 1) && wc >= 3 && nw >= 2 && (w[1] & 0x8000L) == 0)
-		wc--;
-	if ((f->flags & 2) && wc >= 4 && nw >= 3 && (w[2] & 0x8000L) == 0)
-		wc--;
-	return wc;
+	*o = '\0';
+	return f->nw + zlong;
 }

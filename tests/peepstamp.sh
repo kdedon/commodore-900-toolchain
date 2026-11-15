@@ -28,7 +28,7 @@ body() { # <name>
 	"$CC0" $VAR "$T/$1.c" "$T/$1.z0" $INC 2>/dev/null && "$CC1" $VAR "$T/$1.z0" "$T/$1.z1" &&
 	"$CC2" 0010 "$T/$1.z1" "$T/$1.o" "$T/$1.scr" 0 || { echo "  peepstamp: compile FAIL"; exit 1; }
 	"$DIS" -v -fn _doprnt_ "$T/$1.o" | sed 1d |
-		sed -E 's/^ *[0-9a-f]+: //; s/0x[0-9A-F]{2}:0x[0-9A-F]{4}/m/g; s/^CALR /CALL /' > "$T/$1.dis"
+		sed -E 's/^ *[0-9a-f]+: //; s/0x[0-9A-F]{2}:0x[0-9A-F]{2}([0-9A-F]{2})?/m/g; s/^CALR /CALL /' > "$T/$1.dis"
 }
 body all
 body one

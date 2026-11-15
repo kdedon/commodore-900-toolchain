@@ -1,8 +1,7 @@
 /*
  * z8kdump -- dump this decoder's answer for every first word, under whatever
- * contexts are fed to it.  It exists for the gate that compares this C decoder
- * against the one the table was generated from: a mis-derived field then shows
- * up as a differing line rather than as a wrong answer nobody looks at.
+ * contexts are fed to it.  Two dumps, before and after a table change, show
+ * every word whose text or length the change moved.
  *
  *	z8kdump < CONTEXTS
  *

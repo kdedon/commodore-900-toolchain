@@ -47,17 +47,42 @@ cost() {	# type "<expression>" ceiling
 	fi
 }
 
-cost int		'sa[j] * sb[j]'				127
-cost int		'sa[j] / sb[j]'				177
-cost int		'sa[j] % sb[j]'				177
-cost unsigned		'ua[j] * ub[j]'				127
-cost unsigned		'ua[j] / ub[j]'				146
-cost unsigned		'ua[j] % ub[j]'				144
+shclk() {	# "<shift instruction>": clocks of a call to it and back
+	printf '\t.globl\tsh_\nsh_:\n\t%s\n\tret\n' "$1" > "$T/s.s"
+	cat > "$T/t.c" <<-EOF
+	mark1() { }
+	mark2() { _exit(0); }
+	main() { mark1(); sh(); mark2(); return 0; }
+	EOF
+	"$CCZ" -o "$T/t" "$T/t.c" "$T/s.s" >/dev/null 2>&1 \
+		&& python3 "$H/tests/fpcycles.py" "$N2" "$DIS" "$H/tests/z8000-cycles.tab" "$T/t"
+}
+
+# A static byte shift's count is the low byte of its second word, signed in bit 7
+# (00FF is a right shift by 1), so a right shift costs what the left one does.
+bshift() {	# right-form left-form
+	r=$(shclk "$1"); l=$(shclk "$2")
+	if [ -n "$r" ] && [ "${r%% *}" = "${l%% *}" ]; then
+		pass=$((pass+1)); printf '  %-32s %5s =  %5s  PASS\n' "$(echo "$1" | tr "\t" " ")" "${r%% *}" "${l%% *}"
+	else
+		fail=$((fail+1)); printf '  %-32s %5s != %5s  FAIL\n' "$(echo "$1" | tr "\t" " ")" "${r%% *}" "${l%% *}"
+	fi
+}
+bshift 'srlb	rl0,$1'	'sllb	rl0,$1'
+bshift 'srab	rh1,$8'	'slab	rh1,$8'
+
+# A MULT/DIV with an indexed operand costs the X clocks, one more than DA.
+cost int		'sa[j] * sb[j]'				128
+cost int		'sa[j] / sb[j]'				178
+cost int		'sa[j] % sb[j]'				178
+cost unsigned		'ua[j] * ub[j]'				128
+cost unsigned		'ua[j] / ub[j]'				147
+cost unsigned		'ua[j] % ub[j]'				145
 cost unsigned		'ua[j] / cb[j]'				186
 cost unsigned		'ua[j] % cb[j]'				186
-cost long		'(long)sa[j] * sb[j]'			130
+cost long		'(long)sa[j] * sb[j]'			131
 cost long		'(long)sa[j] * 1000'			115
-cost long		'(long)sa[j] * cb[j]'			130
+cost long		'(long)sa[j] * cb[j]'			131
 cost 'unsigned long'	'(unsigned long)ua[j] * 15'		124
 cost 'unsigned long'	'(unsigned long)ua[j] * 80'		125
 cost 'unsigned long'	'(unsigned long)ua[j] * cb[j]'		151
@@ -71,7 +96,7 @@ cost long		'la[j] / 65536L'			134
 cost long		'la[j] % 65536L'			87
 cost long		'la[j] / 2'				86
 cost 'unsigned long'	'(unsigned long)(j & 1 ? sa[j] : sb[j]) * ua[j]' 189
-cost long		'(long)(j & 1 ? sa[j] : sb[j]) * sb[j]'	150
+cost long		'(long)(j & 1 ? sa[j] : sb[j]) * sb[j]'	151
 cost 'unsigned long'	'(unsigned long)(j & 1 ? ua[j] : ub[j]) * ub[j]' 198
 cost long		'(long)(j & 1 ? ua[j] : 7) * sb[j]'	173
 cost unsigned		'ua[j] / (j & 1 ? 10 : 300)'		185

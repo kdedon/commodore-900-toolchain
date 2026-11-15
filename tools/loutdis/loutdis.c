@@ -7,9 +7,9 @@
  *	loutdis FILE -syms	the symbol table
  *	loutdis FILE -fn NAME	disassemble one function, by symbol
  *
- * The instruction knowledge is not here: it is in z8ktab.h, generated from a
- * verified decoder, and z8kdis.c applies it.  This file reads the container and
- * prints.
+ * The instruction knowledge is not here: it is in z8ktab.h, generated from the
+ * assembler's own tables by gentab.py, and z8kdis.c applies it.  This file reads
+ * the container and prints.
  *
  * Header (n.out.h): short l_magic,l_flag,l_machine,l_tbase; long l_ssize[9];
  * long l_entry -- 48 bytes, text following.  Code words are big-endian, but the
@@ -246,64 +246,6 @@ int n;
 	}
 }
 
-/* cmpreg names the register the block compares really compare against memory.
- * Their second word is `0000 rrrr dddd cccc': rrrr is the counter and dddd the
- * compared register -- a BYTE register in the B forms.  The decoder prints that
- * field as @RRd rounded down to an even pair, which reads as an access through
- * a register pair the instruction never touches. */
-static char *
-cmpreg(mnem, w, nw, buf)
-char *mnem;
-unsigned long *w;
-int nw;
-char *buf;
-{
-	static char *word[4] = { "CPI", "CPD", "CPIR", "CPDR" };
-	static char *byte[4] = { "CPIB", "CPDB", "CPIRB", "CPDRB" };
-	int i, d;
-
-	if (nw < 2)
-		return 0;
-	d = (int)((w[1] >> 4) & 0xF);
-	for (i = 0; i < 4; i++)
-		if (strcmp(mnem, byte[i]) == 0) {
-			if (d < 8)
-				sprintf(buf, "RH%d", d);
-			else
-				sprintf(buf, "RL%d", d - 8);
-			return buf;
-		}
-	for (i = 0; i < 4; i++)
-		if (strcmp(mnem, word[i]) == 0) {
-			sprintf(buf, "R%d", d);
-			return buf;
-		}
-	return 0;
-}
-
-/* fixops rewrites the first operand of a block compare to that register. */
-static void
-fixops(mnem, ops, w, nw)
-char *mnem, *ops;
-unsigned long *w;
-int nw;
-{
-	char buf[8], tmp[ZOPSMAX];
-	char *r, *comma;
-
-	r = cmpreg(mnem, w, nw, buf);
-	if (r == 0)
-		return;
-	comma = strchr(ops, ',');
-	if (comma == 0) {
-		strcpy(ops, r);
-		return;
-	}
-	strcpy(tmp, comma);
-	strcpy(ops, r);
-	strcat(ops, tmp);
-}
-
 static int
 hassub(s, sub)
 char *s, *sub;
@@ -354,7 +296,6 @@ long *counts;
 		for (i = 0; i < 12; i++)
 			if (strcmp(mnem, hist[i]) == 0)
 				counts[i]++;
-		fixops(mnem, ops, w + pc, nw);
 		if (endswith(mnem, 'L') || hassub(ops, "@RR") ||
 		    (hassub(ops, "RR") && hassub(ops, "(")))
 			(*far)++;

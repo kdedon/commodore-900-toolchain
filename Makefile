@@ -5,6 +5,7 @@
 #                   -> host/build
 #   make check      the regression suite + the table gates (implies all)
 #   make check-isa  the opcode inventory vs MWC's own assembler table
+#   make loutdis-table  regenerate the disassembler's table from the assembler's
 #   make check-mi   every MI divergence from the donor is justified
 #   make check-shims  the host shims still match src/cc
 #   make check-paths  every tracked name survives a Windows checkout
@@ -28,7 +29,7 @@
 SHELL = /bin/sh
 .DELETE_ON_ERROR:
 .PHONY: all cc as ld slgen libc1 check check-isa check-cc3tab check-mi check-shims check-sources \
-	check-paths \
+	check-paths check-loutdis-table loutdis-table \
 	mi-baseline mi-table \
 	check-selfhost check-native check-tools check-libc \
 	deps os-fallback env-fallback packages clean env env-ours env-inherited env-mwc1985 \
@@ -155,7 +156,7 @@ $(B)/slgen: src/slgen/slgen.c
 #
 # tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
 # ld, ld -r, the native ar's index, loutid, loutdis and nlist().
-check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
+check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-loutdis-table check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
 	sh tests/regress.sh
@@ -171,6 +172,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/blkmove-variant.sh
 	sh tests/lssaddr-variant.sh
 	sh tests/asbytes.sh
+	sh tests/disround.sh
 	sh tests/as-locptr.sh
 	sh tests/shlib-format.sh
 	sh tests/shlib-client.sh
@@ -303,6 +305,15 @@ mi-table:
 check-isa:
 	python3 tools/isa/check_pst.py --check
 
+# z8ktab.h is generated from the assembler's pst.c and asmch.h by gentab.py,
+# whose encoders transcribe machine.c.  loutdis-table rewrites it; the check
+# asserts the committed table is what the generator writes, and
+# tests/disround.sh that the assembler encodes every form as the table says.
+loutdis-table:
+	python3 tools/loutdis/gentab.py
+check-loutdis-table:
+	python3 tools/loutdis/gentab.py --check
+
 # cc3 reads the same CODE stream cc2 does, from its own copy of the instruction
 # table; a copy that drifts desynchronizes the reader rather than mis-printing a
 # line.  What this cannot see is the DECODER moving under a self-consistent set
@@ -322,8 +333,8 @@ check-cc3tab:
 #   lout2cpm        l.out -> CP/M-8000 x.out (commodore-900-cpm compiles its
 #                   own copy of the source rather than consuming this one)
 #   loutdis         l.out disassembler.  Its instruction knowledge is entirely
-#                   in tools/loutdis/z8ktab.h, generated from a verified
-#                   decoder that is not reachable from this repository.
+#                   in tools/loutdis/z8ktab.h, which tools/loutdis/gentab.py
+#                   generates from the assembler's tables (`make loutdis-table').
 TOOLBIN = $(B)/tools
 TOOLCC  = cc -std=gnu89 -g -w
 M32     = gcc -m32

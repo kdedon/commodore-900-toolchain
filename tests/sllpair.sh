@@ -54,9 +54,9 @@ shape() { # <fn> <shift egrep>
 		fail=1
 	fi
 }
-shape sll_ 'SLL +R[0-9]+,3$'
+shape sll_ 'SLL +R[0-9]+,#3$'
 shape sdl_ 'SDL +R[0-9]+,R[0-9]+$'
-shape srl_ 'SLL +R[0-9]+,-2$'
+shape srl_ 'SRL +R[0-9]+,#2$'
 
 [ -n "$N2" ] || { echo "  sllpair: no guest runner"; exit 2; }
 cp "$T/f.c" "$T/r.c"
