@@ -105,6 +105,7 @@ typedef unsigned offset;
 #define	S_CPS	100
 #define	S_OUT	101
 #define	S_SEGM	102
+#define	S_MREQ	103
 
 #define	S_L	040		/* Long instruction */
 #define	S_2	001		/* Mask for register pair */

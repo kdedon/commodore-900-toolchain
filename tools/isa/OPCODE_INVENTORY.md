@@ -43,7 +43,7 @@ Distinct mnemonics: **162**; (mnemonic,shape) groups: **514**.
 | BITB | `Rb,R` | `0x2600` | `0x000F` | 2 | 10 | 16 | `0x2600` RH0,R0 |
 | BITB | `addr(R),#i` | `0x6600` | `0x00FF` | 2 | 11 | 240 | `0x6610` 0x00:0x0000(R1),#0 |
 | BITB | `addr,#i` | `0x6600` | `0x000F` | 2 | 10 | 16 | `0x6600` 0x00:0x0000,#0 |
-| CALL | `@R` | `0x1F00` | `0x00FF` | 1 | 10 | 256 | `0x1F00` @R0 |
+| CALL | `@RR` | `0x1F00` | `0x00FF` | 1 | 10 | 256 | `0x1F00` @RR0 |
 | CALL | `addr` | `0x5F00` | `0x000F` | 2 | 12 | 16 | `0x5F00` 0x00:0x0000 |
 | CALL | `addr(R)` | `0x5F00` | `0x00FF` | 2 | 13 | 240 | `0x5F10` 0x00:0x0000(R1) |
 | CALR | `addr` | `0xD000` | `0x0FFF` | 1 | 10 | 4096 | `0xD000` 0x01:0x0002 |
@@ -143,11 +143,11 @@ Distinct mnemonics: **162**; (mnemonic,shape) groups: **514**.
 | EXTSB | `RR` | `0xB100` | `0x00F0` | 1 | 11 | 16 | `0xB100` RR0 |
 | EXTSL | `RR` | `0xB107` | `0x00F0` | 1 | 11 | 16 | `0xB107` RR0 |
 | HALT | `` | `0x7A00` | `0x00FF` | 1 | 8 | 256 | `0x7A00`  |
-| ILLEGAL | `` | `0x1000` | `0xEFFF` | 1 | 4 | 2493 | `0x1C00`  |
+| ILLEGAL | `` | `0x1000` | `0xEFFF` | 1 | 4 | 2492 | `0x1C00`  |
 | ILLEGAL | `@R` | `0x0C00` | `0x01FF` | 1 | 4 | 272 | `0x0C03` @R0 |
 | ILLEGAL | `@RR,@RR,R` | `0x3800` | `0x83FF` | 2 | 4 | 448 | `0x3A0C` @RR0,@RR0,R0 |
 | ILLEGAL | `R` | `0x8D08` | `0x00F7` | 1 | 4 | 112 | `0x8D09` R0 |
-| ILLEGAL | `RR` | `0x9000` | `0x2DFF` | 1 | 4 | 448 | `0x9C00` RR0 |
+| ILLEGAL | `RR` | `0xB100` | `0x00FF` | 1 | 4 | 208 | `0xB101` RR0 |
 | ILLEGAL | `Rb` | `0x8C00` | `0x00FF` | 1 | 4 | 144 | `0x8C03` RH0 |
 | ILLEGAL | `Rb,0` | `0xB205` | `0x00F8` | 2 | 4 | 32 | `0xB205` RH0,0 |
 | ILLEGAL | `Rb,R` | `0xB207` | `0x00F8` | 2 | 4 | 32 | `0xB207` RH0,R0 |
@@ -170,52 +170,52 @@ Distinct mnemonics: **162**; (mnemonic,shape) groups: **514**.
 | INIR | `@RR,@RR,R` | `0x3B00` | `0x00F0` | 2 | 21 | 16 | `0x3B00` @RR0,@RR0,R0 |
 | INIRB | `@RR,@RR,R` | `0x3A00` | `0x00F0` | 2 | 21 | 16 | `0x3A00` @RR0,@RR0,R0 |
 | IRET | `` | `0x7B00` | `0x0000` | 1 | 13 | 1 | `0x7B00`  |
-| JP | `EQ,@R` | `0x1E60` | `0x000F` | 1 | 10 | 16 | `0x1E60` EQ,@R0 |
+| JP | `EQ,@RR` | `0x1E06` | `0x00F0` | 1 | 10 | 16 | `0x1E06` EQ,@RR0 |
 | JP | `EQ,addr` | `0x5E06` | `0x0000` | 2 | 7 | 1 | `0x5E06` EQ,0x00:0x0000 |
 | JP | `EQ,addr(R)` | `0x5E06` | `0x00F0` | 2 | 8 | 15 | `0x5E16` EQ,0x00:0x0000(R1) |
-| JP | `F,@R` | `0x1E00` | `0x000F` | 1 | 10 | 16 | `0x1E00` F,@R0 |
+| JP | `F,@RR` | `0x1E00` | `0x00F0` | 1 | 10 | 16 | `0x1E00` F,@RR0 |
 | JP | `F,addr` | `0x5E00` | `0x0000` | 2 | 7 | 1 | `0x5E00` F,0x00:0x0000 |
 | JP | `F,addr(R)` | `0x5E00` | `0x00F0` | 2 | 8 | 15 | `0x5E10` F,0x00:0x0000(R1) |
-| JP | `GE,@R` | `0x1E90` | `0x000F` | 1 | 10 | 16 | `0x1E90` GE,@R0 |
+| JP | `GE,@RR` | `0x1E09` | `0x00F0` | 1 | 10 | 16 | `0x1E09` GE,@RR0 |
 | JP | `GE,addr` | `0x5E09` | `0x0000` | 2 | 7 | 1 | `0x5E09` GE,0x00:0x0000 |
 | JP | `GE,addr(R)` | `0x5E09` | `0x00F0` | 2 | 8 | 15 | `0x5E19` GE,0x00:0x0000(R1) |
-| JP | `GT,@R` | `0x1EA0` | `0x000F` | 1 | 10 | 16 | `0x1EA0` GT,@R0 |
+| JP | `GT,@RR` | `0x1E0A` | `0x00F0` | 1 | 10 | 16 | `0x1E0A` GT,@RR0 |
 | JP | `GT,addr` | `0x5E0A` | `0x0000` | 2 | 7 | 1 | `0x5E0A` GT,0x00:0x0000 |
 | JP | `GT,addr(R)` | `0x5E0A` | `0x00F0` | 2 | 8 | 15 | `0x5E1A` GT,0x00:0x0000(R1) |
-| JP | `LE,@R` | `0x1E20` | `0x000F` | 1 | 10 | 16 | `0x1E20` LE,@R0 |
+| JP | `LE,@RR` | `0x1E02` | `0x00F0` | 1 | 10 | 16 | `0x1E02` LE,@RR0 |
 | JP | `LE,addr` | `0x5E02` | `0x0000` | 2 | 7 | 1 | `0x5E02` LE,0x00:0x0000 |
 | JP | `LE,addr(R)` | `0x5E02` | `0x00F0` | 2 | 8 | 15 | `0x5E12` LE,0x00:0x0000(R1) |
-| JP | `LT,@R` | `0x1E10` | `0x000F` | 1 | 10 | 16 | `0x1E10` LT,@R0 |
+| JP | `LT,@RR` | `0x1E01` | `0x00F0` | 1 | 10 | 16 | `0x1E01` LT,@RR0 |
 | JP | `LT,addr` | `0x5E01` | `0x0000` | 2 | 7 | 1 | `0x5E01` LT,0x00:0x0000 |
 | JP | `LT,addr(R)` | `0x5E01` | `0x00F0` | 2 | 8 | 15 | `0x5E11` LT,0x00:0x0000(R1) |
-| JP | `MI,@R` | `0x1E50` | `0x000F` | 1 | 10 | 16 | `0x1E50` MI,@R0 |
+| JP | `MI,@RR` | `0x1E05` | `0x00F0` | 1 | 10 | 16 | `0x1E05` MI,@RR0 |
 | JP | `MI,addr` | `0x5E05` | `0x0000` | 2 | 7 | 1 | `0x5E05` MI,0x00:0x0000 |
 | JP | `MI,addr(R)` | `0x5E05` | `0x00F0` | 2 | 8 | 15 | `0x5E15` MI,0x00:0x0000(R1) |
-| JP | `NE,@R` | `0x1EE0` | `0x000F` | 1 | 10 | 16 | `0x1EE0` NE,@R0 |
+| JP | `NE,@RR` | `0x1E0E` | `0x00F0` | 1 | 10 | 16 | `0x1E0E` NE,@RR0 |
 | JP | `NE,addr` | `0x5E0E` | `0x0000` | 2 | 7 | 1 | `0x5E0E` NE,0x00:0x0000 |
 | JP | `NE,addr(R)` | `0x5E0E` | `0x00F0` | 2 | 8 | 15 | `0x5E1E` NE,0x00:0x0000(R1) |
-| JP | `NOV,@R` | `0x1EC0` | `0x000F` | 1 | 10 | 16 | `0x1EC0` NOV,@R0 |
+| JP | `NOV,@RR` | `0x1E0C` | `0x00F0` | 1 | 10 | 16 | `0x1E0C` NOV,@RR0 |
 | JP | `NOV,addr` | `0x5E0C` | `0x0000` | 2 | 7 | 1 | `0x5E0C` NOV,0x00:0x0000 |
 | JP | `NOV,addr(R)` | `0x5E0C` | `0x00F0` | 2 | 8 | 15 | `0x5E1C` NOV,0x00:0x0000(R1) |
-| JP | `OV,@R` | `0x1E40` | `0x000F` | 1 | 10 | 16 | `0x1E40` OV,@R0 |
+| JP | `OV,@RR` | `0x1E04` | `0x00F0` | 1 | 10 | 16 | `0x1E04` OV,@RR0 |
 | JP | `OV,addr` | `0x5E04` | `0x0000` | 2 | 7 | 1 | `0x5E04` OV,0x00:0x0000 |
 | JP | `OV,addr(R)` | `0x5E04` | `0x00F0` | 2 | 8 | 15 | `0x5E14` OV,0x00:0x0000(R1) |
-| JP | `PL,@R` | `0x1ED0` | `0x000F` | 1 | 10 | 16 | `0x1ED0` PL,@R0 |
+| JP | `PL,@RR` | `0x1E0D` | `0x00F0` | 1 | 10 | 16 | `0x1E0D` PL,@RR0 |
 | JP | `PL,addr` | `0x5E0D` | `0x0000` | 2 | 7 | 1 | `0x5E0D` PL,0x00:0x0000 |
 | JP | `PL,addr(R)` | `0x5E0D` | `0x00F0` | 2 | 8 | 15 | `0x5E1D` PL,0x00:0x0000(R1) |
-| JP | `T,@R` | `0x1E80` | `0x000F` | 1 | 10 | 16 | `0x1E80` T,@R0 |
+| JP | `T,@RR` | `0x1E08` | `0x00F0` | 1 | 10 | 16 | `0x1E08` T,@RR0 |
 | JP | `T,addr` | `0x5E08` | `0x0000` | 2 | 7 | 1 | `0x5E08` T,0x00:0x0000 |
 | JP | `T,addr(R)` | `0x5E08` | `0x00F0` | 2 | 8 | 15 | `0x5E18` T,0x00:0x0000(R1) |
-| JP | `UGE,@R` | `0x1EF0` | `0x000F` | 1 | 10 | 16 | `0x1EF0` UGE,@R0 |
+| JP | `UGE,@RR` | `0x1E0F` | `0x00F0` | 1 | 10 | 16 | `0x1E0F` UGE,@RR0 |
 | JP | `UGE,addr` | `0x5E0F` | `0x0000` | 2 | 7 | 1 | `0x5E0F` UGE,0x00:0x0000 |
 | JP | `UGE,addr(R)` | `0x5E0F` | `0x00F0` | 2 | 8 | 15 | `0x5E1F` UGE,0x00:0x0000(R1) |
-| JP | `UGT,@R` | `0x1EB0` | `0x000F` | 1 | 10 | 16 | `0x1EB0` UGT,@R0 |
+| JP | `UGT,@RR` | `0x1E0B` | `0x00F0` | 1 | 10 | 16 | `0x1E0B` UGT,@RR0 |
 | JP | `UGT,addr` | `0x5E0B` | `0x0000` | 2 | 7 | 1 | `0x5E0B` UGT,0x00:0x0000 |
 | JP | `UGT,addr(R)` | `0x5E0B` | `0x00F0` | 2 | 8 | 15 | `0x5E1B` UGT,0x00:0x0000(R1) |
-| JP | `ULE,@R` | `0x1E30` | `0x000F` | 1 | 10 | 16 | `0x1E30` ULE,@R0 |
+| JP | `ULE,@RR` | `0x1E03` | `0x00F0` | 1 | 10 | 16 | `0x1E03` ULE,@RR0 |
 | JP | `ULE,addr` | `0x5E03` | `0x0000` | 2 | 7 | 1 | `0x5E03` ULE,0x00:0x0000 |
 | JP | `ULE,addr(R)` | `0x5E03` | `0x00F0` | 2 | 8 | 15 | `0x5E13` ULE,0x00:0x0000(R1) |
-| JP | `ULT,@R` | `0x1E70` | `0x000F` | 1 | 10 | 16 | `0x1E70` ULT,@R0 |
+| JP | `ULT,@RR` | `0x1E07` | `0x00F0` | 1 | 10 | 16 | `0x1E07` ULT,@RR0 |
 | JP | `ULT,addr` | `0x5E07` | `0x0000` | 2 | 7 | 1 | `0x5E07` ULT,0x00:0x0000 |
 | JP | `ULT,addr(R)` | `0x5E07` | `0x00F0` | 2 | 8 | 15 | `0x5E17` ULT,0x00:0x0000(R1) |
 | JR | `EQ,addr` | `0xE600` | `0x00FF` | 1 | 6 | 256 | `0xE600` EQ,0x01:0x0002 |
@@ -306,7 +306,7 @@ Distinct mnemonics: **162**; (mnemonic,shape) groups: **514**.
 | LDPS | `addr` | `0x7900` | `0x000F` | 2 | 16 | 16 | `0x7900` 0x00:0x0000 |
 | LDPS | `addr(R)` | `0x7900` | `0x00FF` | 2 | 16 | 240 | `0x7910` 0x00:0x0000(R1) |
 | MBIT | `` | `0x7B0A` | `0x0000` | 1 | 7 | 1 | `0x7B0A`  |
-| MREQ | `` | `0x7B0D` | `0x00F0` | 1 | 12 | 15 | `0x7B1D`  |
+| MREQ | `` | `0x7B0D` | `0x00F0` | 1 | 12 | 16 | `0x7B0D`  |
 | MRES | `` | `0x7B09` | `0x0000` | 1 | 5 | 1 | `0x7B09`  |
 | MSET | `` | `0x7B08` | `0x0000` | 1 | 5 | 1 | `0x7B08`  |
 | MULT | `RR,#i` | `0x1900` | `0x000F` | 2 | 70 | 16 | `0x1900` RR0,#0x0000 |
@@ -491,7 +491,7 @@ Distinct mnemonics: **162**; (mnemonic,shape) groups: **514**.
 | TESTB | `addr` | `0x4C04` | `0x0000` | 2 | 11 | 1 | `0x4C04` 0x00:0x0000 |
 | TESTB | `addr(R)` | `0x4C04` | `0x00F0` | 2 | 12 | 15 | `0x4C14` 0x00:0x0000(R1) |
 | TESTL | `@R` | `0x1C08` | `0x00F0` | 1 | 13 | 16 | `0x1C08` @R0 |
-| TESTL | `RR` | `0x9C08` | `0x00F0` | 1 | 13 | 16 | `0x9C08` RR0 |
+| TESTL | `RR` | `0x9C00` | `0x00FF` | 1 | 13 | 256 | `0x9C00` RR0 |
 | TESTL | `addr` | `0x5C08` | `0x0000` | 2 | 16 | 1 | `0x5C08` 0x00:0x0000 |
 | TESTL | `addr(R)` | `0x5C08` | `0x00F0` | 2 | 17 | 15 | `0x5C18` 0x00:0x0000(R1) |
 | TRDB | `@RR,@RR,R` | `0xB808` | `0x00F0` | 2 | 25 | 16 | `0xB808` @RR0,@RR0,R0 |

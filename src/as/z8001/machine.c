@@ -28,6 +28,7 @@ register struct sym *sp;
 	case S_ODD:
 	case S_HALT:
 	case S_R:
+	case S_MREQ:
 	case S_RR:
 	case S_RET:
 	case S_SC:
@@ -68,7 +69,7 @@ register struct sym *sp;
 	char id[NCPLN];
 	struct expr cnt, dst, src;
 	int c, cc, disp;
-	int addr, flag, kind, mask;
+	int addr, flag, kind, mask, max;
 	int mode, type;
 
 	op = sp->s_addr;
@@ -102,6 +103,13 @@ register struct sym *sp;
 	case S_R:
 		getaddr(&dst);
 		outxx(op, &dst, ROK|UP4|flag);
+		break;
+
+	case S_MREQ:
+		getaddr(&dst);
+		if (mof(dst) != R)
+			aerr();
+		outaw(op | (rof(dst)<<4));
 		break;
 
 	case S_RR:
@@ -305,8 +313,14 @@ register struct sym *sp;
 			addr = getaim();
 		if (mof(dst) != R)
 			aerr();
+		/* Left shifts take 0..max, right shifts 1..max. */
+		max = (op&0xFF00)==0xB200 ? 8 : (op&04) ? 32 : 16;
+		if (addr > max || addr < (kind == S_SRA))
+			aerr();
 		if (kind == S_SRA)
 			addr = -addr;
+		if (max == 8)
+			addr &= 0377;	/* byte forms: 00 in the high byte */
 		outaw(op | (rof(dst)<<4));
 		outaw(addr);
 		break;
@@ -849,6 +863,9 @@ register struct expr *esp;
 		expr(&reg, 0);
 		if (getnb() != ')')
 			qerr();
+		/* No BA or BX on register 0: in BA a 0 field means relative. */
+		if (esp->e_type==E_AREG && esp->e_addr==0)
+			aerr();
 		if (esp->e_type==E_AREG && reg.e_type!=E_AREG) {
 			t = BA + (int)esp->e_addr;
 			*esp = reg;

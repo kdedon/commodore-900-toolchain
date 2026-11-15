@@ -29,7 +29,7 @@ which operand text.
   generated, so read them there rather than trusting this paragraph.
 - **`PST_CROSSCHECK.md`** — diff of the inventory against MWC's own assembler
   opcode table, `src/as/z8001/pst.c` (via `check_pst.py`). **Result: 155
-  matched, 0 mismatches** (149 exact, 6 via the register-form bit `pst|0x8000`),
+  matched, 0 mismatches** (145 exact, 10 via the register-form bit `pst|0x8000`),
   plus 2 placeholders — `LDM` and `ADDB`, whose pst.c base is 0x0000 because
   machine.c builds the opcode. Locks the three-way agreement: verified sim
   decoder · its own `OPCODE_VERIFICATION.md`, in a checkout that is not part

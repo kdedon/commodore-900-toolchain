@@ -277,8 +277,48 @@ outhere()
 	return (olen[SCODE]);
 }
 
-/* debug-table hooks: object mode emits no debug records. */
-outdlab(refnum, class) {}
+/* debug-table hooks: object mode emits no debug records, but reads past them. */
+outdlab(refnum, class)
+{
+	register int	c;
+	sizeof_t	n;
+
+	iget();
+	if (class >= DC_AUTO && class < DC_MOS)
+		iget();
+	else if (class >= DC_MOS) {
+		bget();
+		bget();
+		iget();
+	}
+	while ((c = bget()) != 0 && c != EOF)
+		;
+	for (;;) {
+		c = bget();
+		n = zget();
+		switch (c) {
+		case DT_STRUCT:
+		case DT_UNION:
+		case DT_ENUM:
+		case DD_PTR:
+		case DD_FUNC:
+		case DD_ARRAY:
+			continue;
+		case DX_MEMBS:
+			while (--n >= 0)
+				outdlab(refnum, bget());
+			return;
+		case DX_NAME:
+			while ((c = bget()) != 0 && c != EOF)
+				;
+			return;
+		default:
+			if (c > DT_VOID)
+				cbotch("bad debug type %d", c);
+			return;
+		}
+	}
+}
 outdloc(refnum) {}
 
 /* 4-byte PDP-canonical field: high word first, each word little-endian --

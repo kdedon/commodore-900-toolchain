@@ -74,7 +74,7 @@ new(n)
 
 	if ((p = malloc(n)) == NULL) {
 		fprintf(stderr, "Out of space.\n");
-		exit(1);
+		aexit();
 	}
 	return (p);
 }

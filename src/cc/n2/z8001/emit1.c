@@ -428,7 +428,10 @@ register INS	*ip;
 
 		if (sty == OF_SHIFT) {		/* SLL/SLA Rd,#count -- 2-word, signed count */
 			outw(base | dn<<4);
-			outw((unsigned short)s->a_value);
+			if ((opp->op_flag & OP_BYTE) != 0)	/* byte forms: 00 in the high byte */
+				outw((unsigned short)s->a_value & 0xFF);
+			else
+				outw((unsigned short)s->a_value);
 			return;
 		}
 		if (sty == OF_SHIFTD) {		/* SDL/SDA Rd,Rs -- dynamic (count in Rs) */

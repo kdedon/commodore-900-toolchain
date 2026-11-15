@@ -118,7 +118,7 @@ char *argv[];
 					break;
 				if ((sfp = fopen(sfn, "r")) == NULL) {
 					fprintf(stderr, copen, sfn);
-					exit(1);
+					aexit();
 				}
 				if (nfile != 1)
 					ifn = sfn;
@@ -151,6 +151,7 @@ char *argv[];
 				putc('s', stderr);
 			fprintf(stderr, " detected.\n");
 		}
+		unlink(ofn);
 		exit(1);
 	}
 #if !RSX && !CPM
@@ -472,4 +473,16 @@ setinbss()
 	if (lp->l_seg==L_BSSI || lp->l_seg==L_BSSD)
 #endif
 		++inbss;
+}
+
+/*
+ * Exit on error, removing the open object.
+ */
+aexit()
+{
+	if (ofp != NULL) {
+		fclose(ofp);
+		unlink(ofn);
+	}
+	exit(1);
 }

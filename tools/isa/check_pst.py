@@ -66,6 +66,8 @@ for line in GEN.read_text().splitlines():
 # assemble time: 0x8000 = register-direct, 0x4000 = direct-address (DA). So a pst
 # base matches if {base, base|0x8000, base|0x4000} intersects the inventory set.
 FORMS = [(0x0000, "exact"), (0x8000, "+reg(0x80)"), (0x4000, "+DA(0x40)")]
+# S_R always ORs 0x8000, so the register form is the only one it can emit.
+FORMS_BY_FMT = {"S_R": [(0x8000, "+reg(0x80)")]}
 matched, mismatched, pst_only, special = [], [], [], []
 for MN, (base, sfmt, mod) in sorted(pst.items()):
     if MN not in inv:
@@ -74,8 +76,9 @@ for MN, (base, sfmt, mod) in sorted(pst.items()):
     if base == 0:                         # placeholder; opcode built specially in machine.c
         special.append((MN, base, sfmt, sorted(inv[MN])))
         continue
-    hit = next(((base | bit) for bit, _ in FORMS if (base | bit) in inv[MN]), None)
-    how = next((tag for bit, tag in FORMS if (base | bit) in inv[MN]), None)
+    forms = FORMS_BY_FMT.get(sfmt, FORMS)
+    hit = next(((base | bit) for bit, _ in forms if (base | bit) in inv[MN]), None)
+    how = next((tag for bit, tag in forms if (base | bit) in inv[MN]), None)
     if hit is not None:
         matched.append((MN, base, hit, how, sfmt))
     else:

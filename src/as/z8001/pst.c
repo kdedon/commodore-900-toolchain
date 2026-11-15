@@ -107,7 +107,7 @@ struct	sym	sym[] = {
 	{ 0,	"mset",		S_HALT,		0,	E_ACON,	0x7B08 },
 
 	{ 0,	"dab",		S_R,		0,	E_ACON,	0xB000 },
-	{ 0,	"mreq",		S_R,		0,	E_ACON,	0x7B0D },
+	{ 0,	"mreq",		S_MREQ,	0,	E_ACON,	0x7B0D },
 	{ 0,	"exts",		S_R,		S_2,	E_ACON,	0xB10A },
 	{ 0,	"extsb",	S_R,		0,	E_ACON,	0xB100 },
 	{ 0,	"extsl",	S_R,		S_4,	E_ACON,	0xB107 },

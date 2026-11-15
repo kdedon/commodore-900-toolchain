@@ -415,6 +415,6 @@ char *p;
 {
 	if (fwrite(p, s, n, ofp) != n) {
 		fprintf(stderr, "%s: I/O error.\n", ofn);
-		exit(1);
+		aexit();
 	}
 }

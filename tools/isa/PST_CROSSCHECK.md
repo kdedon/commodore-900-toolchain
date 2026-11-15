@@ -54,7 +54,7 @@ ORs the addressing hi-nibble 0x80/0x40 at assemble time).
 | CPSIB | `0xBA02` | `0xBA02` | exact | S_CPS |
 | CPSIR | `0xBB06` | `0xBB06` | exact | S_CPS |
 | CPSIRB | `0xBA06` | `0xBA06` | exact | S_CPS |
-| DAB | `0xB000` | `0xB000` | exact | S_R |
+| DAB | `0xB000` | `0xB000` | +reg(0x80) | S_R |
 | DEC | `0x2B00` | `0x2B00` | exact | S_DEC |
 | DECB | `0x2A00` | `0x2A00` | exact | S_DEC |
 | DI | `0x7C03` | `0x7C03` | exact | S_DI |
@@ -64,9 +64,9 @@ ORs the addressing hi-nibble 0x80/0x40 at assemble time).
 | EI | `0x7C07` | `0x7C07` | exact | S_DI |
 | EX | `0x2D00` | `0x2D00` | exact | S_EX |
 | EXB | `0x2C00` | `0x2C00` | exact | S_EX |
-| EXTS | `0xB10A` | `0xB10A` | exact | S_R |
-| EXTSB | `0xB100` | `0xB100` | exact | S_R |
-| EXTSL | `0xB107` | `0xB107` | exact | S_R |
+| EXTS | `0xB10A` | `0xB10A` | +reg(0x80) | S_R |
+| EXTSB | `0xB100` | `0xB100` | +reg(0x80) | S_R |
+| EXTSL | `0xB107` | `0xB107` | +reg(0x80) | S_R |
 | HALT | `0x7A00` | `0x7A00` | exact | S_HALT |
 | IN | `0x3D00` | `0x3D00` | exact | S_IN |
 | INB | `0x3C00` | `0x3C00` | exact | S_IN |
@@ -91,7 +91,7 @@ ORs the addressing hi-nibble 0x80/0x40 at assemble time).
 | LDL | `0x1400` | `0x1400` | exact | S_LD |
 | LDPS | `0x3900` | `0x3900` | exact | S_CALL |
 | MBIT | `0x7B0A` | `0x7B0A` | exact | S_HALT |
-| MREQ | `0x7B0D` | `0x7B0D` | exact | S_R |
+| MREQ | `0x7B0D` | `0x7B0D` | exact | S_MREQ |
 | MRES | `0x7B09` | `0x7B09` | exact | S_HALT |
 | MSET | `0x7B08` | `0x7B08` | exact | S_HALT |
 | MULT | `0x1900` | `0x1900` | exact | S_RSRC |

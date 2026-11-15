@@ -92,7 +92,7 @@ register struct expr *esp;
 			continue;
 		}
 		fprintf(stderr, "Internal error, c=%d in expr.\n", c);
-		exit( 1);
+		aexit();
 	}
 	unget(c);
 }

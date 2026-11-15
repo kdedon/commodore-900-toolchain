@@ -133,6 +133,8 @@ $(B)/slgen: src/slgen/slgen.c
 #
 # tests/initvol.sh: a structure member's initializer is volatile only when the
 # structure or the member is.
+#
+# tests/vdebug.sh: a -VDEBUG program compiles and runs.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
@@ -167,6 +169,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/volatile.sh
 	sh tests/volmem.sh
 	sh tests/initvol.sh
+	sh tests/vdebug.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it
