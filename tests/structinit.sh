@@ -70,7 +70,7 @@ struct R { short a, b; };
 struct B { unsigned x:3, y:5; int z; };
 struct O { int k; struct R r; char s[4]; };
 struct P { char *p; int n; };
-int l1() { struct R o; o.a = 1; return o.a; }
+int l1() { struct R o; o.a = 1; o.b = 0; return o.a; }
 int l2() { struct R o; o.a = 1; o.b = 2; return o.b; }
 EOF
 

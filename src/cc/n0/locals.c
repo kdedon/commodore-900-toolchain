@@ -101,7 +101,7 @@ locals()
 						if (s == ASSIGN) {
 							lex();
 							putautos();
-							init(sp, sp->s_dp, (sizeof_t)0, 0);
+							iauto(sp);
 						}
 					}
 				}

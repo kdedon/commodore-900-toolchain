@@ -197,6 +197,32 @@ register TREE	*tp;
 }
 
 /*
+ * The bytes of code that zero 'n' bytes at 'bo' in automatic aggregate 'sp',
+ * as cc1 does it (ZCLRINL in mch.h).  Frame offsets have the parity of the
+ * address: the frame size is even.
+ */
+sizeof_t
+zcost(sp, bo, n)
+SYM		*sp;
+sizeof_t	bo, n;
+{
+	register sizeof_t c;
+
+	c = 0;
+	if (n > 0 && ((sp->s_value + bo) & 1) != 0) {
+		c += ZCLRSTO;
+		--n;
+	}
+	if ((n & 1) != 0) {
+		c += ZCLRSTO;
+		--n;
+	}
+	if (n <= ZCLRINL)
+		return c + n/2*ZCLRSTO;
+	return c + ZCLRBLK + (n/2 - 1 > ZCLRLDK ? 2 : 0);
+}
+
+/*
  * Empty the local binding stack and mark the registers usable
  * for register variables (SI and DI) as available.
  */

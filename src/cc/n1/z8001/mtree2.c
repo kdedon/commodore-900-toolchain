@@ -1450,6 +1450,113 @@ register TREE	*tp;
 }
 
 /*
+ * Append store `tp' to comma chain `chain'.
+ */
+static TREE *
+blkchain(chain, tp)
+register TREE	*chain, *tp;
+{
+	register TREE	*cm;
+
+	if (chain == NULL)
+		return (tp);
+	cm = leftnode(COMMA, chain, tp->t_type, tp->t_size);
+	cm->t_rp = tp;
+	return (cm);
+}
+
+/*
+ * Store a constant 0 of type (ty,sz) at byte offset `off' within `lv'.
+ */
+static TREE *
+blkclr(lv, off, ty, sz, ptdt)
+register TREE	*lv;
+{
+	register TREE	*tp;
+
+	tp = leftnode(ASSIGN, blkword(lv, off, ty, sz, ptdt), ty, sz);
+	tp->t_rp = ivalnode((ival_t)0);
+	tp->t_rp->t_type = ty;
+	return (tp);
+}
+
+/*
+ * The parity of frame lvalue `lp''s address, or -1 if it is not one: an
+ * automatic id, or the frame register plus a constant.  The frame register
+ * and the frame size are even.
+ */
+static int
+blkpar(lp)
+register TREE	*lp;
+{
+	if (lp->t_op == AID)
+		return ((int)lp->t_offs & 1);
+	if (lp->t_op != STAR)
+		return (-1);
+	lp = lp->t_lp;
+	if (lp->t_op == REG && lp->t_reg == FPREG)
+		return (0);
+	if (lp->t_op == ADD && lp->t_lp->t_op == REG && lp->t_lp->t_reg == FPREG
+	 && lp->t_rp->t_op == ICON)
+		return (lp->t_rp->t_ival & 1);
+	return (-1);
+}
+
+/*
+ * The aggregate `lp' of `s' bytes assigned the constant 0: cc0 zeroes the
+ * members an automatic aggregate's initializer leaves out this way.  A CLRB
+ * takes an odd first or last byte; the words between take a CLR each through
+ * ZCLRINL bytes, beyond that a CLR of the first word and an LDIR (BLKMOVE
+ * typed U16, counting words) that copies it along the rest, the source one
+ * word behind the destination.  An lvalue whose address parity is not known
+ * is cleared by bytes the same way, LDIRB with the source a byte behind.
+ */
+static TREE *
+blkzero(lp, s, blkval, ptdt)
+register TREE	*lp;
+{
+	register TREE	*chain, *tp;
+	int		off, end, unit, ty, par;
+
+	chain = NULL;
+	off = 0;
+	end = s;
+	if ((par = blkpar(lp)) >= 0) {
+		if (par != 0) {
+			chain = blkchain(chain, blkclr(lp, off, S8, 1, ptdt));
+			++off;
+		}
+		if (((end - off) & 1) != 0) {
+			--end;
+			chain = blkchain(chain, blkclr(lp, end, S8, 1, ptdt));
+		}
+		unit = 2;
+		ty = S16;
+	} else {
+		unit = 1;
+		ty = S8;
+	}
+	if (end - off <= (unit == 2 ? ZCLRINL : 2)) {
+		for (; off < end; off += unit)
+			chain = blkchain(chain, blkclr(lp, off, ty, unit, ptdt));
+	} else {
+		chain = blkchain(chain, blkclr(lp, off, ty, unit, ptdt));
+		tp = leftnode(BLKMOVE, leftnode(ADDR, blkword(lp, off+unit, ty,
+			unit, ptdt), ptdt), unit == 2 ? U16 : S16);
+		tp->t_rp = leftnode(ADDR, blkword(lp, off, ty, unit, ptdt), ptdt);
+		tp->t_size = (end - off) / unit - 1;
+		chain = blkchain(chain, tp);
+	}
+	if (blkval) {
+		tp = leftnode(COMMA, chain, ptdt, pertype[ptdt].p_size);
+		tp->t_rp = leftnode(ADDR, dupnode(lp), ptdt,
+			pertype[ptdt].p_size);
+		chain = tp;
+	}
+	return (chain);
+}
+
+/*
  * Aggregate (struct/array) assignment.  Small blocks are copied inline word by
  * word; larger blocks become a single Z8000 LDIRB (the BLKMOVE node).  The size
  * is valid.  `blkval' asks for the assignment's VALUE: with it the tree yields
@@ -1494,6 +1601,8 @@ int		blkval;
 		tp->t_rp = leftnode(ADDR, lp, nptdt, pertype[nptdt].p_size);
 		return (tp);
 	}
+	if (rp->t_op == ICON)
+		return (blkzero(lp, s, blkval, nptdt));
 	if (s <= INLINEBLK
 	 && !hascall(rp) && rp->t_op != STAR && !nonrepeat(lp)) {
 		/*

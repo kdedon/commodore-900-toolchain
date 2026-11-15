@@ -188,6 +188,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/stdlevel.sh
 	sh tests/structinit.sh
 	sh tests/autoarray.sh
+	sh tests/autozero.sh
 	sh tests/addrarray.sh
 	sh tests/ptrlong.sh
 	sh tests/asgval.sh

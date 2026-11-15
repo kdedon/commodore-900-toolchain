@@ -130,6 +130,8 @@ a parameter named T, and under -VKR and -VC89, // is a division followed by
 whatever comes next.  Under -VKR, & of an array is "lvalue required", the
 MWC compiler's error, and offsetof() is not a constant expression, as
 there.  K&R code compiles to the same object at every level.
+The members an automatic aggregate's initializer leaves out are zero, as
+a static's are, at every level.
 -VC99 is a C99 subset: designated initializers, inline, variadic macros,
 long long and the C99 library are not supported at any level.
 

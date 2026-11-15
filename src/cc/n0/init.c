@@ -18,24 +18,33 @@
 static	TREE	*itp;
 
 /*
- * An automatic array sized by its initializer is bound once the initializer
- * has been read, so its items and line records are kept, in order, until
- * then.  An item records the member it initializes; the symbol is iflexp's.
+ * An automatic aggregate's items and line records are kept, in order, until
+ * its initializer has been read: an array sized by its initializer is bound
+ * only then, and the members the initializer leaves out are zeroed, as a
+ * static's are, which may be done by clearing the whole object first.  An
+ * item records the member it initializes; the symbol is iflexp's.  A gap is a
+ * run of members left out, merged with the gap before it when no item lies
+ * between them.
  */
 SYM	*iflexp;
 typedef	struct	{
-	TREE	*f_tp;			/* Value, or NULL for a line record */
+	TREE	*f_tp;			/* Value, or NULL for a line record or gap */
 	DIM	*f_dp;			/* Item's dimensions */
 	INFO	*f_ip;			/* Item's info */
 	sizeof_t f_bo;			/* Byte offset, or the line */
+	sizeof_t f_n;			/* Gap's size, or 0 */
 	char	f_type;			/* Item's type */
 	char	f_flag;			/* Item's volatility */
 	char	f_self;			/* Item is the array's own symbol */
 }	IFLEX;
 static	IFLEX	*iflist;
 static	int	nflex, maxflex;
+static	int	lastgap, ngap;
 static	IFLEX	*iflex1();
 static	int	inewtree();
+static	INFO	zinfo;
+static	int	igap(), ikeep(), izitem(), iwhole(), izero();
+extern	sizeof_t zcost();
 
 init(sp, dp, bo, flex)
 register SYM	*sp;
@@ -46,9 +55,10 @@ int		flex;
 	register int	t;
 	DIM		*ndp;
 	TREE		*tp;
-	sizeof_t	width, nbe, nel, ninit;
+	sizeof_t	width, nbe, nel, ninit, bo0;
 	int		brace, c, adj, own;
 
+	bo0 = bo;
 	t  = sp->s_type;
 	width = sdsize(sp, dp);
 	ndp = dp;
@@ -158,7 +168,8 @@ again:
 		if (c==C_GDEF || c==C_SIN || c==C_SEX) {
 			bput(BLOCK);
 			zput(nbe*(nel-ninit));
-		}
+		} else if (iflexp != NULL)
+			igap(bo0 + nbe*ninit, nbe*(nel-ninit));
 	}
 	if (ninit > nel) {
 		if (!flex)
@@ -179,7 +190,7 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 	register SYM	*mp;
 	register INFO	*ip;
 	int		n, brace, c, t, f, bfflag;
-	sizeof_t	mo, lo;
+	sizeof_t	mo, lo, hi;
 	SYM		sym;
 
 	c = sp->s_class;
@@ -197,7 +208,7 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 		++brace;
 		lex();
 	}
-	lo = n = f = 0;
+	lo = hi = n = f = 0;
 	while (s != RBRACE || itp != NULL) {
 		bfflag = 0;
 		if (n >= ip->i_nsp) {
@@ -227,6 +238,8 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 		if (!bfflag)
 			init(&sym, sym.s_dp, bo+mo, 0);
 		lo += ssize(&sym);
+		if (mo + ssize(&sym) > hi)
+			hi = mo + ssize(&sym);
 		if (bfflag != 2 && s != COMMA)
 			break;
 		if (n >= ip->i_nsp && !brace)
@@ -240,6 +253,13 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 		if ((mo = ip->i_size-lo) > 0) {
 			bput(BLOCK);
 			zput(mo);
+		}
+	} else if (iflexp != NULL) {
+		while (n < ip->i_nsp && ip->i_sp[n]->s_value < hi)
+			++n;
+		if (n < ip->i_nsp) {
+			mo = ip->i_sp[n]->s_value;
+			igap(bo+mo, ip->i_size-mo);
 		}
 	}
 }
@@ -314,6 +334,7 @@ DIM		*dp;
 
 	if (isauto(sp)) {
 		if (iflexp != NULL) {
+			lastgap = -1;
 			ip = iflex1(tp, (sizeof_t)bo);
 			ip->f_dp = dp;
 			ip->f_ip = sp->s_ip;
@@ -451,7 +472,29 @@ sizeof_t bo;
 	ip = &iflist[nflex++];
 	ip->f_tp = tp;
 	ip->f_bo = bo;
+	ip->f_n = 0;
 	return ip;
+}
+
+/*
+ * Keep a gap: 'n' bytes at 'bo' that no item initializes.
+ */
+static
+igap(bo, n)
+sizeof_t bo, n;
+{
+	register IFLEX	*ip;
+
+	if (n <= 0)
+		return;
+	if (lastgap >= 0) {
+		ip = &iflist[lastgap];
+		ip->f_n = bo + n - ip->f_bo;
+		return;
+	}
+	lastgap = nflex;
+	iflex1((TREE *)NULL, bo)->f_n = n;
+	++ngap;
 }
 
 /*
@@ -464,28 +507,72 @@ iline()
 
 /*
  * Initialize automatic array 'sp', whose bound is the number of items in
- * its initializer: read the initializer, bind the array, then write what
- * `T a[n] = ...' writes, in the order it writes it.
+ * its initializer.
  */
 iflex(sp)
+SYM	*sp;
+{
+	stdok(STD_C89, "an automatic array sized by its initializer");
+	ikeep(sp, 1);
+}
+
+/*
+ * Initialize automatic 'sp', which is bound.
+ */
+iauto(sp)
+register SYM	*sp;
+{
+	register DIM	*dp;
+
+	if ((dp = sp->s_dp) != NULL ? dp->d_type == D_ARRAY
+	    : sp->s_type == T_STRUCT || sp->s_type == T_UNION)
+		ikeep(sp, 0);
+	else
+		init(sp, dp, (sizeof_t)0, 0);
+}
+
+/*
+ * Initialize automatic aggregate 'sp': read the initializer, keeping its
+ * items, bind the array if it is sized by them, then write what
+ * `T a[n] = ...' writes, in the order it writes it, with the gaps zeroed.
+ * When clearing the whole object first is the shorter code, the clear comes
+ * first and the items storing a constant 0 are dropped.
+ */
+static
+ikeep(sp, flex)
 register SYM	*sp;
 {
 	register IFLEX	*ip, *ep;
 	SYM		sym;
+	int		whole;
 
-	stdok(STD_C89, "an automatic array sized by its initializer");
 	newtree(sizeof(TREE));
 	iflexp = sp;
-	nflex = 0;
-	init(sp, sp->s_dp, (sizeof_t)0, 1);
+	nflex = ngap = 0;
+	lastgap = -1;
+	init(sp, sp->s_dp, (sizeof_t)0, flex);
 	iflexp = NULL;
-	bindlocal(sp);
-	putautos();
+	if (flex) {
+		bindlocal(sp);
+		putautos();
+	}
+	whole = ngap != 0 && iwhole(sp);
 	for (ip = iflist, ep = iflist+nflex; ip < ep; ++ip) {
-		if (ip->f_tp == NULL) {
+		if (ip->f_tp == NULL && ip->f_n == 0) {
 			bput(LINE);
 			iput((ival_t)ip->f_bo);
-		} else if (ip->f_self)
+			continue;
+		}
+		if (whole == 1) {
+			izero(sp, (sizeof_t)0, ssize(sp));
+			whole = 2;
+		}
+		if (ip->f_tp == NULL) {
+			if (!whole)
+				izero(sp, ip->f_bo, ip->f_n);
+		} else if (whole && izitem(ip))
+			;
+		else if (ip->f_self)
 			iassign(sp, ip->f_dp, ip->f_bo, ip->f_tp);
 		else {
 			sym = *sp;
@@ -496,6 +583,75 @@ register SYM	*sp;
 			iassign(&sym, ip->f_dp, ip->f_bo, ip->f_tp);
 		}
 	}
+}
+
+/*
+ * Is the item a constant 0 the clear of the whole object stores already?
+ */
+static int
+izitem(ip)
+register IFLEX	*ip;
+{
+	register TREE	*tp;
+
+	if ((ip->f_flag & S_VOLAT) != 0)
+		return 0;
+	for (tp = ip->f_tp; tp->t_op == CAST || tp->t_op == CONVERT; tp = tp->t_lp)
+		;
+	return (tp->t_op == ICON && tp->t_ival == 0)
+	    || (tp->t_op == LCON && tp->t_lval == 0);
+}
+
+/*
+ * Is clearing all of 'sp' and dropping its constant 0 items shorter code
+ * than clearing its gaps?  zcost() prices a clear.
+ */
+static int
+iwhole(sp)
+register SYM	*sp;
+{
+	register IFLEX	*ip, *ep;
+	sizeof_t	gaps, whole;
+
+	gaps = 0;
+	whole = zcost(sp, (sizeof_t)0, ssize(sp));
+	for (ip = iflist, ep = iflist+nflex; ip < ep; ++ip) {
+		if (ip->f_tp == NULL) {
+			if (ip->f_n != 0)
+				gaps += zcost(sp, ip->f_bo, ip->f_n);
+		} else if (izitem(ip))
+			whole -= zcost(sp, ip->f_bo,
+				tidsize(ip->f_type, ip->f_ip, ip->f_dp, 0));
+	}
+	return whole < gaps;
+}
+
+/*
+ * Zero 'n' bytes at 'bo' in automatic aggregate 'sp': an assignment of the
+ * constant 0 to an aggregate of that size, which the code generator does as
+ * a clear.
+ */
+static
+izero(sp, bo, n)
+SYM		*sp;
+sizeof_t	bo, n;
+{
+	register TREE	*tp;
+	SYM		sym;
+
+	zinfo.i_size = n;
+	sym = *sp;
+	sym.s_type = T_STRUCT;
+	sym.s_dp = NULL;
+	sym.s_ip = &zinfo;
+	tp = talloc();
+	tp->t_op = ASSIGN;
+	tp->t_type = T_STRUCT;
+	tp->t_ip = &zinfo;
+	tp->t_lp = bid(&sym);
+	tp->t_lp->t_offs += bo;
+	tp->t_rp = bicon((ival_t)0);
+	tput(EEXPR, 0, tp);
 }
 
 /* end of n0/init.c */

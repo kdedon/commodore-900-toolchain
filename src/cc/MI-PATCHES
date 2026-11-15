@@ -319,7 +319,7 @@ why: this is what a driver writes to say that reading a device register twice me
 patch: volatile-level
 file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
 file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
-file: n0/locals.c 920492706fe61aa11625f3e830a1821d4de2c5ad63cd8bca7151d404fbd734b3
+file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: n0/gcandt.c fcb06fac89760c8c5ed36b65cf1ddee1f84e89582058cd715ba8e0b2f358a70d
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
@@ -327,7 +327,7 @@ fix: the qualifier is placed at the declarator level it was written at. `volatil
 why: `int * volatile p' and a `volatile' typedef lost the qualifier, so the object was promoted to a register and its accesses optimized -- wrong exactly where the qualifier was asked for. `volatile int *p' was the reverse: the flag sat on the symbol, so p itself was kept out of a register though only `*p' is volatile. A declaration with neither form compiles as before
 
 patch: sinit-member-flags
-file: n0/init.c f2516dcc7a10922f92b884e0f039919d72b5560c16fac7c6eb3ba30c0376579d
+file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
 fix: `sinit()' sets the flags of its stack copy of the structure: a member initializer is volatile when the structure or the member is
 why: the copy's `s_flag' was never set, and `bid()' reads it since identifiers carry volatile, so each member store took whatever the stack held -- randomly volatile, randomly a pointer to volatile.  The code generator keeps a volatile store in memory and never reuses its value, so the stack decided code; a volatile structure's initialization is now volatile as it should be
 
@@ -376,7 +376,7 @@ fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/intuition po
 why: additive: `//' outside a string was not C before -- the second `/' was always a syntax error, except in `a //* c */ b', which now reads as C99 says, and which no source in the comparison set contains: the library, kernel, driver, userland and Exec900 objects are byte-identical. No ABI or data change on the C900: the comment is consumed by the same character reader that consumes `/* */', with no buffer
 
 patch: mixed-declarations
-file: n0/locals.c 920492706fe61aa11625f3e830a1821d4de2c5ad63cd8bca7151d404fbd734b3
+file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: n0/stat.c d10a870857a501013ec1e4cfa233277b7904b7b275a6f792ecd0eeec793c1743
 file: n0/cc0.c 5d09169339329ac3362d31f6764ed02dd97c992d876fe9080311e2e6e10cf83b
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/intuition port). Declarations after statements: a block's statements are read by `body()', which hands a statement that starts with a declaration specifier or a typedef name (not a label) to `locals()' and then `putautos()', exactly as the declarations at the head of the block are read, so a name is in scope from its declarator to the end of the block and its initializer runs where it stands. `for (T i = e; ...)' reads the declaration in a scope of its own, opened as a nested block's is and closed after the loop. A jump past a declaration is not checked, as C99 allows without VLAs
@@ -390,7 +390,7 @@ fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/intuition p
 why: VSRTVC is the donor's "risky things in truth contexts" and also warns of every pointer or long used as a condition (`if (p)', `while (l)'), so a port that asked for the `...' check through it got the truth-context warnings too: 61 of them in the Workbench utility.library port, none of them a defect. -VSRTVC is the donor's again. The machine-independent slots 0..33 are all in use, and VMBASE cannot move without renumbering every machine variant, so the bit takes the next free machine slot, as VPIC and VLNAME did; a target that does not define it has no such warning, as before the prototype work. The bit reaches only cc0's diagnostics, so the code is byte-identical with it set or clear (tests/proto.sh compares cc0's output)
 
 patch: auto-struct-init
-file: n0/init.c f2516dcc7a10922f92b884e0f039919d72b5560c16fac7c6eb3ba30c0376579d
+file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
 file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
 file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/AROS port). An automatic structure or union may be initialized from a structure expression, as C89 allows: `init()' reads the initializer of an automatic structure that does not start with `{', `}' or a string as one expression, and when it is a structure of the same type (the same INFO) it emits the assignment `o = e' that `iassign()' builds for any automatic item, and returns. Otherwise the tree is kept in `itp' and the first scalar member takes it in place of reading its own expression -- `init()' at its leaf, `bfinit()' through the new `iconval()', the folding half of `iconexpr()' -- so the brace-less member list (`struct R o = 1, 2;') reads as before. A member of a brace list may be initialized the same way. A structure of another type is a type clash, as before
@@ -403,10 +403,10 @@ fix: `modtree()' modifies a CONVERT or CAST operand in the MINIT context when th
 why: the MINIT context is what tells a machine layer that an address in an initializer is a link-time constant; losing it under a cast is wrong on every target whose machine layer reads it -- the i8086 LARGE model and the Z8001 pool a static address in an MRVALUE context, so `(unsigned long)a' in an initializer became the address of a literal-pool cell holding a, and `int i = (int)a' silently initialized i with that cell's offset -- and changes nothing on the i386, whose machine layer reads MINIT only at the root. On the C900 a far pointer and a long are the same two words (leaves.t shares the pair), so the datum is the pointer's relocated long, object-identical to `char *p = a' (tests/ptrlong.sh); AROS IPTR tables (keymaps, tag lists) need it. Only initializers with a cast over an address change: before they were `initializer too complex' or the pool cell above
 
 patch: auto-array-size
-file: n0/init.c f2516dcc7a10922f92b884e0f039919d72b5560c16fac7c6eb3ba30c0376579d
+file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
 file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
 file: n0/ddecl.c 92064706183fdacc677581b46201d4fb56670dd2c5f2d2c6f08c301780997b5b
-file: n0/locals.c 920492706fe61aa11625f3e830a1821d4de2c5ad63cd8bca7151d404fbd734b3
+file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
 fix: FEATURE ADDITION, not a defect fix (approved for the Workbench/AROS port). An automatic array declared without a bound takes it from its initializer, as C89 allows: `declare()' refuses such an array only without an initializer, and `locals()' hands it to `iflex()', which reads the initializer with `init()' as for a static array, keeping each item (the member's type, dimensions, offset and tree) and each LINE record that `expr()' would have written, in order, with the tree space kept until they are written; then it binds the array, writes its AUTOS record and writes the kept records as `iassign()' and `expr()' would have. A structure element of an automatic array goes through `init()', so it too may be initialized whole from a structure expression (record auto-struct-init)
 why: additive: before this, an automatic array without a bound was an error (`cannot declare flexible automatic array'), and every other declaration takes the path it took; an element of a static array of structures still goes to `sinit()' directly, and an automatic one reaches `sinit()' through `init()' with the same braces, so the brace lists compile byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects). The kept records are the records the bounded array writes, in its order, so `long a[] = { 1, 2 };' is object-identical to `long a[2] = { 1, 2 };' (tests/autoarray.sh). On the C900 the array takes the frame slots its size needs, as before; the items are kept in one malloc'd list, about 16 bytes an item on the native compiler and reused by the next such array, and the trees of one initializer stay in the tree space until it is written
@@ -415,9 +415,9 @@ patch: language-levels
 file: n0/etc.c 480fb38624f8f57212ce9e7ae84acccc3fb3e30660aa7e92f00235946686dad1
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n0/get.c cc75dea4ec472417119bd3ab6b0e8e4653a48c3db679785be9133d75caff17cd
-file: n0/locals.c 920492706fe61aa11625f3e830a1821d4de2c5ad63cd8bca7151d404fbd734b3
+file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
 file: n0/stat.c d10a870857a501013ec1e4cfa233277b7904b7b275a6f792ecd0eeec793c1743
-file: n0/init.c f2516dcc7a10922f92b884e0f039919d72b5560c16fac7c6eb3ba30c0376579d
+file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
 file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
 file: coh/cc.c 0364333a706756c33c00fa901778851151d7e01e1f6926754ed37bcf1ef5346f
 file: h/z8001/varmch.h
@@ -444,3 +444,13 @@ file: n0/expr.c 150ada6c864ec2dfdc4f7c2f87f7a6dd633de7d42434fdaf1a4baf6a56663d75
 file: h/cc0.h 562de0a664b93dcda6f9003ff78173790fb4c02121fe1c0fe7dee67c5aaa4acf
 fix: FEATURE ADDITION, not a defect fix (requested for the Workbench/AROS port). offsetof() is an integer constant expression, as C89 requires: above -VKR (STD_KR), a cast to int or unsigned of the address of a member or element at a constant offset from a null pointer, `(size_t)&((T *)0)->m' as include/stddef.h spells it, folds to that offset in `term()' (n0/expr.c, `nullofs()'), through members, nested members, member arrays and constant indexes (an index is a CONVERT scaled by its ZCON), so it is an array bound, a case label or a static initializer. Any other cast is as before, and under -VKR every cast is, so there offsetof() is not a constant, as in the donor and the June 1985 MWC cc0; h/cc0.h lists it among the C89 additions
 why: the folded constant is the value the cast had: the null pointer's offset word is 0 and the member offsets and scaled indexes are byte counts, so the int is their sum, which is what cc1 already computed at run time. So code that used it at run time compiles to the same object at every level, though cc0's output differs above -VKR (the library, kernel, driver, userland, Exec900 and Workbench objects; tests/stdlevel.sh compiles such a source at all four levels and compares the objects, and tests/addrarray.sh checks the constant forms against the host compiler and the -VKR refusals). No ABI or data change on the C900; cc0 gains one small function
+
+patch: auto-aggregate-zero
+file: n0/init.c c17f7a4fe057ce2a2319ce4fa161507506c29bd4f3e41767ceaaff3734fdd668
+file: n0/locals.c dce7b98c6f148e35d7850ef7ed96e5787d8cd4537e0e2f223fd6d1685731f7d4
+file: n0/z8001/bind.c
+file: n1/z8001/mtree2.c
+file: n1/tables/blkmv.t
+file: h/z8001/mch.h
+fix: the members an automatic aggregate's initializer leaves out are zeroed, as a static's are. `locals()' hands an automatic array, structure or union to `iauto()', which keeps its items as `iflex()' does for an array sized by its initializer (`ikeep()'); where `init()' and `sinit()' write a static's BLOCK of zeros, the trailing elements, the rest of a string's array and the trailing members, they keep a gap instead, merged with the one before it when no item lies between. With no gap the kept records are written as before. Otherwise each gap is written where it fell as an assignment of the constant 0 to an aggregate of its size, or, when the machine's `zcost()' prices that higher, one such assignment of the whole object comes first and the items storing a constant 0 are dropped. The Z8001 `modsasg()' (n1/z8001/mtree2.c `blkzero()') does an assignment from a constant as a clear: CLRB for an odd first or last byte, a word CLR each through ten bytes, beyond that a CLR of the first word and an LDIR from it along the rest (blkmv.t, a BLKMOVE typed U16 counting words, through RR4, RR2 and a scratch count, so no callee-saved register is taken)
+why: wrong code on every target: C89 3.5.7 zeroes the members a brace list leaves out, at any storage duration, and K&R 8.6 pads an aggregate with zeros, while the donor and the June 1985 cc0 store the listed items and leave the rest of the frame slot as whatever the stack held, so `struct N n[] = { { 1, (char *)10, 0, 3 }, { 2 } };' handed gadtools a garbage `nm_CommKey', and `struct MsgPort port = { 0 };' a garbage name and flags. At every level, as the 1985 compiler's garbage is no dialect a program can rely on. An aggregate its initializer fills compiles byte-identical (the library, kernel, driver, Exec900 and Workbench objects that have no gap); every object that differs has a gap (tests/autozero.sh checks the values against the host compiler at the default level, -VKR and -VC89, and that a few gaps compile as the stores of zero they mean). On the C900 the clear costs only code: no ABI or data change; the items of one automatic aggregate's initializer are kept until it is written, as an array sized by it already was (record auto-array-size), about 20 bytes an item on the native compiler

@@ -250,3 +250,18 @@ typedef uint32_t PREGSET;
 
 /* return registers by type are defined in n1/z8001/table1.c pertype[]:
  *   int -> R1 ;  long/pointer -> RR0 (R0=hi/seg, R1=lo/off) ;  double -> RQ0  */
+
+/* ---- clearing an automatic aggregate ----------------------------------- */
+/*
+ * cc1 zeroes a run of an automatic aggregate, of even length at an even
+ * address, with a CLR per word through ZCLRINL bytes, and beyond that with a
+ * CLR of the first word that an LDIR copies along the rest: CLR 4, two
+ * LDA/LD address pairs 12, the count 2 (LDK, through ZCLRLDK) or 4, LDIR 4.
+ * A CLRB takes an odd first or last byte.  cc0 prices the code with the same
+ * figures (n0/z8001/bind.c zcost()).  Five words inline are 20 bytes and 60
+ * clocks against 22 bytes and 96 clocks; six are 24 against 22.
+ */
+#define	ZCLRINL	10
+#define	ZCLRBLK	22		/* the block clear, the count by LDK */
+#define	ZCLRLDK	15		/* the largest count LDK loads */
+#define	ZCLRSTO	4		/* one CLR or CLRB at a frame offset */
