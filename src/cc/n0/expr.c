@@ -21,6 +21,7 @@
 #define	isunsint(t)	((t) == T_UCHAR || (t) == T_USHORT || (t) == T_UINT || (t) == T_ULONG)
 
 static	char	tclash[] = "type clash";
+static	int	nullofs();
 
 /*
  * Read a tree.
@@ -233,6 +234,7 @@ term()
 	TREE 		*cp;
 	DIM		*dp;
 	int		tt, lt, n;
+	ival_t		ov;
 
 	switch (op = s) {
 
@@ -311,6 +313,10 @@ term()
 				adjust(tp, cp->t_type, cp->t_dp, cp->t_ip);
 				if (tp->t_op == CONVERT && tp->t_rp == NULL)
 					tp->t_op = CAST;
+			} else if ((tt == T_INT || tt == T_UINT)
+			 && stdlevel() != STD_KR && nullofs(cp->t_lp, &ov)) {
+				tp = bicon(ov);		/* offsetof(): a constant */
+				tp->t_type = tt;
 			} else
 				tp = cp;
 			break;
@@ -353,8 +359,19 @@ term()
 		op = STAR;
 		goto unary;
 	case AND:
-		op = ADDR;
-		goto unary;
+		lex();
+		tp = tree(HIGH);
+		if ((dp = tp->t_dp) != NULL && stdlevel() != STD_KR
+		 && (dp->d_type == D_ARRAY || dp->d_type == D_MOSAR)) {
+			/* C89: the address of an array, a pointer to the array.
+			 * The tree is the decayed one, &a[0], typed (*)[n]. */
+			if (dp->d_type == D_MOSAR)
+				dp = tdalloc(dp->d_dp, D_ARRAY, dp->d_bound);
+			tp = charray(tp);
+			tp->t_dp = tdalloc(dp, D_PTR, (sizeof_t)0);
+		} else
+			tp = build(ADDR, tp, NULL);
+		break;
 	case COM:
 	unary:
 		lex();
@@ -1170,6 +1187,52 @@ register TREE	*tp;
 	n = tsize(tp);
 	tp->t_dp = dp;
 	return n;
+}
+
+/*
+ * If 'tp' is the address of a member or an element at a constant offset
+ * from a null pointer, `&((T *)0)->m', as offsetof() takes it, put the
+ * offset in '*np' and return 1.
+ */
+#define	isicon(tp)	((tp)->t_op == ICON || (tp)->t_op == ZCON)
+#define	icval(tp)	((tp)->t_op == ICON ? (tp)->t_ival : (ival_t)(tp)->t_zval)
+
+static
+nullofs(tp, np)
+register TREE	*tp;
+ival_t		*np;
+{
+	register TREE	*xp;
+	register ival_t	n;
+
+	n = 0;
+	for (;;) {
+		switch (tp->t_op) {
+		case ADDR:
+			if (tp->t_lp->t_op != STAR)
+				return 0;
+			tp = tp->t_lp->t_lp;
+			continue;
+		case ADD:			/* a member, or a scaled index */
+			xp = tp->t_rp;
+			if (isicon(xp))
+				n += icval(xp);
+			else if (xp->t_op == CONVERT && xp->t_rp != NULL
+			      && isicon(xp->t_lp) && isicon(xp->t_rp))
+				n += icval(xp->t_lp) * icval(xp->t_rp);
+			else
+				return 0;
+			tp = tp->t_lp;
+			continue;
+		case CAST:
+			if (tp->t_dp == NULL || tp->t_dp->d_type != D_PTR
+			 || tp->t_lp->t_op != ICON || tp->t_lp->t_ival != 0)
+				return 0;
+			*np = n;
+			return 1;
+		}
+		return 0;
+	}
 }
 
 /*

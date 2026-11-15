@@ -619,7 +619,9 @@ extern	int	ininit;
 #define	STD_ALL	0		/* Every addition			*/
 #define	STD_KR	1		/* K&R: none				*/
 #define	STD_C89	2		/* Prototypes, structure initializers,
-				 * sized automatic arrays, long switch	*/
+				 * sized automatic arrays, long switch,
+				 * the address of an array, offsetof()
+				 * as a constant			*/
 #define	STD_C99	3		/* C89, `//' comments, declarations
 				 * after statements			*/
 #ifdef	VSTD0

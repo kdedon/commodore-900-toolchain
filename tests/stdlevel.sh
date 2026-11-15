@@ -4,7 +4,7 @@
 # Each addition is taken at its level and above and by default, and is an
 # error naming it below; `//' and `f(T)' (T a typedef name) are refused the
 # donor's way, since K&R code can hold the same text.  K&R code compiles to the
-# same cc0 output at every level: the C library's sources are the corpus.  The
+# same object at every level: the C library's sources are the corpus.  The
 # driver maps each option onto VSTD0/VSTD1, and -VSTRICT sets VSTRICT, which
 # makes every strict message an error.  ccz takes the same levels from
 # CCZ_LEVEL.
@@ -47,6 +47,18 @@ feature 'sized automatic array' 'an automatic array sized by its initializer is 
 	'f(i) { long a[] = { 1, 2 }; return a[i]; }'
 feature 'long switch' 'a switch on a long is not K&R C' C89 \
 	'f(l) long l; { switch (l) { case 70000L: return 1; } return 0; }'
+# Under -VKR `&' of an array is the MWC compiler's error.
+feature 'address of an array' 'lvalue required' C89 \
+	'struct S { short a[4]; } s; short b[4]; f(p) struct S *p; { return (short *)&p->a - (short *)&b; }'
+# Under -VKR offsetof() is not a constant, as in the MWC compiler.
+printf '#include <stddef.h>\nstruct S { short x; char c; };\nf(i) { switch (i) { case offsetof(struct S, c): return 1; } return 0; }\n' > "$T/oc.c"
+if "$CC0" $DEF "$T/oc.c" "$T/oc.z0" -I"$H/src/include" >/dev/null 2>&1 &&
+   ! "$CC0" $KR "$T/oc.c" "$T/oc.z0" -I"$H/src/include" > "$T/oc.err" 2>&1 &&
+   grep -q 'int constant expression required' "$T/oc.err"; then
+	echo "  -VKR offsetof() case label refused PASS"
+else
+	echo "  -VKR offsetof() case label FAIL"; cat "$T/oc.err"; fail=1
+fi
 feature '// comment' - C99 \
 	'f() { return 1; // one
 }'
@@ -72,22 +84,41 @@ else
 	echo "  -VKR a //* c */ b FAIL"; fail=1
 fi
 
-# K&R code: the same cc0 output at every level.
-n=0; diff=""
-for c in "$COHERENT_OS"/libc/*/*.c; do
+# K&R code: the same code at every level.  cc0's output is the same, except
+# that above -VKR offsetof() folds to its constant; where the output differs,
+# the objects must not.  The C library's sources are the corpus, with one
+# that uses offsetof() at run time.
+cat > "$T/ofs.c" <<'EOF'
+#include <stddef.h>
+struct S { short x; char c; short a[4]; };
+static unsigned so = offsetof(struct S, c);
+f(p, n) char *p; { return *(short *)(p + offsetof(struct S, x)) + n * offsetof(struct S, c) + so; }
+g() { return (int)&((struct S *)0)->c; }
+EOF
+CC1="$BUILD/z8001/cc1-z8001"; CC2="$BUILD/z8001/cc2-z8001"
+obj() { "$CC1" $1 "$2" "$2.z1" >/dev/null 2>&1 && "$CC2" 0012 "$2.z1" "$2.o" "$2.scr" 0 >/dev/null 2>&1; }
+n=0; nz=0; diff=""
+for c in "$COHERENT_OS"/libc/*/*.c "$T/ofs.c"; do
 	b=$(basename "$c" .c)
-	"$CC0" $DEF "$c" "$T/def.z0" -I"$COHERENT_OS/include" -I"$COHERENT_OS/include/sys" >/dev/null 2>&1 || continue
+	I="-I$COHERENT_OS/include -I$COHERENT_OS/include/sys"
+	[ "$c" = "$T/ofs.c" ] && I="-I$H/src/include"
+	"$CC0" $DEF "$c" "$T/def.z0" $I >/dev/null 2>&1 || continue
 	for lv in KR C89 C99; do
 		eval v=\$$lv
-		"$CC0" $v "$c" "$T/lv.z0" -I"$COHERENT_OS/include" -I"$COHERENT_OS/include/sys" >/dev/null 2>&1 &&
-			cmp -s "$T/def.z0" "$T/lv.z0" || diff="$diff $b($lv)"
+		if ! "$CC0" $v "$c" "$T/lv.z0" $I >/dev/null 2>&1; then
+			diff="$diff $b($lv)"
+		elif ! cmp -s "$T/def.z0" "$T/lv.z0"; then
+			nz=$((nz+1))
+			obj $DEF "$T/def.z0" && obj $v "$T/lv.z0" && cmp -s "$T/def.z0.o" "$T/lv.z0.o" ||
+				diff="$diff $b($lv)"
+		fi
 	done
 	n=$((n+1))
 done
-if [ -z "$diff" ] && [ "$n" -gt 100 ]; then
-	echo "  $n libc sources, the same output at every level PASS"
+if [ -z "$diff" ] && [ "$n" -gt 100 ] && [ "$nz" -gt 0 ]; then
+	echo "  $n sources, the same code at every level ($nz cc0 outputs differ, their objects do not) PASS"
 else
-	echo "  libc at the levels ($n sources): differ:$diff FAIL"; fail=1
+	echo "  K&R code at the levels ($n sources, $nz cc0 outputs differ): differ:$diff FAIL"; fail=1
 fi
 
 # -VSTRICT (VSTRICT, bit 48: a seventh variant byte, 01) makes every strict

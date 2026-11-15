@@ -76,7 +76,8 @@ Variant options:
 
      -VASM           Assembly language output, same as -S
      -VC89           Language: K&R and C89's prototypes, structure
-                     initializers, sized automatic arrays, long switch
+                     initializers, sized automatic arrays, long switch,
+                     & of an array, offsetof() as a constant
      -VC99           Language: C89 and C99's // comments and
                      declarations after statements (a C99 subset)
      -VCOMM          Common data items (default)
@@ -116,7 +117,9 @@ Variant options:
 Language level.  By default cc takes every addition to the MWC compiler's
 K&R language: function prototypes and ANSI definitions, an automatic
 structure initialized from a structure expression, an automatic array
-sized by its initializer, switch on a long, // comments, and
+sized by its initializer, switch on a long, & applied to an array (a
+pointer to the array, at its first element), offsetof() as an integer
+constant expression, // comments, and
 declarations after statements and in a for.  -VKR, -VC89 and -VC99 select
 a level; the last one given counts.  A feature above the level is an
 error that names it, and the compile goes on as if it were allowed, so
@@ -124,7 +127,9 @@ one use gives one message.  Two features are refused the way the MWC
 compiler refused them, without a message of their own, because K&R code
 can contain the same text: under -VKR, f(T) with T a typedef name declares
 a parameter named T, and under -VKR and -VC89, // is a division followed by
-whatever comes next.  K&R code compiles to the same object at every level.
+whatever comes next.  Under -VKR, & of an array is "lvalue required", the
+MWC compiler's error, and offsetof() is not a constant expression, as
+there.  K&R code compiles to the same object at every level.
 -VC99 is a C99 subset: designated initializers, inline, variadic macros,
 long long and the C99 library are not supported at any level.
 
