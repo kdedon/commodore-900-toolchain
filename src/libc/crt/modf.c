@@ -6,7 +6,7 @@
  double real, *ip
 
  returns  real - g  and stores g at ip
-   where g = greatest integer <= real
+   where g = real truncated toward zero, so both have the sign of real
 
  uses machine dependent subroutine modfs( real, ip, e)
    which does modf assuming that d >= 0  1 <= e = exponent of real  <= MBITS+1
@@ -29,21 +29,13 @@ register double *dp;
 		return( 0.0);
 	}
 	if( e <= 0) {
-		if( d < 0) {
-			*dp = -1;
-			return( 1 - d);
-		}
 		*dp = 0;
+		*(int *)dp = *(int *)&d & 0x8000;	/* zero with the sign of d */
 		return( d);
 	}
 	if( d >= 0)
 		return( modfs( d, dp, e));
 	d = modfs( -d, dp, e);
-	if( d != 0) {
-		*dp = -*dp - 1;
-		return( 1 - d);
-	} else {
-		*dp = -*dp;
-		return( d);
-	}
+	*dp = -*dp;
+	return( -d);
 }

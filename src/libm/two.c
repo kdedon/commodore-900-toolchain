@@ -32,6 +32,10 @@ double x;
 	}
 	s = 0;
 	x = modf(x, &e);
+	if (x < 0.0) {		/* modf truncates; this wants the floor */
+		x += 1.0;
+		e -= 1.0;
+	}
 	if (x > 0.5) {
 		s = 1;
 		x -= 0.5;

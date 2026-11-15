@@ -42,6 +42,8 @@ double x;
 	register int s;
 
 	x = modf(x/(2.0*PI), &r);
+	if (x < 0.0)		/* the fraction of a period, in [0, 1) */
+		x += 1.0;
 	s = 0;
 	if (x > 0.5) {
 		s = 1;

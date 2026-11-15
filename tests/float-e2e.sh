@@ -37,6 +37,24 @@ run 'return a * b;'         0x4000000000000000 0x4008000000000000 0x401800000000
 run 'return a / b;'         0x4024000000000000 0x4010000000000000 0x4004000000000000 "10.0 / 4.0 = 2.5"
 run 'return (a + b) * b;'   0x3FF8000000000000 0x4004000000000000 0x4024000000000000 "(1.5+2.5)*2.5 = 10.0"
 run 'double t; t=a*b; return t+a;' 0x4008000000000000 0x4000000000000000 0x4022000000000000 "3*2+3 = 9.0 (store/reload)"
+# Round to nearest, ties to even.  1.0 - 0.9 is exact (the operands are within a
+# factor of two), so it needs the bit alignment shifts out; truncating dropped it
+# and normalizing shifted in zeros, 8 ulp high.
+run 'return a - b;'         0x3FF0000000000000 0x3FECCCCCCCCCCCCD 0x3FB9999999999998 "1.0 - 0.9 exact"
+run 'return a + b;'         0x3FF0000000000000 0x3CA0000000000000 0x3FF0000000000000 "1 + 2^-53 tie to even"
+run 'return a + b;'         0x3FF0000000000001 0x3CA0000000000000 0x3FF0000000000002 "1+2^-52 + 2^-53 tie up"
+run 'return a + b;'         0xBFE8A24533138131 0x3DF308644ED08D80 0xBFE8A24532ED7068 "add rounds up"
+# All that is left is the guard bit: 2^-53 of the larger operand, not zero.
+run 'return a + b;'         0xBFD0000000000000 0x3FCFFFFFFFFFFFFF 0xBC80000000000000 "-0.25 + pred(0.25)"
+run 'return a * b;'         0x3FB999999999999A 0x4008000000000000 0x3FD3333333333334 "0.1 * 3 rounds up"
+run 'return a * b;'         0x3F73A1898092B4D4 0x401FFFFFFFFFFF89 0x3FA3A1898092B48B "mul rounds up"
+run 'return a / b;'         0x4000000000000000 0x4008000000000000 0x3FE5555555555555 "2 / 3"
+run 'return a / b;'         0x3FF0000000000000 0x4024000000000000 0x3FB999999999999A "1 / 10 rounds up"
+run 'return a / b;'         0x3EE0B9C1B5BB66C1 0xC18602BDF4EC2906 0xBD4850FA9F863580 "div rounds up"
+# Quotients close to a rounding boundary, where the estimate is corrected down
+# and up by the exact remainder.
+run 'return a / b;'         0x3FFE4327A1D6CB68 0x3FFA6A5B74A677C6 0x3FF2547F6BF84913 "div near boundary, down"
+run 'return a / b;'         0x3FFC7FBA5D69C7FD 0x3FF816B90951331B 0x3FF2EDE5900A5991 "div near boundary, up"
 # F32 float<->double conversions: a float local narrows the double on store
 # (fdpack) and widens back on load (dfload).  Float-exact values round-trip exactly.
 run 'float x; x = a; return x;'         0x4010000000000000 0x4000000000000000 0x4010000000000000 "round-trip 4.0 (narrow+widen)"

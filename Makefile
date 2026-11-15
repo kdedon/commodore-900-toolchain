@@ -203,10 +203,11 @@ check-effdiff-linked:
 # target program links against rather than of a host build of the same source;
 # libc is built from src/ (host/coherent-os.sh), so this needs no OS tree and
 # nothing beyond the emulator `check' already requires.
-check-libc: libc
+check-libc: libc libm
 	sh tests/notmem.sh
 	sh tests/printf.sh
 	sh tests/sbrk.sh
+	sh tests/libm.sh
 
 # What each program is MADE OF, declared once by the build that runs on the
 # C900 and read by every cross-build (host/srcman.sh).  The build scripts assert

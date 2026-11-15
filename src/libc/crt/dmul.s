@@ -11,139 +11,143 @@
 	.globl	drmul, dlmul
 	.globl	SS
 
-/ double multiply   product returned in rq4
+/ double multiply   product returned in rq0
 /
 / drmul( da, db)
 / dlmul( da, &db)
 /
-/ complexified by lack of unsigned multiply in z8000
+/ Each fraction is split as h*2^32 + l with l a signed long, h one more
+/ when l's top bit is set, so the four signed multiplies are exact.  With
+/ L = al*bl, M = ah*bl + al*bh + (L >> 32) and T = ah*bh + (M >> 32), the
+/ product is T*2^64 + (M mod 2^32)*2^32 + (L mod 2^32).  With a*512 and
+/ b*4, T is the fraction.
 
 drmul:
-	lda	rr4, SS|12(r15)
+	lda	rr2, SS|12(r15)
 	jr	un, 0f
 dlmul:
-	ldl	rr4, SS|12(r15)
+	ldl	rr2, SS|12(r15)
 0:
 	sub	r15, $16
 	ldm	(rr14), r6, $8
 
-	ld	r0, SS|20(r15)
-
-	ld	r8, (rr4)
-
-	ld	r1, $32768
-	ld	r3, r1
+	ldl	rr4, SS|20(r15)		/ a
+	ldl	rr6, SS|24(r15)
+	ldl	rr8, (rr2)		/ b
+	ldl	rr10, rr2(4)
+	ld	r13, r4			/ result sign
+	xor	r13, r8
+	and	r13, $32768
+	ldl	rr0, $0x7ff07ff0	/ exponents
 	and	r1, r8
-	xor	r8, r1
-	cp	r8, $16
-	jr	lt, retz
-	cp	r8, $2047*16
-	jr	ge, retinf
-	and	r3, r0
-	xor	r0, r3
-	cp	r0, $16
-	jr	lt, retz
+	jr	z, retz
+	cp	r1, $2047*16
+	jr	eq, retinf
+	and	r0, r4
+	jr	z, retz
 	cp	r0, $2047*16
-	jr	ge, retinf
-	xor	r1, r3
-
-	ldl	rr2, SS|22(r15)
-	ld	r6, SS|26(r15)
-	sub	r7, r7
-
-	ldl	rr12, rr4(2)
-	ld	r10, rr4(6)
-	sub	r11, r11
-
-	ldb	rl1, $4
+	jr	eq, retinf
+	add	r0, r1			/ (exp - 1)*16 for a product of 2 or more
+	sub	r0, $1023*16
+	ld	r12, r0
+	cp	r0, $2047*16
+	jr	ult, 0f
+	cp	r0, $0xc000		/ above 2047 or below 1
+	jr	ult, retinf
+	jr	un, retz
 0:
-	srl	r0
-	rrc	r2
-	rrc	r3
-	rrc	r6
-	rrc	r7
-
-	srl	r8
-	rrc	r12
-	rrc	r13
-	rrc	r10
-	rrc	r11
-
-	dbjnz	rl1, 0b
-
-	setflg	C
-	rrc	r2
-	rrc	r3
-	rrc	r6
-	rrc	r7
-
-	setflg	C
-	rrc	r12
-	rrc	r13
-	rrc	r10
-	rrc	r11
-
-	sub	r0, $1022
-	add	r0, r8
-	jr	le, retz	/ exp will only get smaller
-	cp	r0, $2047
-	jr	gt, retinf	/ by at most 1
-
-	srll	rr2		/ force fractions to be positive
-	rrc	r6
-	rrc	r7
-	srll	rr6
-
-	srll	rr12
-	rrc	r10
-	rrc	r11
-	srll	rr10
-
-	multl	rq4, rr12
-	multl	rq8, rr2
-	addl	rr4, rr8
-	subl	rr6, rr6
-	slll	rr4
-
-	ldl	rr10, rr2
-	multl	rq8, rr12
-	addl	rr10, rr4
-	adc	r9, r6
-	adc	r8, r7
-
-	slll	rr10		/ undo effect of adjustment
-	rlc	r9
-	rlc	r8
+	and	r4, $15			/ fractions with the implicit bit
+	set	r4, $4
+	and	r8, $15
+	set	r8, $4
+	ldb	rh4, rl4		/ a*512 and b*4 put the product's
+	ldb	rl4, rh5		/ fraction in T
+	ldb	rh5, rl5
+	ldb	rl5, rh6
+	ldb	rh6, rl6
+	ldb	rl6, rh7
+	ldb	rh7, rl7
+	subb	rl7, rl7
+	slll	rr6
+	rlc	r5
+	rlc	r4
 	slll	rr10
 	rlc	r9
 	rlc	r8
 	slll	rr10
 	rlc	r9
 	rlc	r8
-	jr	c, 0f		/ justified
-	dec	r0
-	jr	le, retz
-	slll	rr10
-	rlc	r9
-	rlc	r8
+	bit	r6, $15
+	jr	z, 0f
+	addl	rr4, $1
 0:
-	cp	r0, $2047
-	jr	ge, retinf
-	ldb	rl1, $4		/ pack result
+	bit	r10, $15
+	jr	z, 0f
+	addl	rr8, $1
 0:
-	slll	rr10
-	rlc	r9
-	rlc	r8
-	rlc	r0
-	dbjnz	rl1, 0b
+	pushl	(rr14), rr12
+	pushl	(rr14), rr8		/ bh
+	ldl	rr2, rr6
+	multl	rq0, rr10		/ L = al*bl
+	ldl	rr12, rr4
+	multl	rq4, (rr14)		/ al*bh
+	multl	rq8, rr12		/ ah*bl
+	addl	rr10, rr6
+	adc	r9, r5
+	adc	r8, r4
+	ldl	rr6, rr12
+	multl	rq4, (rr14)		/ ah*bh
+	popl	rr12, (rr14)
+	ld	r12, r0
+	sra	r12, $15
+	addl	rr10, rr0		/ M
+	adc	r9, r12
+	adc	r8, r12
+	ld	r12, r8
+	sra	r12, $15
+	addl	rr6, rr8		/ T
+	adc	r5, r12
+	adc	r4, r12
+	popl	rr12, (rr14)
 
-	or	r0, r1
-	ld	r1, r8
-	ld	r2, r9
-	ld	r3, r10
+	bit	r4, $4			/ the fraction in rq4, the rounding bit
+	jr	nz, 0f			/ at bit 15 of r10
+	slll	rr10
+	rlc	r7
+	rlc	r6
+	rlc	r5
+	rlc	r4
+	dec	r12, $16
+	jr	mi, retz
+0:
+	cp	r12, $2046*16
+	jr	uge, retinf
+	bit	r10, $15		/ round to nearest, ties to even
+	jr	z, 7f
+	res	r10, $15
+	or	r10, r11
+	or	r10, r2
+	or	r10, r3
+	jr	nz, 6f
+	bit	r7, $0
+	jr	z, 7f
+6:
+	inc	r7, $1
+	jr	nz, 7f
+	inc	r6, $1
+	jr	nz, 7f
+	inc	r5, $1
+	jr	nz, 7f
+	inc	r4, $1
+7:
+	add	r12, r4			/ a carry out of the fraction is the
+	ld	r0, r12			/ exponent's, as IEEE packs them
+	or	r0, r13
+	ld	r1, r5
+	ldl	rr2, rr6
 9:
 	ldm	r6, (rr14), $8
-	add	r15, $16
+	inc	r15, $16
 	ret
 retz:
 	subl	rr0, rr0
@@ -151,7 +155,7 @@ retz:
 	jr	un, 9b
 retinf:
 	ld	r0, $2047*16
-	or	r0, r1
+	or	r0, r13
 	sub	r1, r1
 	subl	rr2, rr2
 	jr	un, 9b
