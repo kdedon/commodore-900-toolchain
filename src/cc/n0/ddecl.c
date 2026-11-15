@@ -135,7 +135,8 @@ unsigned long	x2;
 		cerror("identifier \"%s\" is not a parameter", sp->s_id);
 		c = C_AUTO;
 	} else if ((c==C_AUTO || c==C_REG)
-	 && ndp!=NULL && ndp->d_type==D_ARRAY && ndp->d_bound==0) {
+	 && ndp!=NULL && ndp->d_type==D_ARRAY && ndp->d_bound==0
+	 && s!=ASSIGN) {
 		cerror("cannot declare flexible automatic array");
 	} else if (ot!=T_NONE && ot!=t && !ismemb(oc)) {
 		++rf;

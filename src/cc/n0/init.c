@@ -11,6 +11,32 @@
 #include "cc0.h"
 #endif
 
+/*
+ * An automatic structure's initializer read before its members were known
+ * to take it: a member that is not a structure takes it as its first item.
+ */
+static	TREE	*itp;
+
+/*
+ * An automatic array sized by its initializer is bound once the initializer
+ * has been read, so its items and line records are kept, in order, until
+ * then.  An item records the member it initializes; the symbol is iflexp's.
+ */
+SYM	*iflexp;
+typedef	struct	{
+	TREE	*f_tp;			/* Value, or NULL for a line record */
+	DIM	*f_dp;			/* Item's dimensions */
+	INFO	*f_ip;			/* Item's info */
+	sizeof_t f_bo;			/* Byte offset, or the line */
+	char	f_type;			/* Item's type */
+	char	f_flag;			/* Item's volatility */
+	char	f_self;			/* Item is the array's own symbol */
+}	IFLEX;
+static	IFLEX	*iflist;
+static	int	nflex, maxflex;
+static	IFLEX	*iflex1();
+static	int	inewtree();
+
 init(sp, dp, bo, flex)
 register SYM	*sp;
 register DIM	*dp;
@@ -21,7 +47,7 @@ int		flex;
 	DIM		*ndp;
 	TREE		*tp;
 	sizeof_t	width, nbe, nel, ninit;
-	int		brace, c, adj;
+	int		brace, c, adj, own;
 
 	t  = sp->s_type;
 	width = sdsize(sp, dp);
@@ -38,6 +64,20 @@ int		flex;
 	nbe = sdsize(sp, ndp);
 	if (nbe != 0)
 		nel = width/nbe;
+	own = 0;
+	if (dp==NULL && istruct(t) && isauto(sp) && itp==NULL
+	 && s!=LBRACE && s!=RBRACE && s!=STRING) {
+		++own;
+		inewtree();
+		++ininit;
+		itp = expr();
+		--ininit;
+		if (tltype(itp)==T_STRUCT && itp->t_ip==sp->s_ip) {
+			icollect(itp, bo, sp, NULL);
+			itp = NULL;
+			return;
+		}
+	}
 	brace = 0;
 	if (s==LBRACE && (dp!=NULL || !istruct(t))) {
 		++brace;
@@ -45,18 +85,25 @@ int		flex;
 	} else if (s!=LBRACE && (dp!=NULL || istruct(t)))
 		notbook();
 	ninit = 0;
-	while (s != RBRACE) {
-		if (ndp==NULL && istruct(t))
-			sinit(sp, bo);
+	while (s != RBRACE || itp != NULL) {
+		if (ndp==NULL && istruct(t)) {
+			if (dp!=NULL && isauto(sp))
+				init(sp, (DIM *)NULL, bo, 0);	/* may be whole */
+			else
+				sinit(sp, bo);
+		}
 		else if (ndp!=NULL && ndp->d_type==D_ARRAY)
 			init(sp, ndp, bo, 0);
-		else {
+		else if (itp != NULL) {
+			icollect(itp, bo, sp, ndp);
+			itp = NULL;
+		} else {
 			adj = 0;
 			if (s==STRING && t<T_INT && ndp==NULL) {
 again:
 				instring = '"';
 				while ((c = getmap('\"')) >= 0) {
-					newtree(sizeof(TREE));
+					inewtree();
 					icollect(bicon((ival_t)c), bo, sp, ndp);
 					++ninit;
 					++bo;
@@ -72,12 +119,12 @@ again:
 					cwarn("string initializer not terminated by NUL");
 					break;
 				}
-				newtree(sizeof(TREE));
+				inewtree();
 				icollect(bicon((ival_t)0), bo, sp, ndp);
 				++ninit;
 				break;
 			}
-			newtree(sizeof(TREE));
+			inewtree();
 			++ininit;
 			tp = expr();
 			--ininit;
@@ -101,6 +148,8 @@ again:
 		}
 		itrail();
 	}
+	if (own)
+		itp = NULL;
 	if (brace)
 		mustbe(RBRACE);
 	if (ninit < nel) {
@@ -148,7 +197,7 @@ sinit(sp, bo) SYM *sp; sizeof_t bo;
 		lex();
 	}
 	lo = n = f = 0;
-	while (s != RBRACE) {
+	while (s != RBRACE || itp != NULL) {
 		bfflag = 0;
 		if (n >= ip->i_nsp) {
 			if (f == 0) {
@@ -259,19 +308,28 @@ sizeof_t	bo;
 register SYM	*sp;
 DIM		*dp;
 {
-	register TREE	*ip;
+	register IFLEX	*ip;
+	register TREE	*xp;
 
 	if (isauto(sp)) {
-		iassign(sp, dp, bo, tp);
+		if (iflexp != NULL) {
+			ip = iflex1(tp, (sizeof_t)bo);
+			ip->f_dp = dp;
+			ip->f_ip = sp->s_ip;
+			ip->f_type = sp->s_type;
+			ip->f_flag = sp->s_flag;
+			ip->f_self = sp == iflexp;
+		} else
+			iassign(sp, dp, bo, tp);
 		return;
 	}
-	ip = talloc();
-	ip->t_op = INIT;
-	ip->t_type = sp->s_type;
-	ip->t_dp = dp;
-	ip->t_ip = sp->s_ip;
-	ip->t_lp = tp;
-	tput(IEXPR, 0, ip);
+	xp = talloc();
+	xp->t_op = INIT;
+	xp->t_type = sp->s_type;
+	xp->t_dp = dp;
+	xp->t_ip = sp->s_ip;
+	xp->t_lp = tp;
+	tput(IEXPR, 0, xp);
 }
 
 /*
@@ -320,9 +378,14 @@ bfinit(sp, mp, ip, np, off) SYM *sp; register SYM *mp; INFO *ip; register int *n
 			sp->s_type = mp->s_type;
 
 		/* Grab the initializer value. */
-		++ininit;
-		mval = iconexpr();
-		--ininit;
+		if (itp != NULL) {
+			mval = iconval(itp);
+			itp = NULL;
+		} else {
+			++ininit;
+			mval = iconexpr();
+			--ininit;
+		}
 
 		/* Make sure the initializer is appropriate. */
 		mask = (((unsigned long)1) << mp->s_width) - 1;
@@ -354,6 +417,83 @@ bfinit(sp, mp, ip, np, off) SYM *sp; register SYM *mp; INFO *ip; register int *n
 	 */
 	icollect(bicon((ival_t)val), off, sp, NULL);
 	return status;
+}
+
+/*
+ * Reset the tree space for the next initializer item, unless the items
+ * are being kept for an automatic array sized by its initializer.
+ */
+static int
+inewtree()
+{
+	if (iflexp == NULL)
+		newtree(sizeof(TREE));
+}
+
+/*
+ * Keep one more item: value 'tp' at offset 'bo', or a line record.
+ */
+static IFLEX *
+iflex1(tp, bo)
+TREE	*tp;
+sizeof_t bo;
+{
+	register IFLEX	*ip;
+
+	if (nflex == maxflex) {
+		maxflex = maxflex ? 2*maxflex : 16;
+		iflist = (IFLEX *)(iflist ? realloc((char *)iflist, maxflex*sizeof(IFLEX))
+					  : malloc(maxflex*sizeof(IFLEX)));
+		if (iflist == NULL)
+			cfatal("out of space in initializer");
+	}
+	ip = &iflist[nflex++];
+	ip->f_tp = tp;
+	ip->f_bo = bo;
+	return ip;
+}
+
+/*
+ * Keep the line record expr() would write.
+ */
+iline()
+{
+	iflex1((TREE *)NULL, (sizeof_t)line);
+}
+
+/*
+ * Initialize automatic array 'sp', whose bound is the number of items in
+ * its initializer: read the initializer, bind the array, then write what
+ * `T a[n] = ...' writes, in the order it writes it.
+ */
+iflex(sp)
+register SYM	*sp;
+{
+	register IFLEX	*ip, *ep;
+	SYM		sym;
+
+	newtree(sizeof(TREE));
+	iflexp = sp;
+	nflex = 0;
+	init(sp, sp->s_dp, (sizeof_t)0, 1);
+	iflexp = NULL;
+	bindlocal(sp);
+	putautos();
+	for (ip = iflist, ep = iflist+nflex; ip < ep; ++ip) {
+		if (ip->f_tp == NULL) {
+			bput(LINE);
+			iput((ival_t)ip->f_bo);
+		} else if (ip->f_self)
+			iassign(sp, ip->f_dp, ip->f_bo, ip->f_tp);
+		else {
+			sym = *sp;
+			sym.s_type = ip->f_type;
+			sym.s_dp = ip->f_dp;
+			sym.s_ip = ip->f_ip;
+			sym.s_flag = ip->f_flag;
+			iassign(&sym, ip->f_dp, ip->f_bo, ip->f_tp);
+		}
+	}
 }
 
 /* end of n0/init.c */

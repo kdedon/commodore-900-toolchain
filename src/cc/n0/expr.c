@@ -33,8 +33,12 @@ TREE *
 expr()
 {
 	if (notvariant(VCPP)) {
-		bput(LINE);
-		iput((ival_t) line);
+		if (iflexp != NULL)
+			iline();
+		else {
+			bput(LINE);
+			iput((ival_t) line);
+		}
 	}
 	return build(NOP, tree(LOW), NULL);
 }
@@ -792,9 +796,16 @@ TREE *tp;
 ival_t
 iconexpr()
 {
-	register TREE *tp;
+	return iconval(expr());
+}
 
-	tp = expr();
+/*
+ * The value of tree 'tp', which must be an int constant.
+ */
+ival_t
+iconval(tp)
+register TREE *tp;
+{
 	while (tp->t_op == CAST || tp->t_op == CONVERT)
 		tp = tp->t_lp;
 	if (tp->t_op == ICON)

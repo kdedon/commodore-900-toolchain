@@ -53,13 +53,17 @@ register TREE	*tp;
 	lval_t		offs;
 	int		lidn;
 	SYM		*gidp;
+	int		narrow;
 
-	tp = basenode(tp);
+	for (narrow = 0; (op = tp->t_op) == CONVERT || op == CAST; tp = tp->t_lp)
+		if (!islong(tp->t_type))
+			narrow = 1;
 	if (!isflt(tt)) {
 		mode = A_DIR;
 		offs = 0;
 		if (gencoll(tp, &mode, &offs, &lidn, &gidp, 0, 1) == 0
-		|| (mode&A_AMOD) != A_DIR) {
+		|| (mode&A_AMOD) != A_DIR
+		|| (narrow && (mode&(A_LID|A_GID)) != 0)) {
 			cerror(ilinit);
 			return;
 		}
@@ -71,11 +75,14 @@ register TREE	*tp;
 		 * word-swapped in the data image; the float path below was
 		 * already byte-order-fixed, this one was missed).
 		 */
+		/*
+		 * `(long)&x' is the far pointer's own two words: a conversion
+		 * between long and far pointer emits no code (leaves.t shares
+		 * the pair).  An address cut to a word or byte is not constant.
+		 */
+		if ((tt==S32 || tt==U32) && (mode&(A_LID|A_GID)) != 0)
+			tt = LPTR;
 		if (tt==S32 || tt==U32) {
-			if ((mode&(A_LID|A_GID)) != 0) {
-				cerror(ilinit);
-				return;
-			}
 			bput(CODE);
 			bput(ZWORD);
 			iput(A_OFFS|mode);

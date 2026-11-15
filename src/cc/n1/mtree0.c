@@ -198,7 +198,7 @@ again:
 			tp = lp;
 			goto again;
 		}
-		tp->t_lp = lp = modtree(lp, MRVALUE, tp);
+		tp->t_lp = lp = modtree(lp, (ac==MINIT?MINIT:MRVALUE), tp);
 		/* modtree() may have changed the op of lp. */
 		if (lp->t_op==COMMA || lp->t_op==QUEST)
 			goto again;

@@ -91,11 +91,17 @@ locals()
 					newseg(SCODE);
 				}
 				if (dc==C_AUTO || dc==C_REG) {
-					bindlocal(sp);
-					if (s == ASSIGN) {
+					if (s == ASSIGN && (ndp=sp->s_dp) != NULL
+					 && ndp->d_type == D_ARRAY && ndp->d_bound == 0) {
 						lex();
-						putautos();
-						init(sp, sp->s_dp, (sizeof_t)0, 0);
+						iflex(sp);
+					} else {
+						bindlocal(sp);
+						if (s == ASSIGN) {
+							lex();
+							putautos();
+							init(sp, sp->s_dp, (sizeof_t)0, 0);
+						}
 					}
 				}
 #ifdef KLUDGE
