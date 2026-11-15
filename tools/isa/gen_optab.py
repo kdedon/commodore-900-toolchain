@@ -62,7 +62,10 @@ def width(mn, S):
     # the name convention AND run before the @RR/long test.  (MNEMONICS is the full
     # inventory mnemonic set, built before this is called.)
     if mn.endswith('B') and mn[:-1] in MNEMONICS: return 'B'
-    if any(s.startswith(('RR', '@RR')) or ',RR' in s for s in S) or mn.endswith('L'): return 'L'
+    # A long op is likewise <word-mnemonic>+'L' (LDL, ADDL, SLLL); the 'L' of RL, SDL,
+    # SLL or LDCTL is part of a word mnemonic.
+    if any(s.startswith(('RR', '@RR')) or ',RR' in s for s in S): return 'L'
+    if mn.endswith('L') and mn[:-1] in MNEMONICS: return 'L'
     if any(s.startswith('RQ') for s in S): return 'Q'
     return 'W'
 

@@ -582,7 +582,9 @@ quadhit(op, r)
  * the epilogue reads the registers a return statement left a value in, except on a
  * return without one (getautos); a block move is opaque -> NOT dead.  i_pc
  * carries a per-call visited stamp + the union of masks seen (mask-union worklist, so loops
- * terminate); genfunc rewrites i_pc afterward. */
+ * terminate); genfunc rewrites i_pc afterward.  A node can arrive holding an earlier
+ * function's code address, which reads as a stamp of this query, so clrstamps() zeroes
+ * every i_pc before the first query (ddgen is never 0). */
 #define	NDDSTK	1024
 extern SYM	retvoid;			/* getcod.c */
 extern int	retmask, retvoidok, fallvoid;
@@ -595,6 +597,15 @@ static INS	*exitrun;			/* the labels before the epilogue */
 static INS	*ddstk[NDDSTK];
 static int	ddmsk[NDDSTK];
 static long	ddgen;
+
+static
+clrstamps()
+{
+	register INS	*p;
+
+	for (p = ins.i_fp; p != &ins; p = p->i_fp)
+		p->i_pc = 0;
+}
 
 static
 pairdeadcfg(start, d)
@@ -1567,6 +1578,7 @@ peephole()
 	subdec();
 	shldouble();
 	callreloc();
+	clrstamps();
 	cpstate();
 	copyfwd();
 	pushfold();

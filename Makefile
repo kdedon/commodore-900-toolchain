@@ -199,6 +199,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/mul16.sh
 	sh tests/sdiv2.sh
 	sh tests/opasg.sh
+	sh tests/sllpair.sh
+	sh tests/peepstamp.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
 # an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it

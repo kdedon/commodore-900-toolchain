@@ -16,7 +16,7 @@ struct optab { short style; unsigned short base; short flags; } optab[] = {
     { OF_DOPB    , 0x0600, OP_BYTE          },	/* ZANDB      Rb,#i Rb,@R Rb,Rb Rb,addr Rb,a [pst] */
     { OF_BIT     , 0x2700, 0                },	/* ZBIT       @R,#i R,#i R,R addr(R),#i addr [pst] */
     { OF_BIT     , 0x2600, OP_BYTE          },	/* ZBITB      @R,#i Rb,#i Rb,R addr(R),#i ad [pst] */
-    { OF_CALL    , 0x1F00, OP_DWORD         },	/* ZCALL      @R addr addr(R) [pst] */
+    { OF_CALL    , 0x1F00, OP_DWORD         },	/* ZCALL      @RR addr addr(R) [pst] */
     { OF_CALR    , 0xD000, 0                },	/* ZCALR      addr [pst] */
     { OF_SOP     , 0x0D08, 0                },	/* ZCLR       @R R addr addr(R) [pst] */
     { OF_SOPB    , 0x0C08, OP_BYTE          },	/* ZCLRB      @R Rb addr addr(R) [pst] */
@@ -67,13 +67,13 @@ struct optab { short style; unsigned short base; short flags; } optab[] = {
     { OF_ASMONLY , 0x3B00, OP_DWORD         },	/* ZINIR      @RR,@RR,R [pst] */
     { OF_ASMONLY , 0x3A00, OP_BYTE          },	/* ZINIRB     @RR,@RR,R [pst] */
     { OF_IMPL    , 0x7B00, 0                },	/* ZIRET       [pst] */
-    { OF_JP      , 0x1E00, 0                },	/* ZJP        cc,@R cc,addr cc,addr(R) [pst] */
+    { OF_JP      , 0x1E00, 0                },	/* ZJP        cc,@RR cc,addr cc,addr(R) [pst] */
     { OF_JR      , 0xE000, 0                },	/* ZJR        cc,addr [pst] */
     { OF_LD      , 0x2100, 0                },	/* ZLD        @R,#i @R,R R(R),R R,#i R,@R R, [pst] */
     { OF_LDA     , 0x3400, OP_DWORD         },	/* ZLDA       R,R(R) R,addr R,addr(R) RR,add [pst] */
     { OF_LDA     , 0x3400, 0                },	/* ZLDAR      R,addr [pst] */
     { OF_LD      , 0x2000, OP_BYTE          },	/* ZLDB       @R,#i @R,Rb R(R),Rb Rb,#i Rb,@ [pst] */
-    { OF_LDCTL_  , 0x7D00, OP_DWORD         },	/* ZLDCTL     CTRb,R FCW,R NSPOFF,R NSPSEG,R [pst] */
+    { OF_LDCTL_  , 0x7D00, 0                },	/* ZLDCTL     CTRb,R FCW,R NSPOFF,R NSPSEG,R [pst] */
     { OF_ASMONLY, 0x0000, 0 },	/* ZLDCTLBFLAGSRB (no inventory row) */
     { OF_ASMONLY, 0x0000, 0 },	/* ZLDCTLBRBFLAGS (no inventory row) */
     { OF_ASMONLY , 0xBB09, OP_DWORD         },	/* ZLDDR      @RR,@RR,R [pst] */
@@ -109,7 +109,7 @@ struct optab { short style; unsigned short base; short flags; } optab[] = {
     { OF_BIT     , 0x2200, OP_BYTE          },	/* ZRESB      @R,#i Rb,#i Rb,R addr(R),#i ad [pst] */
     { OF_FLAG    , 0x8D03, 0                },	/* ZRESFLG    #i [pst] */
     { OF_RET     , 0x9E00, 0                },	/* ZRET       cc [pst] */
-    { OF_ROT     , 0xB300, OP_DWORD         },	/* ZRL        R [pst] */
+    { OF_ROT     , 0xB300, 0                },	/* ZRL        R [pst] */
     { OF_ROT     , 0xB200, OP_BYTE          },	/* ZRLB       Rb [pst] */
     { OF_ROT     , 0xB308, 0                },	/* ZRLC       R [pst] */
     { OF_ROT     , 0xB208, OP_BYTE          },	/* ZRLCB      Rb [pst] */
@@ -125,7 +125,7 @@ struct optab { short style; unsigned short base; short flags; } optab[] = {
     { OF_SHIFTD  , 0x330B, 0                },	/* ZSDA       R,R [pst] */
     { OF_SHIFTD  , 0x320B, OP_BYTE          },	/* ZSDAB      Rb,R [pst] */
     { OF_SHIFTD  , 0x330F, OP_DWORD         },	/* ZSDAL      RR,R [pst] */
-    { OF_SHIFTD  , 0x3303, OP_DWORD         },	/* ZSDL       R,R [pst] */
+    { OF_SHIFTD  , 0x3303, 0                },	/* ZSDL       R,R [pst] */
     { OF_SHIFTD  , 0x3203, OP_BYTE          },	/* ZSDLB      Rb,R [pst] */
     { OF_SHIFTD  , 0x3307, OP_DWORD         },	/* ZSDLL      RR,R [pst] */
     { OF_BIT     , 0x2500, 0                },	/* ZSET       @R,#i R,#i R,R addr(R),#i addr [pst] */
@@ -140,7 +140,7 @@ struct optab { short style; unsigned short base; short flags; } optab[] = {
     { OF_SHIFT   , 0xB309, 0                },	/* ZSLA       R,0 [pst] */
     { OF_SHIFT   , 0xB209, OP_BYTE          },	/* ZSLAB      Rb,0 [pst] */
     { OF_SHIFT   , 0xB30D, OP_DWORD         },	/* ZSLAL      RR,0 [pst] */
-    { OF_SHIFT   , 0xB301, OP_DWORD         },	/* ZSLL       R,0 [pst] */
+    { OF_SHIFT   , 0xB301, 0                },	/* ZSLL       R,0 [pst] */
     { OF_SHIFT   , 0xB201, OP_BYTE          },	/* ZSLLB      Rb,0 [pst] */
     { OF_SHIFT   , 0xB305, OP_DWORD         },	/* ZSLLL      RR,0 [pst] */
     { OF_ASMONLY , 0x3B0B, OP_DWORD         },	/* ZSOTDR     @RR,@RR,R [pst] */
