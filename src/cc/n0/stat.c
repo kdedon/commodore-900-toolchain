@@ -312,7 +312,8 @@ loop:
 				break;
 			}
 			if (bitcompat(tltype(lp), tltype(tp))
-			 && !((tp->t_op==DIV||tp->t_op==REM||tp->t_op==SHR||tp->t_op==ASHR||tp->t_op==ADIV||tp->t_op==AREM)
+			 && !((tp->t_op==DIV||tp->t_op==REM||tp->t_op==SHR||tp->t_op==ASHR||tp->t_op==ADIV||tp->t_op==AREM
+			    ||((tp->t_op==CAST||tp->t_op==CONVERT) && (tltype(tp->t_lp)==T_FLOAT||tltype(tp->t_lp)==T_DOUBLE)))
 			   && ((tltype(tp)==T_UCHAR||tltype(tp)==T_USHORT||tltype(tp)==T_UINT||tltype(tp)==T_ULONG)
 			    != (lp->t_type==T_UCHAR||lp->t_type==T_USHORT||lp->t_type==T_UINT||lp->t_type==T_ULONG))))
 				adjust(tp, lp->t_type, lp->t_dp, lp->t_ip);

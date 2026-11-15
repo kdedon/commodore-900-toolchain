@@ -306,7 +306,9 @@ term()
 			if (isfloat(tt) && lt == T_PTR)
 				cerror("cannot cast pointer to double");
 			if (bitcompat(tt, lt)
-			 && !((cp->t_lp->t_op==DIV||cp->t_lp->t_op==REM||cp->t_lp->t_op==SHR||cp->t_lp->t_op==ASHR||cp->t_lp->t_op==ADIV||cp->t_lp->t_op==AREM)
+			 && !((cp->t_lp->t_op==DIV||cp->t_lp->t_op==REM||cp->t_lp->t_op==SHR||cp->t_lp->t_op==ASHR||cp->t_lp->t_op==ADIV||cp->t_lp->t_op==AREM
+			    ||cp->t_lp->t_op==QUEST||cp->t_lp->t_op==COMMA
+			    ||((cp->t_lp->t_op==CAST||cp->t_lp->t_op==CONVERT) && isfloat(tltype(cp->t_lp->t_lp))))
 			   && ((tt==T_UCHAR||tt==T_USHORT||tt==T_UINT||tt==T_ULONG)
 			    != (lt==T_UCHAR||lt==T_USHORT||lt==T_UINT||lt==T_ULONG)))) {
 				tp = cp->t_lp;
@@ -1150,6 +1152,7 @@ register DIM	*dp;
 INFO	 	*ip;
 {
 	register int	op;
+	int		tt, lt;
 
 again:
 	tp->t_type = t;
@@ -1169,8 +1172,13 @@ again:
 	}
 	if (dp != NULL && dp->d_type == D_MOSAR)
 		dp = tdalloc(dp->d_dp, D_PTR, (sizeof_t)0);
-	if (op == CAST && bitcompat(tltype(tp), tltype(tp->t_lp))) {
+	if (op == CAST && bitcompat(tt = tltype(tp), lt = tltype(tp->t_lp))) {
 		tp = tp->t_lp;
+		if ((tp->t_op == CAST || tp->t_op == CONVERT)
+		 && isfloat(tltype(tp->t_lp))
+		 && ((tt==T_UCHAR||tt==T_USHORT||tt==T_UINT||tt==T_ULONG)
+		  != (lt==T_UCHAR||lt==T_USHORT||lt==T_UINT||lt==T_ULONG)))
+			return;		/* a float conversion keeps its type */
 		goto again;
 	}
 }

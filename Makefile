@@ -144,6 +144,12 @@ $(B)/slgen: src/slgen/slgen.c
 # tests/mul16.sh: 16-bit operands take the one-word MULT and DIV, and their
 # values match the host's.
 #
+# tests/condcast.sh: a cast of a `?:' or a comma converts its value before a
+# widening, by a cast, an assignment, an argument or a return.
+#
+# tests/dblcast.sh: a cast of a float-to-integer conversion converts the
+# integer: (unsigned long)(long)d with d = -2.0 is 4294967294.
+#
 # tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
 # ld, ld -r, the native ar's index, loutid, loutdis and nlist().
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
@@ -199,6 +205,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/mul16.sh
 	sh tests/sdiv2.sh
 	sh tests/opasg.sh
+	sh tests/condcast.sh
+	sh tests/dblcast.sh
 	sh tests/sllpair.sh
 	sh tests/peepstamp.sh
 
