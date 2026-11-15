@@ -99,6 +99,7 @@ typedef	struct	ldsym	lds_t;
 sym_t	*symtable[NHASH];	/* hashed symbol table */
 mod_t	*modhead, *modtail;	/* module list head and tail */
 seg_t	oseg[NLSEG];		/* output segment descriptors */
+uaddr_t	slead[NLSEG];		/* bytes before each output section's base */
 int	nundef;			/* number of undefined symbols */
 int	nerror;			/* inputs found broken; the exit status */
 uaddr_t	commons;		/* accumulate size of commons */
@@ -228,7 +229,7 @@ void	canldh();
 void	endbind();
 void	undef();
 void	lfixup1(), lfixup2();
-uaddr_t	setbase(), newpage(), lentry(), seppage();
+uaddr_t	setbase(), setlead(), newpage(), lentry(), seppage();
 uaddr_t ptov(), vtop();
 fsize_t	segoffs();
 void	symredef(), rdsymbol(), commfit();

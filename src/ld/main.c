@@ -32,7 +32,7 @@ char	*argv[];
 	FILE	*ofp;
 	int	i, segn;
 	unsigned int	symno;
-	fsize_t	daddr, ostrsize;
+	fsize_t	daddr, ostrsize, lead;
 	lds_t	lds;
 
 	scanargs(argc, argv);
@@ -159,7 +159,7 @@ char	*argv[];
 
 			if ((outputf[i] = malloc(sizeof(FILE)))==NULL)
 				fatal("out of space");
-			outputf[i]->_cc = sgp->size;
+			outputf[i]->_cc = sgp->size + slead[i];
 			outputf[i]->_cp = &outbuf[sgp->daddr];
 			outputf[i]->_pt = &abort;
 		} else
@@ -169,6 +169,8 @@ char	*argv[];
 				fatal("cannot open %s (seg %d)", ofname, i);
 			fseek(outputf[i], sgp->daddr, 0);
 		}
+		for (lead=slead[i]; lead>0; lead--)
+			putc(0, outputf[i]);
 	}
 	sldivert();		/* a library's L_REL waits for L_SYM's size */
 	/*
@@ -274,7 +276,7 @@ char	*argv[];
 	canshort(oldh.l_tbase);
 	canlong(oldh.l_entry);
 	for (i=0; i<NLSEG; i++) {
-		oldh.l_ssize[i] = oseg[i].size;
+		oldh.l_ssize[i] = oseg[i].size + slead[i];
 		cansize(oldh.l_ssize[i]);
 	}
 	if (outbuf==NULL)
@@ -454,7 +456,7 @@ register ldh_t	*ldhp;
 	addr = ldhp->l_flag&LF_KER ? drvbase[ldhp->l_machine] : base;
 	addr = setbase(&sega[L_SHRI], ldhp, addr);
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==LF_SHR) {
-		addr = setbase(&sega[L_SHRD], ldhp, addr);
+		addr = setlead(sega, L_SHRD, ldhp, addr);
 		/*
 		 * `-n' without `-i' puts SHRD in the text segment.  setbase()
 		 * checks each alone, so check their sum: past 64Kb the 16-bit
@@ -467,19 +469,51 @@ register ldh_t	*ldhp;
 	}
 	if (ldhp->l_flag&LF_SHR)
 		addr = prvset && ldhp==&oldh ? prvbase : newpage(addr);
-	addr = setbase(&sega[L_PRVI], ldhp, addr);
+	addr = setlead(sega, L_PRVI, ldhp, addr);
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==LF_SHR)
-		addr = setbase(&sega[L_PRVD], ldhp, addr);
-	addr = setbase(&sega[L_BSSI], ldhp, addr);
+		addr = setlead(sega, L_PRVD, ldhp, addr);
+	addr = setlead(sega, L_BSSI, ldhp, addr);
 	if (ldhp->l_flag&LF_SEP)
 		addr = seppage(ldhp, addr);
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))!=LF_SHR)
-		addr = setbase(&sega[L_SHRD], ldhp, addr);
+		addr = setlead(sega, L_SHRD, ldhp, addr);
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))==(LF_SHR|LF_SEP))
 		addr = newpage(addr);
 	if ((ldhp->l_flag&(LF_SHR|LF_SEP))!=LF_SHR)
-		addr = setbase(&sega[L_PRVD], ldhp, addr);
-	setbase(&sega[L_BSSD], ldhp, addr);
+		addr = setlead(sega, L_PRVD, ldhp, addr);
+	setlead(sega, L_BSSD, ldhp, addr);
+}
+
+/*
+ * Set the base of section n of a final segmented image, starting it at the
+ * next hardware segment if it would otherwise cross a boundary.  A Z8001
+ * seg:offset address cannot reach across a 64Kb segment -- the 16-bit offset
+ * wraps inside it -- so an object straddling one has its tail alias the
+ * bottom of its own segment.  The skipped bytes lead the section: they count
+ * in its header size and are zeros in the file, so a loader that lays the
+ * sections end to end puts the section's contents at its base.  Under -L a
+ * section starting on a boundary is also where lfixup1() expects it, since
+ * that pads modules by their offset within the section.
+ */
+uaddr_t
+setlead(sega, n, ldhp, addr)
+register seg_t	sega[];
+int	n;
+register ldh_t	*ldhp;
+register uaddr_t addr;
+{
+	uaddr_t	lead, max, max1;
+
+	lead = 0;
+	max = segmax[ldhp->l_machine];
+	if (segoff && !reloc && ldhp==&oldh && max!=0 && sega[n].size!=0) {
+		max1 = max-1;
+		if ((addr&max1)!=0 && (addr&max1)+sega[n].size > max)
+			lead = max-(addr&max1);
+	}
+	if (sega==oseg)
+		slead[n] = lead;
+	return (setbase(&sega[n], ldhp, addr+lead));
 }
 
 /*
@@ -546,6 +580,8 @@ register fsize_t	offs;
 		else {
 			sgp->daddr = offs;
 			offs += sgp->size;
+			if (sega==oseg)
+				offs += slead[sgp-sega];
 		}
 	}
 	return (offs);

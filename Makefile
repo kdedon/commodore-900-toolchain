@@ -98,6 +98,9 @@ $(B)/slgen: src/slgen/slgen.c
 #
 # tests/ld-commsize.sh: a common against a definition too small for it.
 #
+# tests/ld-straddle.sh: no output section crosses a 64K boundary; its first part
+# needs only as and ld, its second runs a program through ccz.
+#
 # tests/cc-commons.sh: a file-scope `int foo;' under -VCOMM, compiled, linked
 # and run.
 #
@@ -160,6 +163,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/obj-reloc.sh
 	sh tests/ld-commons.sh
 	sh tests/ld-commsize.sh
+	sh tests/ld-straddle.sh
 	sh tests/cc-commons.sh
 	sh tests/multiseg-text.sh
 	sh tests/regclob.sh
