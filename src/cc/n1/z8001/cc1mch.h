@@ -221,9 +221,13 @@ typedef	char	INDEX;		/* Index type				*/
  */
 #define	ZJRPL	(NZOPCODE+0)	/* JR PL,lab  -- sign clear	*/
 #define	ZJRULT	(NZOPCODE+1)	/* JR ULT,lab -- unsigned <	*/
+#define	ZJREQ	(NZOPCODE+2)	/* JR EQ,lab  -- zero		*/
+#define	ZJRMI	(NZOPCODE+3)	/* JR MI,lab  -- sign set	*/
 
 #define	mapcode(c, tp)	((c) == ZJRPL  ? (ZJREL|CC_PL)  : \
-			 (c) == ZJRULT ? (ZJREL|CC_ULT) : (c))
+			 (c) == ZJRULT ? (ZJREL|CC_ULT) : \
+			 (c) == ZJREQ  ? (ZJREL|CC_EQ)  : \
+			 (c) == ZJRMI  ? (ZJREL|CC_MI)  : (c))
 #define	mappfx(tp, opv, pfx, npfxp)	cbotch("mappfx")	/* unused	*/
 #define	gentos(x,y)			/* no top-of-stack required	*/
 #define	genstar(x,y,z,zz)		/* no star address required	*/

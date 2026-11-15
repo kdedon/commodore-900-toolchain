@@ -22,6 +22,9 @@ TREE	*dupnode();	/* deep tree copy (defined below, before modlfld) */
 TREE	*mdtempnode();	/* altemp.c: modify-phase stack temporary */
 static TREE *modopasg();
 static opasgtype();
+static lpow2();
+static isnnarm();
+static mularm();
 
 static	char	modoptab[] = {
 	'i',	'u',	'i',	'u',	'l',	'v',	'f',
@@ -415,6 +418,174 @@ register TREE	*ptp;
 }
 
 /*
+ * True if word `tp' is known to be under 0x8000: a widened unsigned byte, an
+ * AND with a constant that is, or a ?: or comma whose values are such words
+ * or constants.
+ */
+static
+isnnword(tp)
+register TREE *tp;
+{
+	register TREE *cp;
+
+	if (tp->t_op == QUEST)
+		return isnnarm(tp->t_rp->t_lp) && isnnarm(tp->t_rp->t_rp);
+	if (tp->t_op == COMMA)
+		return isnnarm(tp->t_rp);
+	if (tp->t_op == CONVERT || tp->t_op == CAST)
+		return tp->t_lp->t_type == U8;
+	if (tp->t_op != AND)
+		return 0;
+	cp = tp->t_rp->t_op == ICON ? tp->t_rp : tp->t_lp;
+	return cp->t_op == ICON && (cp->t_ival & 0x8000) == 0;
+}
+
+/*
+ * isnnword(), or a constant under 0x8000.
+ */
+static
+isnnarm(tp)
+register TREE *tp;
+{
+	if (tp->t_op == ICON)
+		return (tp->t_ival & 0x8000) == 0;
+	return isnnword(tp);
+}
+
+/*
+ * Give `tp' type `t', through the values of a ?: or comma.
+ */
+static
+settype(tp, t)
+register TREE *tp;
+{
+	tp->t_type = t;
+	if (tp->t_op == QUEST) {
+		tp = tp->t_rp;
+		tp->t_type = t;
+		settype(tp->t_lp, t);
+		settype(tp->t_rp, t);
+	} else if (tp->t_op == COMMA)
+		settype(tp->t_rp, t);
+}
+
+/*
+ * Make a signed long widening of a short `tp' unsigned.
+ */
+static
+unswiden(tp)
+register TREE *tp;
+{
+	if ((tp->t_op == CONVERT || tp->t_op == CAST) && tp->t_type == S32
+	 && tp->t_lp->t_type == S16)
+		tp->t_type = U32;
+}
+
+/*
+ * Classes of a long multiply operand that holds a 16-bit value, for MULT.
+ * MSIG: MULT reads it as its own value.  MNNG: that, and known to be
+ * non-negative.  MUNS: a widened unsigned word.  MUCN, for a value of a ?:
+ * only: a constant that is an unsigned word.
+ */
+#define	MSIG	1
+#define	MNNG	3
+#define	MUNS	4
+#define	MUCN	8
+
+static
+mulcls(tp)
+register TREE *tp;
+{
+	register int c;
+
+	c = mularm(tp);
+	return c == MUCN ? 0 : c;
+}
+
+/*
+ * mulcls() of `tp', which may be MUCN.  The class of a ?: is the one both
+ * its values fit, that of a comma its value's.
+ */
+static
+mularm(tp)
+register TREE *tp;
+{
+	register int t, l, r;
+
+	if (tp->t_op == COMMA && islong(tp->t_type))
+		return mularm(tp->t_rp);
+	if (tp->t_op == QUEST && islong(tp->t_type)) {
+		l = mularm(tp->t_rp->t_lp);
+		r = mularm(tp->t_rp->t_rp);
+		if (l == 0 || r == 0)
+			return 0;
+		if (l == r)
+			return l == MUCN ? MUNS : l;
+		if ((l&r&MSIG) != 0)
+			return MSIG;
+		if ((l|r) & MSIG) {
+			t = (l&MSIG) != 0 ? l : r;
+			return t == MNNG ? MUNS : 0;
+		}
+		return MUNS;
+	}
+	if (tp->t_op == LCON) {
+		if (tp->t_lval < -32768L || tp->t_lval > 65535L)
+			return 0;
+		return tp->t_lval > 32767L ? MUCN : tp->t_lval >= 0 ? MNNG : MSIG;
+	}
+	if ((tp->t_op != CONVERT && tp->t_op != CAST) || !islong(tp->t_type))
+		return 0;
+	tp = tp->t_lp;
+	t = tp->t_type;
+	if ((t == S16 || t == U16) && isnnword(tp))
+		return MNNG;
+	return t == U8 ? MNNG : (t == S8 || t == S16) ? MSIG : t == U16 ? MUNS : 0;
+}
+
+/*
+ * The 16-bit operand of a class mulcls() accepted, typed S16 unless it is an
+ * unsigned word.  A ?: is unsigned if its class is, a comma as its value.
+ */
+static TREE *
+mulword(tp)
+register TREE *tp;
+{
+	register TREE *wp, *cp;
+	register int t;
+
+	if (tp->t_op == COMMA) {
+		tp->t_rp = wp = mulword(tp->t_rp);
+		tp->t_type = wp->t_type;
+		tp->t_size = 2;
+		return tp;
+	}
+	if (tp->t_op == QUEST) {
+		t = mularm(tp) == MUNS ? U16 : S16;
+		cp = tp->t_rp;
+		cp->t_lp = mulword(cp->t_lp);
+		cp->t_rp = mulword(cp->t_rp);
+		cp->t_size = tp->t_size = 2;
+		settype(tp, t);
+		return tp;
+	}
+	if (tp->t_op == LCON) {
+		tp = ivalnode((ival_t)tp->t_lval);
+		amd(tp, NULL);
+		return tp;
+	}
+	wp = tp->t_lp;
+	if (isbyte(wp->t_type)) {
+		tp->t_type = S16;
+		tp->t_size = 2;
+		return tp;
+	}
+	if (isnnword(wp))
+		settype(wp, S16);
+	return wp;
+}
+
+/*
  * This function performs machine specific tree modifications.
  * It is called from "modtree" after all of the machine
  * independent transformations have been done.
@@ -444,6 +615,7 @@ TREE		*ptp;
 	register int	seg;
 	register int	lab;
 	register int	makecall;
+	int		n2;
 
 	c = ac;
 	if (c==MRETURN || c==MSWITCH || c==MINIT)
@@ -918,6 +1090,38 @@ TREE		*ptp;
 	if ((op==SHR || op==ASHR) && rp!=NULL && rp->t_op==ICON && rp->t_ival > 0)
 		rp->t_ival = -rp->t_ival;
 	/*
+	 * A signed long divided by 2^k, k >= 2, or its remainder, k <= 16: a sign
+	 * test and shifts or masks for the DIVL, with the fix-up that rounds toward
+	 * zero.  The quotient is `(x + b) >> k' with b = 2^k-1 added only to a
+	 * negative x, by a DIV whose right operand is the unsigned long b (div.t);
+	 * the remainder is `x & m' for a non-negative x and `-(-x & m)' for a
+	 * negative one, m = 2^k-1, by a REM whose right operand is the word m
+	 * (rem.t).  cc0 gives a signed long divide neither operand, so those rules
+	 * meet only these nodes; they are built here with their flags and not
+	 * walked again, which would take the REM by 1 for an AND.  A compound
+	 * form is written as its binary one first.
+	 */
+	if ((op==DIV || op==REM || op==ADIV || op==AREM) && tt==S32 && rt==S32
+	&&  rp!=NULL && rp->t_op==LCON && (n2 = lpow2(rp->t_lval)) >= 2 - (op==REM || op==AREM)
+	&&  n2 <= ((op==DIV || op==ADIV) ? 30 : 16)) {
+		if (op==ADIV || op==AREM)
+			return (modopasg(tp, lp, rp, S32));
+		if (op == DIV) {
+			tp1 = leftnode(DIV, lp, S32, 4);
+			tp1->t_rp = lvalnode(((lval_t)1 << n2) - 1);
+			tp1->t_rp->t_type = U32;
+			amd(tp1->t_rp, tp1);
+			amd(tp1, tp);
+			tp->t_op = SHR;
+			tp->t_lp = tp1;
+			tp->t_rp = ivalnode((ival_t)-n2);
+		} else
+			tp->t_rp = ivalnode((ival_t)(((lval_t)1 << n2) - 1));
+		amd(tp->t_rp, tp);
+		amd(tp, ptp);
+		return (NULL);
+	}
+	/*
 	 * A compound divide or remainder whose operands balance to another type
 	 * than the left's: cc0 hands `i /= u' the right operand unsigned, as the
 	 * divide must be.  The adiv and arem rules divide in the node's type, so
@@ -990,20 +1194,20 @@ TREE		*ptp;
 		}
 	}
 	/*
-	 * Unsigned WORD divide/remainder whose divisor the compiler cannot bound:
-	 * the Z8000 has no unsigned divide, and its one-word DIV reads a 16-bit
-	 * divisor with bit 15 set as NEGATIVE, so that instruction can only serve a
-	 * divisor known to be under 0x8000 -- which only a constant is here.
-	 * Widen the DIVISOR to 32 bits (zero-extended, hence positive)
-	 * and divide with DIVL, whose divisor is a full word wider than any U16
-	 * value: the UWORD rules with a LONG right operand in div/rem/adiv/arem.t
-	 * take the 16-bit dividend into the low word of the 64-bit DIVL dividend and
-	 * leave a 16-bit result, so the node's own type and the lvalue store are
-	 * unchanged.  A divisor that is a constant with bit 15 clear keeps the
-	 * one-word DIV above; a constant with bit 15 set was rewritten above.
+	 * Unsigned WORD divide/remainder.  The Z8000 has no unsigned divide, and
+	 * its one-word DIV reads a divisor with bit 15 set as negative.  A divisor
+	 * isnnword() bounds is retyped S16 and takes DIV directly, as a constant
+	 * with bit 15 clear does.  An unsigned word divisor stays a word: the rules
+	 * test its bit 15 and take DIV or the 0-or-1 quotient.  Any other divisor
+	 * (a signed word) is converted to U32 for the DIVL rules with a LONG right
+	 * operand.
 	 */
 	if ((op==DIV || op==REM || op==ADIV || op==AREM) && tt==U16
-	&&  rp!=NULL && !islong(rt)
+	&&  rp!=NULL && rp->t_type==U16 && isnnword(rp))
+		settype(rp, S16);
+	if ((op==DIV || op==REM || op==ADIV || op==AREM) && tt==U16
+	&&  rp!=NULL && !islong(rt) && rp->t_type!=U16
+	&& !(rp->t_type==S16 && isnnword(rp))
 	&& !(rp->t_op==ICON && (rp->t_ival & 0x8000) == 0)) {
 		tp->t_rp = leftnode(CONVERT, rp, U32, 4);
 		return (tp);
@@ -1526,6 +1730,22 @@ int		gt;
 		as = bin;
 	}
 	return (as);
+}
+
+/*
+ * k if a long is 2^k, else -1.
+ */
+static
+lpow2(n)
+lval_t	n;
+{
+	register int	k;
+
+	if (n <= 0 || (n & (n - 1)) != 0)
+		return (-1);
+	for (k = 0; n != 1; n >>= 1)
+		++k;
+	return (k);
 }
 
 /*
@@ -2488,6 +2708,37 @@ TREE		*ptp;
 			return;
 		}
 	case MUL:
+		/*
+		 * A long product of two 16-bit values takes the one-word MULT, which
+		 * is signed.  mul.t corrects the high word for an unsigned factor with
+		 * bit 15 set by adding the other factor.  Done here, after constant
+		 * folding, which would otherwise regroup the factors of nested
+		 * products.  An unsigned word times a signed one keeps the unsigned
+		 * factor widened, which selects its rule, and stays in that order.
+		 * That rule takes the unsigned factor as an unsigned long.  The
+		 * selector drops a signed widening of a short to match a rule, so
+		 * in any other long product that widening is made unsigned, which
+		 * it keeps: the rule must not meet a long times a short.
+		 */
+		if (tp->t_op == MUL && islong(tp->t_type)) {
+			lf = mulcls(tp->t_lp);
+			rf = mulcls(tp->t_rp);
+			if ((lf|rf) == (MUNS|MSIG)) {
+				if (lf != MUNS)
+					swapit(tp);
+				settype(tp->t_lp, U32);
+				tp->t_rp = mulword(tp->t_rp);
+				return;
+			}
+			if ((lf&rf&MSIG) != 0 || (lf|rf) == (MUNS|MNNG)
+			 || (lf == MUNS && rf == MUNS)) {
+				tp->t_lp = mulword(tp->t_lp);
+				tp->t_rp = mulword(tp->t_rp);
+			} else {
+				unswiden(tp->t_lp);
+				unswiden(tp->t_rp);
+			}
+		}
 	case AND:
 	case OR:
 	case XOR:

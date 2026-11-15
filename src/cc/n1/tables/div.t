@@ -16,6 +16,30 @@ DIV:
 		IMM|MMX		WORD
 			[ZCLR]	[REGNO R0]
 			[ZDIV]	[REGNO RR0],[AR]
+/ So does a divisor known to be under 0x8000, retyped S16 by modoper.
+%	PEFFECT|PRVALUE
+	UWORD		RR0	R1	*	R1
+		TREG		WORD
+		ADR		FS16
+			[ZCLR]	[REGNO R0]
+			[ZDIV]	[REGNO RR0],[AR]
+/ An unsigned word divisor: DIV reads bit 15 set as negative, but such a divisor
+/ gives a quotient of 0 or 1 and a remainder of a or a-b, so that arm takes a
+/ compare instead.
+%	PEFFECT|PRVALUE
+	UWORD		RR0	R1	*	R1
+		TREG		WORD
+		ADR		FU16
+			[ZTEST]		[AR]
+			[ZJRPL]		[LAB0]
+			[ZCP]		[REGNO R1],[AR]
+			[ZCLR]		[REGNO R1]
+			[ZJRULT]	[LAB1]
+			[ZINC]		[REGNO R1],[CONST 1]
+			[ZJP]		[LAB1]
+		[DLAB0]:[ZCLR]		[REGNO R0]
+			[ZDIV]		[REGNO RR0],[AR]
+		[DLAB1]:
 / Any other unsigned divisor arrives widened to 32 bits (modoper), zero-extended and
 / so positive, for the wider divisor of DIVL. The 16-bit dividend is the low word of
 / the 64-bit RQ0 dividend (R3) with the rest zeroed; the quotient lands in RR2 and is
@@ -69,6 +93,28 @@ DIV:
 		[DLAB0]:[ZSUBL]		[REGNO RR0],[REGNO RR0]
 			[ZDIVL]		[REGNO RQ0],[AR]
 		[DLAB1]:
+/ SIGNED by 2^k, k >= 2: modoper makes the quotient an SRAL of this node, whose right
+/ operand is the unsigned long 2^k-1 (a signed long divide has none otherwise).  It
+/ biases a negative dividend by 2^k-1, branching around the ADDL when the high word's
+/ sign is clear: TEST 7 and JR 6 for a non-negative dividend, +14 for a negative one.
+%	PEFFECT|PRVALUE
+	FS32		RQ0	RR2	*	RR2
+		TREG		FS32
+		IMM|MMX		FU32
+			[ZTEST]		[REGNO R2]
+			[ZJRPL]		[LAB0]
+			[ZADDL]		[REGNO RR2],[AR]
+		[DLAB0]:
+/ SIGNED by the constant 2: the quotient rounds toward zero, so a negative dividend
+/ takes 1 before the arithmetic shift.  EXTSL leaves 0 or -1 in RR0, and subtracting
+/ it is that 1.  As long as the DIVL it replaces, and without the divide.
+%	PEFFECT|PRVALUE
+	FS32		RQ0	RR2	*	RR2
+		TREG		LONG
+		2|MMX		FS32
+			[ZEXTSL]	[REGNO RR0]
+			[ZSUBL]		[REGNO RR2],[REGNO RR0]
+			[ZSLAL]		[REGNO RR2],[CONST 0xFFFF]
 %	PEFFECT|PRVALUE
 	FS32		RQ0	RR2	*	RR2
 		TREG		LONG

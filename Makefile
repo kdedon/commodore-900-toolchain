@@ -141,6 +141,9 @@ $(B)/slgen: src/slgen/slgen.c
 # tests/asgval.sh: the value of an assignment through a pointer reaches the
 # return register at every width.
 #
+# tests/mul16.sh: 16-bit operands take the one-word MULT and DIV, and their
+# values match the host's.
+#
 # tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
 # ld, ld -r, the native ar's index, loutid, loutdis and nlist().
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-paths check-effdiff check-effdiff-linked check-libc libc1 \
@@ -193,6 +196,8 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/ptrlong.sh
 	sh tests/asgval.sh
 	sh tests/longuns.sh
+	sh tests/mul16.sh
+	sh tests/sdiv2.sh
 	sh tests/opasg.sh
 
 # The efficiency sweep itself needs the donor corpus, the original binaries and
@@ -220,7 +225,7 @@ check-effdiff-linked:
 # libc is built from src/ (host/coherent-os.sh), so this needs no OS tree and
 # nothing beyond the emulator `check' already requires.  fpcost.sh and
 # fpcycles.sh hold the soft-float routines and floor, ceil, modf and cos under
-# instruction and clock ceilings.
+# instruction and clock ceilings, and intcycles.sh integer *, / and %.
 check-libc: libc libm $(B)/tools/loutdis
 	sh tests/notmem.sh
 	sh tests/printf.sh
@@ -228,6 +233,7 @@ check-libc: libc libm $(B)/tools/loutdis
 	sh tests/libm.sh
 	sh tests/fpcost.sh
 	sh tests/fpcycles.sh
+	sh tests/intcycles.sh
 
 # What each program is MADE OF, declared once by the build that runs on the
 # C900 and read by every cross-build (host/srcman.sh).  The build scripts assert

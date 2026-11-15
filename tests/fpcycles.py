@@ -101,6 +101,10 @@ def cost(pc, mn, ops, regs, taken):
     if mn == "LDM":
         n = (w1 & 15) + 1
         return {"IR": 11, "DA": 17 if lng else 15, "X": 18 if lng else 15}[md] + 3 * n
+    if mn in ("MULT", "DIV"):
+        add = {"R": 0, "IM": 0, "IR": 0, "DA": 4 if lng else 2, "X": 5 if lng else 2}[md]
+        zero = md == "IM" and w1 == 0 or md == "R" and regs[(w0 >> 4) & 15] == 0
+        return (18 if zero else 70) + add if mn == "MULT" else (13 if zero else 107) + add
     if mn in ("MULTL", "DIVL"):
         d = w0 & 0x0C
         zero = md == "R" and regs[(w0 >> 4) & 14] == 0 and regs[((w0 >> 4) & 14) + 1] == 0
@@ -126,7 +130,7 @@ while True:
         k, pc = k + 1, probe(k + 1)[0]
         continue
     mn, ops = lst[pc & 0xFFFF]
-    regs = probe(k - 1)[1] if inside and re.fullmatch(r"SD[LA][BL]?|MULTL|DIVL", mn) else None
+    regs = probe(k - 1)[1] if inside and re.fullmatch(r"SD[LA][BL]?|MULTL?|DIVL?", mn) else None
     sz = size[pc & 0xFFFF]
     npc = probe(k + 1)[0] if mn in CTL else pc + sz
     if npc == m2 and inside:

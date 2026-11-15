@@ -124,7 +124,7 @@ shape() {
 	fi
 }
 shape f1_ " DIV " 22
-shape f2_ " DIVL " 42
+shape f2_ " DIV " 44	# mul16b: the divisor's sign tested, then one DIV
 shape f3_ ' DIVL ' 22
 shape f4_ " DIVL " 40
 

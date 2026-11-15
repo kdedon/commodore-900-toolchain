@@ -13,6 +13,32 @@ REM:
 			[ZLD]	[REGNO R1],[AL]
 			[ZCLR]	[REGNO R0]
 			[ZDIV]	[REGNO RR0],[AR]
+/ So does a divisor known to be under 0x8000, retyped S16 by modoper.
+%	PEFFECT|PRVALUE
+	UWORD		RR0	R0	*	R0
+		ADR|IMM		WORD
+		ADR		FS16
+			[ZLD]	[REGNO R1],[AL]
+			[ZCLR]	[REGNO R0]
+			[ZDIV]	[REGNO RR0],[AR]
+/ An unsigned word divisor: DIV reads bit 15 set as negative, but such a divisor
+/ gives a quotient of 0 or 1 and a remainder of a or a-b, so that arm takes a
+/ compare instead.
+%	PEFFECT|PRVALUE
+	UWORD		RR0	R0	*	R0
+		ADR|IMM		WORD
+		ADR		FU16
+			[ZLD]		[REGNO R1],[AL]
+			[ZTEST]		[AR]
+			[ZJRPL]		[LAB0]
+			[ZLD]		[REGNO R0],[REGNO R1]
+			[ZCP]		[REGNO R0],[AR]
+			[ZJRULT]	[LAB1]
+			[ZSUB]		[REGNO R0],[AR]
+			[ZJP]		[LAB1]
+		[DLAB0]:[ZCLR]		[REGNO R0]
+			[ZDIV]		[REGNO RR0],[AR]
+		[DLAB1]:
 / Any other unsigned divisor arrives widened to 32 bits (modoper) for DIVL, which
 / leaves the remainder in the high pair RR0; the remainder is below the 16-bit
 / divisor, so its low word R1 is the 16-bit result. The dividend goes in R3, the low
@@ -62,6 +88,24 @@ REM:
 			[ZJP]		[LAB1]
 		[DLAB0]:[ZSUBL]		[REGNO RR0],[REGNO RR0]
 			[ZDIVL]		[REGNO RQ0],[AR]
+		[DLAB1]:
+/ SIGNED by 2^k, k <= 16: modoper gives the node the word right operand m = 2^k-1 (no
+/ long remainder has a word operand otherwise).  A non-negative dividend's remainder is
+/ its low word & m.  A negative one's is -(-x & m), which the low word holds: NEG, AND,
+/ NEG, and SBC makes the high word -1 from the last NEG's borrow, 0 when it is zero.
+%	PEFFECT|PRVALUE
+	FS32		RQ0	RR2	*	RR2
+		TREG		FS32
+		IMM|MMX		FS16
+			[ZTEST]		[REGNO R2]
+			[ZJRMI]		[LAB0]
+			[ZAND]		[REGNO R3],[AR]
+			[ZCLR]		[REGNO R2]
+			[ZJP]		[LAB1]
+		[DLAB0]:[ZNEG]		[REGNO R3]
+			[ZAND]		[REGNO R3],[AR]
+			[ZNEG]		[REGNO R3]
+			[ZSBC]		[REGNO R2],[REGNO R2]
 		[DLAB1]:
 %	PEFFECT|PRVALUE
 	FS32		RQ0	RR0	*	RR0

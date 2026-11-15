@@ -13,6 +13,33 @@ ADIV:
 		[ZCLR]	[REGNO R0]
 		[ZDIV]	[REGNO RR0],[AR]
 		[ZLD]	[AL],[REGNO R1]
+/ So does a divisor known to be under 0x8000, retyped S16 by modoper.
+%	PEFFECT|PRVALUE
+	UWORD	RR0	*	*	R1
+		ADR|LV	WORD
+		ADR	FS16
+		[ZLD]	[REGNO R1],[AL]
+		[ZCLR]	[REGNO R0]
+		[ZDIV]	[REGNO RR0],[AR]
+		[ZLD]	[AL],[REGNO R1]
+/ An unsigned word divisor: DIV reads bit 15 set as negative, but such a divisor
+/ gives a quotient of 0 or 1 and a remainder of a or a-b, so that arm takes a
+/ compare instead.
+%	PEFFECT|PRVALUE
+	UWORD	RR0	*	*	R1
+		ADR|LV	WORD
+		ADR	FU16
+		[ZLD]		[REGNO R1],[AL]
+		[ZTEST]		[AR]
+		[ZJRPL]		[LAB0]
+		[ZCP]		[REGNO R1],[AR]
+		[ZCLR]		[REGNO R1]
+		[ZJRULT]	[LAB1]
+		[ZINC]		[REGNO R1],[CONST 1]
+		[ZJP]		[LAB1]
+	[DLAB0]:[ZCLR]		[REGNO R0]
+		[ZDIV]		[REGNO RR0],[AR]
+	[DLAB1]:[ZLD]		[AL],[REGNO R1]
 / An unsigned divisor the one-word DIV cannot hold (anything but a constant with bit
 / 15 clear) arrives widened to 32 bits (modoper): dividend into R3, the low word of
 / the 64-bit RQ0 dividend, rest zeroed, DIVL, and the quotient's low word R3 is the
@@ -65,6 +92,16 @@ ADIV:
 	[DLAB0]:[ZSUBL]		[REGNO RR0],[REGNO RR0]
 		[ZDIVL]		[REGNO RQ0],[AR]
 	[DLAB1]:[ZLDL]		[AL],[REGNO RR2]
+/ `l /= 2': as div.t's signed divide by 2, the shift for the DIVL.
+%	PEFFECT|PRVALUE
+	FS32	RQ0	*	*	RR2
+		ADR|LV	LONG
+		2|MMX	FS32
+		[ZLDL]		[REGNO RR2],[AL]
+		[ZEXTSL]	[REGNO RR0]
+		[ZSUBL]		[REGNO RR2],[REGNO RR0]
+		[ZSLAL]		[REGNO RR2],[CONST 0xFFFF]
+		[ZLDL]		[AL],[REGNO RR2]
 %	PEFFECT|PRVALUE
 	FS32	RQ0	*	*	RR2
 		ADR|LV	LONG

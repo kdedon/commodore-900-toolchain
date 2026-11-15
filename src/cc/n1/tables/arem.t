@@ -12,6 +12,33 @@ AREM:
 		[ZCLR]	[REGNO R0]
 		[ZDIV]	[REGNO RR0],[AR]
 		[ZLD]	[AL],[REGNO R0]
+/ So does a divisor known to be under 0x8000, retyped S16 by modoper.
+%	PEFFECT|PRVALUE
+	UWORD	RR0	*	*	R0
+		ADR|LV	WORD
+		ADR	FS16
+		[ZLD]	[REGNO R1],[AL]
+		[ZCLR]	[REGNO R0]
+		[ZDIV]	[REGNO RR0],[AR]
+		[ZLD]	[AL],[REGNO R0]
+/ An unsigned word divisor: DIV reads bit 15 set as negative, but such a divisor
+/ gives a quotient of 0 or 1 and a remainder of a or a-b, so that arm takes a
+/ compare instead.
+%	PEFFECT|PRVALUE
+	UWORD	RR0	*	*	R0
+		ADR|LV	WORD
+		ADR	FU16
+		[ZLD]		[REGNO R1],[AL]
+		[ZTEST]		[AR]
+		[ZJRPL]		[LAB0]
+		[ZLD]		[REGNO R0],[REGNO R1]
+		[ZCP]		[REGNO R0],[AR]
+		[ZJRULT]	[LAB1]
+		[ZSUB]		[REGNO R0],[AR]
+		[ZJP]		[LAB1]
+	[DLAB0]:[ZCLR]		[REGNO R0]
+		[ZDIV]		[REGNO RR0],[AR]
+	[DLAB1]:[ZLD]		[AL],[REGNO R0]
 / An unsigned divisor the one-word DIV cannot hold (anything but a constant with bit
 / 15 clear) arrives widened to 32 bits (modoper): dividend into R3, the low word of
 / the 64-bit RQ0 dividend, rest zeroed, DIVL, and the remainder's low word R1 is the
