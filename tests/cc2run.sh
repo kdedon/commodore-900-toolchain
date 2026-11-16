@@ -60,6 +60,10 @@ chk 'char c; c=65; return c+1;' 66
 chk 'int a; char b; a=300; b=a; return b&0xFF;' 44
 # long (32-bit)
 chk 'long x; x=100000L; return (int)(x/7L);' 14285
+# a signed quotient under an unsigned `?:' or sum
+chk 'int dy,u; unsigned h,k; dy=-7; u=2; h=5; k = h < dy / u ? h : dy / u; return k;' 5
+chk 'int dy,u; unsigned h,k; dy=-7; u=2; h=0; k = h ? h : (dy /= u); return k + dy;' -6
+chk 'int x; unsigned h; x=-3; h=0; return h + x / 2;' -1
 
 # Cross-translation-unit linkage: a file-scope global defined in one object must be
 # EXPORTED so another object's `extern' reference resolves.  This is a correctness class

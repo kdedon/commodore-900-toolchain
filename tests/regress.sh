@@ -523,6 +523,41 @@ chkdis 'f(p, c) unsigned long *p; char c; { *p = (unsigned char)c; }' 'clrb' yes
 # re-derived a far pointer right of a long, which no rule takes (EDFA55).
 chkf 'int f(x,y) int x,y; { char fr[8]; char *q; q = fr + x; return ((long)q == (long)fr + 1) + ((long)q < (long)fr + 3) * 2; }' 1 0 3
 chkf 'int f(x,y) int x,y; { char fr[8]; char *q; long v; q = fr + x; v = (long)q != (long)fr - 1 + y; return (int)v; }' 2 3 0
+# A signed quotient converted to unsigned, as a `?:' arm, an assignment or an
+# operand: the dropped conversion relabeled the DIV unsigned, which widened its
+# divisor to a long, and no rule took the signed DIV left (EDFA69, EDFA23,
+# EDFA20).  A /= or %= relabeled so divided unsigned.  Each keeps its signed DIV.
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 5; k = h < dy / u ? h : dy / u; return k; }' -7 2 5
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 5; k = h < dy / u ? h : dy / u; return k; }' 7 2 3
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h < dy % u ? h : dy % u; return k; }' -7 2 0
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : dy / u; return k; }' -7 2 -3
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? dy / u : h; return k; }' -7 2 0
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 1; k = h ? dy / u : h; return k; }' 7 -2 -3
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : dy % u; return k; }' -7 2 -1
+chkf 'int f(dy,u) int dy,u; { unsigned h; h = 0; return h ? h : dy / u; }' -9 4 -2
+chkf 'int f(dy,u) int dy,u; { unsigned k; k = (unsigned)(dy / u); return k; }' -7 2 -3
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 1; k = h + dy / u; return k; }' -7 2 -2
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 1; k = h * (dy % u); return k; }' -7 2 -1
+chkf 'int f(dy,u) int dy,u; { unsigned k; k = 1; k += dy / u; return k; }' -7 2 -2
+chkf 'unsigned g(dy,u) int dy,u; { return dy / u; } int f(x,y) int x,y; { return g(x, y); }' -7 2 -3
+chkf 'unsigned g(dy,u) int dy,u; { return 1 + dy % u; } int f(x,y) int x,y; { return g(x, y); }' -7 2 0
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : (dy /= u); return k + dy; }' -7 2 -6
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : (dy %= u); return k * 10 + dy; }' -7 2 -11
+chkf 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h + (dy /= u); return k; }' -7 2 -3
+chkf 'unsigned g(dy,u) int dy,u; { return (dy /= u); } int f(x,y) int x,y; { return g(x, y); }' 7 -2 -3
+chkf 'int f(x,y) int x,y; { unsigned long k; long dy, u; dy = x; u = y; k = x ? dy / u : 0L; return (int)(k >> 16); }' -7 2 -1
+chkf 'int f(x,y) int x,y; { unsigned long k; long dy, u; dy = x; u = y; k = x ? (dy /= u) : 0L; return (int)(k >> 16) + (int)dy; }' -7 2 -4
+chkf 'int f(x,y) unsigned x,y; { int h, k; h = 0; k = h ? h : (int)(x / y); return k; }' -2 2 32767
+# By a power of two the relabeled quotient was an arithmetic shift, which rounds down.
+chkf 'int f(x,y) int x,y; { unsigned h; h = y; return h + x / 2; }' -3 0 -1
+chkf 'int f(x,y) int x,y; { unsigned h; h = y; return x / 8 - h; }' -9 1 -2
+chkf 'int f(x,y) int x,y; { unsigned h; h = y; return (h - x) / 2; }' 3 0 32766
+# A pointer difference's quotient is exact, so it still shifts.
+chkf 'int f(x,y) int x,y; { long a[8]; long *p, *q; unsigned n; p = a + x; q = a + y; n = (p - q) * sizeof(long); return n; }' 1 6 -20
+chklist 'int f(p,q) long *p, *q; { unsigned n; n = (p - q) * sizeof(long); return n; }' 'sla r[0-9]+, \$-2' yes
+chklist 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : (dy /= u); return k; }' 'div rr0, ' yes
+chklist 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : (dy /= u); return k; }' 'divl ' no
+chklist 'int f(x,y) int x,y; { long a, b; a = x; b = y; return (int)(a / b); }' 'divl ' yes
 # The frame top (`buf + sizeof(buf)', `&buf[64]' with buf the first local) folds to
 # the bare frame register, one near word with no pair half.  Narrowed to an int or
 # a byte it took [LO] of R13 and gave cc2 an empty operand (2C59); a truth test

@@ -23,6 +23,8 @@ TREE	*mdtempnode();	/* altemp.c: modify-phase stack temporary */
 static TREE *modopasg();
 static opasgtype();
 static lpow2();
+static isptrdiv();
+static isptrval();
 static isnnarm();
 static mularm();
 
@@ -1527,11 +1529,19 @@ TREE		*ptp;
 			 *    signedness) needs no boundary, so the node drops and
 			 *    costs nothing.
 			 *
-			 * 2. On the drop path, do NOT relabel an unsigned one as
-			 *    signed (e.g. `return (unsigned)x >> n' or `.../...'
-			 *    from an int fn) -- keep its type.  (A relabel the other
-			 *    way is repaired by the SHR/DIV re-sync on the next
-			 *    modtree pass.)
+			 * 2. On the drop path, do NOT relabel one of those ops to
+			 *    the other signedness -- keep its type, which the
+			 *    parent's rules take as the same kind.  An unsigned
+			 *    `return (unsigned)x >> n' from an int fn would shift
+			 *    signed.  A signed DIV or REM relabeled unsigned gets
+			 *    the unsigned word divide's U32 divisor before the
+			 *    re-sync restores its type, which no rule takes
+			 *    (`k = h < dy / u ? h : dy / u', k and h unsigned), or
+			 *    by a power of two becomes an arithmetic shift, which
+			 *    rounds down; a signed ADIV or AREM has no re-sync and
+			 *    divides unsigned.  A pointer difference divided by its
+			 *    element size is exact, so that DIV is still relabeled
+			 *    and shifts.
 			 */
 			if ((lp->t_op == DIV || lp->t_op == REM
 			  || lp->t_op == SHR || lp->t_op == ASHR
@@ -1546,7 +1556,8 @@ TREE		*ptp;
 			if (!((lp->t_op == DIV || lp->t_op == REM
 			       || lp->t_op == SHR || lp->t_op == ASHR
 			       || lp->t_op == ADIV || lp->t_op == AREM)
-			      && isuns(lp->t_type)))
+			      && isuns(tt) != isuns(lp->t_type))
+			 || isptrdiv(lp))
 				lp->t_type = tt;
 			return (lp);
 		}
@@ -1574,6 +1585,34 @@ done:
 		return (modsasg(lp, tp, tp->t_size, 1));
 	}
 	return (NULL);
+}
+
+/*
+ * A signed DIV of a pointer difference by a constant: `p - q' over elements
+ * of that size, whose quotient is exact.
+ */
+static
+isptrdiv(tp)
+register TREE *tp;
+{
+	register TREE *sp;
+
+	if (tp->t_op != DIV || isuns(tp->t_type) || tp->t_rp->t_op != ICON)
+		return (0);
+	sp = tp->t_lp;
+	return (sp->t_op == SUB && isptrval(sp->t_lp) && isptrval(sp->t_rp));
+}
+
+/*
+ * A pointer, or the offset word converted from one.
+ */
+static
+isptrval(tp)
+register TREE *tp;
+{
+	if ((tp->t_op == CONVERT || tp->t_op == CAST) && !ispoint(tp->t_type))
+		tp = tp->t_lp;
+	return (ispoint(tp->t_type));
 }
 
 /*
