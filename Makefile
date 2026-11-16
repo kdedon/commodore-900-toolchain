@@ -12,19 +12,16 @@
 #   make check-sources  every .c under src/ is declared by the native build
 #   make check-cc3tab  every table indexed by generated/opcode.h, vs opcode.h
 #   make check-libc   the C library's own answers, run on the target libc
-#   make check-selfhost  the byte-identity fixed point: the TARGET-built passes
-#                   reproduce this compiler's objects exactly, all 86 of them
+#   make check-selfhost  the target-built passes reproduce the host objects
 #   make env        stage a compiler environment for a guest (docs/ENVIRONMENTS.md)
-#   make libc libm libmisc selfhost native   parts of the `ours' env; each needs $COHERENT_OS
+#   make libc libm libmisc selfhost native   parts of the `ours' env
 #   make env-fallback  cut the two compiler dists consumers place with `make deps'
 #   make packages   cut the release packages into $(PKGOUT), each judged against
 #                   its own .contents and .provenance before it is left there
 #   make deps       acquire what DEPS says this repository consumes
 #   make clean      remove host/build
 #
-# The guest RUNNER is not optional: the value assertions execute compiled code
-# under the C emulator (host/runner.sh, $C900_EMU).  No simulator is reached
-# from this repository at all.
+# Tests run compiled code under the emulator (host/runner.sh, $C900_EMU).
 
 SHELL = /bin/sh
 .DELETE_ON_ERROR:
@@ -81,88 +78,9 @@ $(B)/slgen: src/slgen/slgen.c
 	@mkdir -p $(B)
 	$(TOOLCC) -o $@ $<
 
-# The table gates run here rather than as a side target somebody remembers:
-# generated/opcode.h is machine-generated and its numbers are the ROW NUMBERS of
-# tables kept by hand, so a half-landed regeneration makes cc2 emit the wrong
-# instruction with no diagnostic anywhere.
-#
-# The four suites after regress.sh need only the emulator, the same edge
-# regress.sh already needs, and cost half a second between them -- but nothing
-# invoked them, so no CI run has ever executed one.  They cover ground
-# regress.sh does not: cc2's object as the linker sees it, relocation, the
-# register-clobber contract, and the soft-float runtime.
-#
-# tests/multiseg-text.sh links through ccz against the libc-z8001 that
-# check-libc builds from src/, and runs the result, so it needs that target,
-# the emulator and $(B)/tools/loutid.  It is the `ld -L' multi-segment text
-# gate: placement of named modules across three and four text segments, read
-# back with tools/loutid -s.
-#
-# tests/ld-commons.sh needs no libc: .comm states the sizes, so as and ld alone
-# build the case.
-#
-# tests/ld-commsize.sh: a common against a definition too small for it.
-#
-# tests/ld-straddle.sh: no output section crosses a 64K boundary; its first part
-# needs only as and ld, its second runs a program through ccz.
-#
-# tests/cc-commons.sh: a file-scope `int foo;' under -VCOMM, compiled, linked
-# and run.
-#
-# tests/shlib-format.sh: a toy slgen library read back against shlib.h.
-#
-# tests/shlib-data.sh: -VPIC data slots, SE_DATA exports, and ld binding them.
-#
-# tests/shlib-client.sh: ld linking a program against a library -- stubs,
-# slots and the LI_LIB/LI_IMP records exec binds.
-#
-# tests/fixed-mode.sh: `slgen -F' libraries at fixed addresses and `ld -F'
-# clients calling them directly.
-#
-# tests/native-ld.sh: the unity-built linker, compiled for the target, links a
-# program under the emulator.  Only this puts the whole linker through cc0.
-#
-# tests/foldofs.sh: which far-pointer field accesses fold the offset into the
-# displacement.
-#
-# tests/immstore.sh: constant stores through a displacement go via a register;
-# the Z8000 has no such immediate store.
-#
-# tests/calr.sh: only a callee already emitted, same segment and in reach, gets
-# a PC-relative call.
-#
-# tests/relax.sh: ld shortens data operands below offset 256 and CALLs in reach,
-# and everything across the cuts still lands.
-#
-# tests/peepfold.sh: loads folded into pushes and memory INC/DEC, dead EXTSB,
-# and argument pops merged.
-#
-# tests/promote.sh: which undeclared locals get a register.
-#
-# tests/initvol.sh: a structure member's initializer is volatile only when the
-# structure or the member is.
-#
-# tests/vdebug.sh: a -VDEBUG program compiles and runs.
-#
-# tests/symlen.sh: cc2 names the externals the 16-byte l.out symbol truncates.
-#
-# tests/asgval.sh: the value of an assignment through a pointer reaches the
-# return register at every width.
-#
-# tests/mul16.sh: 16-bit operands take the one-word MULT and DIV, and their
-# values match the host's.
-#
-# tests/condcast.sh: a cast of a `?:' or a comma converts its value before a
-# widening, by a cast, an assignment, an argument or a return.
-#
-# tests/dblcast.sh: a cast of a float-to-integer conversion converts the
-# integer: (unsigned long)(long)d with d = -2.0 is 4294967294.
-#
-# tests/charret.sh: a function of a char type returns its value narrowed:
-# `unsigned char f() { return i; }' with int i = -2 returns 254.
-#
-# tests/lname.sh: long external names (-VLNAME, as -N, ld -N) through cc2, as,
-# ld, ld -r, the native ar's index, loutid, loutdis and nlist().
+# check runs the table gates too: generated/opcode.h numbers rows of tables
+# kept by hand, and a half-landed regeneration makes cc2 emit wrong
+# instructions silently.  Each test names what it covers in its header.
 check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa check-loutdis-table check-paths check-effdiff check-effdiff-linked check-libc libc1 \
 	$(B)/tools/loutid $(B)/tools/loutdis $(B)/tools/cohfs
 	sh tests/cohfs.sh
@@ -231,32 +149,18 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/sllpair.sh
 	sh tests/peepstamp.sh
 
-# The efficiency sweep itself needs the donor corpus, the original binaries and
-# an l.out disassembler ($EFFDIFF_DIS) this repository does not carry, so it
-# cannot run here -- but its NEGATIVE CONTROL needs python3 and
-# nothing else, and a differential harness that has never been demonstrated to
-# fail is not yet an instrument.  This target is that demonstration: it feeds
-# effdiff's own matcher a pair it must call equal and a pair it must call
-# different, and fails if either verdict does not come back.  It also prints the
-# perturbation size at which the signature matcher stops seeing a function --
-# the coverage limit, measured on every run rather than claimed in a comment.
+# effdiff's negative control: its matcher must call a known pair equal and
+# another different.  Prints the perturbation at which it goes blind.
 check-effdiff:
 	sh tests/effdiff.sh --selftest
 
-# The same demonstration for the LINKED sweep, which needs crt0.o, the libc
-# archive and both corpora on top of what effdiff needs.  Its matcher runs at a
-# near-exact threshold of 2, so the perturbation it goes blind at is far smaller
-# than effdiff's; this target prints that number too.
+# The same for the linked sweep.
 check-effdiff-linked:
 	sh tests/effdiff-linked.sh --selftest
 
-# The C library's own answers, as a PROGRAM on the machine gets them.  notmem()
-# decides whether a pointer may be freed, so it is asked of the libc-z8001.a a
-# target program links against rather than of a host build of the same source;
-# libc is built from src/ (host/coherent-os.sh), so this needs no OS tree and
-# nothing beyond the emulator `check' already requires.  fpcost.sh and
-# fpcycles.sh hold the soft-float routines and floor, ceil, modf and cos under
-# instruction and clock ceilings, and intcycles.sh integer *, / and %.
+# The C library as a target program sees it, run under the emulator.
+# fpcost, fpcycles and intcycles hold soft-float and integer *, / and %
+# under instruction and clock ceilings.
 check-libc: libc libm $(B)/tools/loutdis
 	sh tests/notmem.sh
 	sh tests/printf.sh
@@ -266,12 +170,8 @@ check-libc: libc libm $(B)/tools/loutdis
 	sh tests/fpcycles.sh
 	sh tests/intcycles.sh
 
-# What each program is MADE OF, declared once by the build that runs on the
-# C900 and read by every cross-build (host/srcman.sh).  The build scripts assert
-# this too, so a stray source cannot be compiled; this target is the assertion
-# alone, over committed inputs only, plus the one thing no single build can see:
-# that build-selfhost.sh's second copy of the compiler's list still agrees with
-# src/cc/Makefile's.
+# Every source is declared by the native build's manifest (host/srcman.sh),
+# and build-selfhost.sh's copy of the compiler's list matches src/cc's.
 check-sources:
 	@sh -c '. host/srcman.sh; rc=0; \
 		srcman_check cc src/cc || rc=1; \
@@ -281,42 +181,29 @@ check-sources:
 		[ $$rc = 0 ] && echo "check-sources: cc, as, ld declared and complete"; \
 		exit $$rc'
 
-# The host shims are the one thing `make all' cannot report on: build-cc.sh
-# applies them and would fail, but only in a build that reached gcc, and only
-# for the lane running it.  This target is that assertion alone, over committed
-# inputs only -- no build directory, no emulator, no OS tree.
+# The host shims still apply to src/cc.
 check-shims:
 	sh tests/check-shims.sh
 
-# A name Windows cannot create aborts the whole checkout there, and nothing on
-# a Linux or macOS tree shows it -- so it belongs with the other gates over
-# committed inputs, which run on every push.
 check-tools:
 	sh tests/check-tools.sh
 
+# Every tracked name survives a Windows checkout.
 check-paths:
 	sh tests/check-paths.sh
 
-# The rule that defines this repository -- Z8001 work goes in the machine layer,
-# the machine-independent front end is not edited -- is enforced HERE or nowhere.
-# It ran nowhere for as long as it needed the 200 MB donor archive to say
-# anything: CI printed SKIPPED and exited 0.  It now reads committed hashes and
-# needs no donor, so it belongs in `check' with the other gates over committed
-# inputs; $MWC_DONOR still adds the full-tree comparison when it is set.
+# Every machine-independent divergence from the donor has a record
+# (src/cc/MI-PATCHES).  $MWC_DONOR adds a full-tree comparison.
 check-mi:
 	@python3 tests/mi-divergence.py check
 
-# Rewrite the two generated artifacts.  mi-baseline is the only thing here that
-# needs the donor, and it is run when the donor generation changes -- not by a
-# gate, which must never be able to rewrite what it is checking.
+# Regenerate MI-BASELINE (needs $MWC_DONOR) and docs/PATCHES.md's table.
 mi-baseline:
 	python3 tests/mi-divergence.py baseline
 mi-table:
 	python3 tests/mi-divergence.py table
 
-# --check asserts rather than writes.  Run bare, the script overwrites its own
-# committed artifact and then exits 0 on the result, so drift from the generator
-# would be undetectable by construction.
+# The opcode inventory matches the assembler's table.
 check-isa:
 	python3 tools/isa/check_pst.py --check
 
@@ -329,10 +216,7 @@ loutdis-table:
 check-loutdis-table:
 	python3 tools/loutdis/gentab.py --check
 
-# cc3 reads the same CODE stream cc2 does, from its own copy of the instruction
-# table; a copy that drifts desynchronizes the reader rather than mis-printing a
-# line.  What this cannot see is the DECODER moving under a self-consistent set
-# of tables -- that needs the simulator and lives with the generator.
+# cc3's copy of the instruction table matches cc2's.
 check-cc3tab:
 	sh tests/cc3tab.sh
 
@@ -454,24 +338,17 @@ native: tools
 tools-z8001: tools libc
 	sh host/build-tools-z8001.sh
 
-# The self-host FIXPOINT: run the target-built passes over every compiler source
-# and byte-compare the objects against the host build's.  It is the one gate that
-# can see a shim which should have been baked.  Deliberately not folded into
-# `check': check needs only the emulator, this needs an OS tree as well.
+# The self-host fixpoint: the target-built passes reproduce the host
+# compiler's objects byte for byte.
 check-selfhost: selfhost
 	sh host/build-selfhost2.sh
 
-# The fixpoint runs cc0/cc1/cc2 and nothing else, so the native ASSEMBLER and
-# LINKER were built, shipped in the release archive, and never executed.  This
-# runs them: their output against the host tools' byte for byte, and a corrupt
-# object against ld's exit status, which is the half a byte-comparison cannot
-# see -- two linkers agreeing about a bad object still agree.
+# The native as and ld match the host ones, and ld rejects a corrupt object.
 check-native: native
 	sh tests/nativetools.sh
 
-# Never a prerequisite of a build: nothing that compiles may decide for you which
-# version of another repository it is testing against.  `make deps DEP=coherent'
-# places just that edge.
+# Fetch what DEPS names; `make deps DEP=emu' fetches one.  Never a build
+# prerequisite.
 deps:
 	sh host/deps-fetch.sh $(DEP)
 
@@ -489,18 +366,13 @@ os-fallback:
 env-fallback: env-ours env-mwc1985
 	sh host/pack-fallback.sh $(B)
 
-# The release packages -- this host's archive, the z8001 archive, the Z8001
-# libraries and the target headers -- cut by host/release-pack.sh, which judges
-# each archive against what it says it carries and refuses the whole cut on one
-# failure.  Each carries programs for the machine its name gives and no other.
-# Needs `make all libc libm libmisc selfhost native'; the packer names whichever
-# is missing, and asks for less under -hostonly, where no Z8001 program is
-# packed at all.  PKGVERSION defaults to what `git describe' says this checkout is.
-# Each cut starts from an empty PKGOUT: the two packers only ever add archives
-# there, so a stale one from a prior version or a prior dirty tree would
-# otherwise sit alongside the new cut and be just as collectible.
 PKGVERSION ?=
 PKGOUT ?= $(C900_TC_BUILD)/dist
+
+# The release packages, cut by host/release-pack.sh and
+# host/pack-components.sh, each checked against its .contents and
+# .provenance.  Needs `make all libc libm libmisc selfhost native tools
+# tools-z8001'.  PKGVERSION defaults to `git describe'.
 packages:
 	rm -rf $(PKGOUT)
 	mkdir -p $(PKGOUT)

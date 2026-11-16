@@ -8,6 +8,7 @@ executables using 16-bit `int`, 32-bit `long`, and far pointers.
 
     make                  build the host cross-toolchain in host/build
     make check            run the regression suite
+    make libc libm        build the Z8001 C and maths libraries
     make check-selfhost   verify the self-hosted compiler fixed point
     make check-native     compare native assembler/linker output
     make tools            build auxiliary conversion tools
@@ -27,21 +28,29 @@ The main outputs are:
     host/build/z8001/cc3-z8001
     host/build/as-z8001
     host/build/ld-z8001
+    host/build/mkarz                     l.out archiver (host/arz)
+    host/build/libc-z8001/libc-z8001.a   with crt0.o (make libc)
+    host/build/libm-z8001/libm-z8001.a   (make libm)
+
+The C library, maths library and headers are in `src/libc`, `src/libm` and
+`src/include`.
 
 `host/ccz` is the one-shot compiler driver. Linking a complete program also
 requires headers, startup code, and libraries from the target environment.
 Its usage text lists the options.
 
-## Language level from the environment
+## Language levels
 
-`CCZ_LEVEL` gives every `ccz` compile a language level without editing its
-command line: the words `KR`, `C89`, `C99` and `STRICT`, separated by blanks
-or commas, as in `CCZ_LEVEL="KR STRICT"`.  Each word is the matching option
-(`-VKR`, `-VC89`, `-VC99`, `-VSTRICT`), set in whichever base variant string
-the compile uses, so the PIC variant and `CCZ_VAR` keep their bits.  A level
-option on the command line replaces the environment's level; `STRICT` from
-either applies.  Unset or empty, it has no effect; an unknown word is an
-error.
+By default cc0 takes K&R C with every addition: prototypes, `//` comments,
+declarations after statements, `long` switches, C89 initializers, `&` of an
+array and a constant `offsetof`.  `-VKR`, `-VC89` and `-VC99` limit it to one
+level, and `-VSTRICT` makes every strict message an error.  The `cc` manual
+page (`man/COHERENT.1/cc`) gives the details.
+
+`CCZ_LEVEL` sets a level for every `ccz` compile: the words `KR`, `C89`, `C99`
+and `STRICT`, separated by blanks or commas, as in `CCZ_LEVEL="KR STRICT"`.
+A level option on the command line replaces it; `STRICT` from either applies.
+An unknown word is an error.
 
 ## Stack-segment symbol
 
@@ -88,7 +97,7 @@ layout from a transcription of `machine.c`.  The assembler is the encoding
 authority.  The Z8000 CPU User's Reference Manual (Zilog, 1982) decides only
 register widths and the few documented forms the assembler cannot write (LDR
 stores, EPU templates, TESTL's ignored low nibble); the generator cites its
-pages.  c900oses `genz8001tab` and the z8000 simulator are not used.
+pages.
 
     make loutdis-table        regenerate z8ktab.h
     make check-loutdis-table  check the committed table is the generator's output
@@ -111,7 +120,6 @@ with a nonzero reserved field or a zero address register, print as `ILLEGAL`.
 | Variable | Used for |
 |---|---|
 | `C900_EMU` | tests that execute Z8001 binaries |
-| `COHERENT_OS` | libc, native/self-hosted tools, and guest environments |
 | `MWC_DONOR` | comparison with pristine MWC sources |
 | `Z8001_DONOR` | broad compiler corpus tests |
 | `C900_TC_BUILD` | alternate build directory, for the build and for a consumer reading it |
@@ -121,3 +129,9 @@ with a nonzero reserved field or a zero address register, print as `ILLEGAL`.
 Project-authored code is MIT licensed. The Mark Williams COHERENT sources are
 BSD 3-Clause. Other historical material remains under its original terms. See
 `LICENSE` and notices in the source.
+
+## More
+
+- `docs/ENVIRONMENTS.md`: compiler environments for compiling on the C900
+- `docs/PATCHES.md`: divergences from the MWC donor compiler
+- `CHANGES.md`: release notes
