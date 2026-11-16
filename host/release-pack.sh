@@ -237,21 +237,11 @@ cp -r "$ROOT/man" "$A/man"
 # at all.  Copied at the path a checkout spells, same as man/ above.
 mkdir -p "$A/tools"
 cp -r "$ROOT/tools/lout2cpm" "$A/tools/lout2cpm"
-# src/libc/gen/qsort.c: SOURCE, for the same reason and by the same rule as
-# tools/lout2cpm above.  commodore-900-cpm compiles it itself, from
-# $(C900_TOOLCHAIN)/src/libc/gen/qsort.c, for its STAT command -- the object
-# has to be built by the CONSUMER's compiler and variant word, not ours, so
-# only the source can ship.  Without it `make deps && make all' over a release
-# dies at build/user/qsort.o with "No rule to make target
-# .../src/libc/gen/qsort.c", exactly as it died at build/lout2cpm before the
-# line above.  Copied at the path a checkout spells it.
-#
-# ONE FILE, not src/: this archive deliberately carries no source tree and no
-# harnesses (see host/ below), so what ships is what a consumer NAMES, the same
-# discipline as lib/kobj.  qsort.c is self-contained K&R with no #include at
-# all, so the file alone is the whole of what it needs.
-mkdir -p "$A/src/libc/gen"
-cp "$ROOT/src/libc/gen/qsort.c" "$A/src/libc/gen/qsort.c"
+# src/libc, src/libm and src/include: SOURCE, at the paths a checkout spells.
+# Consumers compile them with their own compiler and variant word, as
+# commodore-900-cpm does qsort.c and Exec900 the whole of libc and libm.
+mkdir -p "$A/src"
+cp -r "$ROOT/src/libc" "$ROOT/src/libm" "$ROOT/src/include" "$A/src/"
 # Sealed below, after host/: the content id is over every file in the package,
 # and host/ adds two shims that are regular files.
 
@@ -637,8 +627,8 @@ mkdir -p "$J"
 case $ARCH in tar) hostarch=$name.tar.gz ;; zip) hostarch=$name.zip ;; esac
 TB=host/build
 judge "$hostarch" compiler "cc0 cc1 cc2 cc3 kobj" \
-	"lib/crt0.o lib/libc-z8001.a lib/libm-z8001.a lib/libmisc-z8001.a host/ccz host/cppz" \
-	"lib/kobj/*.o:5 bin/*:10 usr/include/*.h:30" \
+	"lib/crt0.o lib/libc-z8001.a lib/libm-z8001.a lib/libmisc-z8001.a host/ccz host/cppz host/build/mkarz" \
+	"lib/kobj/*.o:5 bin/*:10 usr/include/*.h:30 src/libc/gen/*.c:60 src/libm/*.c:20 src/include/*.h:30" \
 	$TB/z8001/cc0-z8001 bin/cc0-z8001$X  $TB/z8001/cc1-z8001 bin/cc1-z8001$X \
 	$TB/z8001/cc2-z8001 bin/cc2-z8001$X  $TB/z8001/cc3-z8001 bin/cc3-z8001$X \
 	$TB/as-z8001 bin/as-z8001$X  $TB/ld-z8001 bin/ld-z8001$X  $TB/mkarz bin/mkarz \

@@ -1,7 +1,7 @@
 # Commodore 900 (Z8001) cross-toolchain.
 # The normal host build is self-contained; optional targets name their inputs.
 #
-#   make            cc0/cc1/cc2/cc3-z8001 + as-z8001 + ld-z8001 + slgen + tabgen
+#   make            cc0/cc1/cc2/cc3-z8001 + as-z8001 + ld-z8001 + slgen + tabgen + mkarz
 #                   -> host/build
 #   make check      the regression suite + the table gates (implies all)
 #   make check-isa  the opcode inventory vs MWC's own assembler table
@@ -28,7 +28,7 @@
 
 SHELL = /bin/sh
 .DELETE_ON_ERROR:
-.PHONY: all cc as ld slgen libc1 check check-isa check-cc3tab check-mi check-shims check-sources \
+.PHONY: all cc as ld slgen mkarz libc1 check check-isa check-cc3tab check-mi check-shims check-sources \
 	check-paths check-loutdis-table loutdis-table \
 	mi-baseline mi-table \
 	check-selfhost check-native check-tools check-libc \
@@ -43,7 +43,7 @@ SHELL = /bin/sh
 B ?= $(if $(C900_TC_BUILD),$(C900_TC_BUILD),host/build)
 export C900_TC_BUILD := $(abspath $(B))
 
-all: cc as ld slgen
+all: cc as ld slgen mkarz
 
 help:
 	@printf '%s\n' \
@@ -68,6 +68,10 @@ as:
 # assembler is a real input and not a conventional ordering.
 ld: as
 	sh host/build-ld.sh
+
+# mkarz writes the l.out archives consumers build; host/arz calls it.
+mkarz: ld
+	sh host/arz -b
 
 # slgen builds a shared library from objects: reserves the export table, runs
 # as and ld, and turns ld's relocations into the segment fixup list.  Plain
