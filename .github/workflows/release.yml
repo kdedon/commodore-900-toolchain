@@ -1,26 +1,8 @@
-# release -- build every gate from clean on a v* tag, then publish the
-# deliverables as versioned assets (AUTOMATION.md 13).
-#
-# The assets are the two host archives, the Z8001 one, and -- cut from the same
-# staged tree, so they are one build of the same files -- the libc and include
-# packages, which let a consumer take and name the libraries or the headers
-# without a host compiler.  Each archive carries programs for the machine its
-# name gives and no other; a consumer that wants a compiler for the machine
-# downloads the z8001 archive, which is the only place those programs are.  host/release-pack.sh emits all of them and the
-# publish job uploads dist/*, so a new package needs no step of its own here.
-# Only the Linux job cuts them: the three assets besides the host archive are
-# host-independent, so the Windows job packs its zip alone (release-pack.sh
-# -hostonly) rather than building a second set nobody publishes.
-#
-# THE TAG IS THE RELEASER'S TO CHOOSE.  This workflow reads the version off it
-# and does not judge it: a patch may change an opcode, and a fix to the divide
-# lowering is an ordinary patch.  The release notes say what changed; a CI job
-# refusing a tag because the bytes moved fought the work instead of checking it.
-#
-# EVERYTHING IN THE RELEASE IS BUILT FROM THIS CHECKOUT.  The C library, the
-# headers and crts0 live in src/ beside the compiler, so a tag names one tree
-# and that tree is the whole release: the commit being built is the release's
-# identity, and host/release-pack.sh records it in the archive's stamp.
+# release -- on a v* tag, run every gate from clean and publish the archives
+# host/release-pack.sh cuts: the Linux and Windows host archives, the z8001
+# archive, the libc and include packages, and the tools.  The Linux job cuts
+# the host-independent ones; Windows packs only its zip (-hostonly).
+# The tag is the version; everything ships from this checkout.
 name: release
 
 on:
@@ -58,10 +40,8 @@ jobs:
           make libc libm libmisc selfhost native
           make tools tools-z8001
           make check-selfhost
+          sh tests/nativetools.sh
 
-      # The version, the emulator pin and the COHERENT commit are the packer's
-      # to record -- see host/release-pack.sh -- so that an archive built here
-      # and one built by hand carry the same stamp.
       - name: Package
         working-directory: src
         run: sh host/release-pack.sh "$V"
@@ -107,30 +87,10 @@ jobs:
           make tools
           sh host/selfhost-root.sh
           sh host/build-selfhost2.sh -hostonly
-      # The Windows archive carries no Z8001 PROGRAM -- those ship once, in the
-      # z8001 archive the Linux job cuts -- so nothing of deliverable 3 is
-      # fetched here.  What it does need is the Z8001 LIBRARIES and headers,
-      # which are compiler inputs every host archive carries: they are
-      # host-independent, the Linux job built them, and they must be the same
-      # bytes in both archives.  The libc package is exactly that set, and it is
-      # 60 KB where the z8001 archive is 500.
+      # The host archive carries the Z8001 libraries; take the Linux job's.
       - uses: actions/download-artifact@v4
         with: { name: linux-dist, path: dist-linux }
 
-      # The Windows archive is packed by release-pack.sh, the same script that
-      # packs the Linux one.  It was hand-rolled here once, and the two layouts
-      # drifted: the zip carried no host/ view at all, so a consumer that
-      # unpacked it and set $C900_TOOLCHAIN found nothing at the one path every
-      # consuming makefile spells (host/build/z8001/cc0-z8001).  One packer is
-      # the fix; the equivalence job now compares the two archives' contents so
-      # that a second drift is a red build rather than a broken release.
-      #
-      # What the script needs beyond `make all' is the Z8001 libraries, which
-      # this job does not build: they are unpacked into the build directory
-      # under the names the packer reads, so both host archives offer one build
-      # of them -- which is what the equivalence job then checks.  `make
-      # selfhost native' is NOT needed and NOT run: no Z8001 program goes into
-      # a host archive, so there is nothing here to cross-build twice.
       - name: Seed the Z8001 libraries from the Linux archive
         working-directory: src
         run: |
@@ -140,24 +100,14 @@ jobs:
           B=host/build
           mkdir -p $B/libc-z8001/kobj $B/libm-z8001 $B/libmisc-z8001
           cp $z/crt0.o $z/libc-z8001.a $B/libc-z8001/
-          # kobj/: the five objects the KERNEL links by name.  They travel in
-          # the archive beside the library.
           cp $z/kobj/*.o $B/libc-z8001/kobj/
           cp $z/libm-z8001.a $B/libm-z8001/
           cp $z/libmisc-z8001.a $B/libmisc-z8001/
-      # -hostonly: the zip and nothing else.  The other three assets are
-      # host-independent, the Linux job's copies are the published ones, and
-      # packing a second set here only adds MSYS-specific ways for a release to
-      # fail on bytes nobody would have downloaded.
       - name: Package
         working-directory: src
         run: |
           set -e
           sh host/release-pack.sh -hostonly "$V"
-      # Only the zip, and now it is the only thing there is: -hostonly above
-      # stops the packer cutting the host-independent assets a second time.  The
-      # released ones are the Linux job's, and two artifacts of the same name
-      # would collide in the publish job's download directory anyway.
       - uses: actions/upload-artifact@v4
         with:
           name: windows-dist
@@ -180,9 +130,7 @@ jobs:
       - name: The two hosts are one compiler
         run: sh src/host/cmp-objdirs.sh obj/linux obj/windows linux windows
 
-      # The objects being identical says nothing about whether either archive
-      # can be USED.  What a consumer resolves is a layout, so the layout is
-      # compared too -- see host/cmp-archives.sh.
+      # Both archives must have one layout (host/cmp-archives.sh).
       - uses: actions/download-artifact@v4
         with: { name: linux-dist, path: dist/linux }
       - uses: actions/download-artifact@v4
@@ -197,9 +145,6 @@ jobs:
 
   publish:
     needs: [ linux, windows, equivalence ]
-    # BOTH hosts must have passed.  A release is the two archives and the
-    # equivalence between them; publishing the Linux one alone would hand out a
-    # tag that promises three deliverables and carries two.
     if: ${{ startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:

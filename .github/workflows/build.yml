@@ -1,42 +1,15 @@
-# build -- the bootstrap stages S0..S4, on both hosts, on every push.
+# build -- the bootstrap stages on both hosts, on every push.
 #
-# The three deliverables (AUTOMATION.md 10) are a Linux executable, a Windows
-# executable, and the native Z8001 cc/as/ld that run on the machine.  The stages
-# below produce them and prove they are one compiler:
-#
-#   S0  make all                     the source compiles under gcc, shims bite
-#   S1  make check                   731 assertions, most EXECUTING the compiled
-#                                    code under the emulator -- codegen truth,
-#                                    not compile-without-error
-#   S2  make libc selfhost native    the compiler compiles ITSELF to Z8001
+#   S0  make all                     the host toolchain builds
+#   S1  make check                   regression suite, run under the emulator
+#   S2  make libc selfhost native    the compiler compiles itself to Z8001
 #   S3  make check-selfhost          the target-built passes reproduce the host
-#                                    compiler's objects BYTE FOR BYTE, 86 of 86
-#   S4  windows S0+S1, then the      the two hosts' objects are identical: the
-#       equivalence job              only place an LLP64 defect can surface
+#                                    compiler's objects byte for byte
+#   S3b tests/nativetools.sh         the native as and ld match the host ones
+#   S4  equivalence                  Linux and Windows emit identical objects
 #
-# S1 and S3 are not redundant.  S3 proves the two compilers agree; S1 proves
-# what they agree about is right.  Two identical WRONG compilers pass S3.
-#
-# Measured, on this repository: S0 7 s, S1 9 s, S2 3 s, S3 75 s.  Under three
-# minutes for everything, both hosts, which is why nothing here is nightly.
-#
-# CI SETS THE VARIABLES; it never relies on the search.  A job that depended on
-# directory adjacency breaks the first time a runner image moves its checkouts,
-# and the search has its own regression test (resolver-isolation.yml).
-#
-# THE OS EDGE IS A PINNED SNAPSHOT, AND ITS ABSENCE IS ANNOUNCED.  S2, S3 and S4
-# build OS artifacts with this compiler, so they need the operating system's
-# source; that repository is unpublished, so `make deps DEP=coherent' places the
-# archive DEPS pins and those stages run against it.
-# Where either is absent the stages DO NOT RUN, and the run says so three ways: an ::warning:: annotation on the run page, a table in the
-# job summary naming each stage that did not run, and the `verdict' job's own
-# displayed name, which reads INCOMPLETE.  What must not happen is the fourth
-# way a gate lies -- announcing a skip and exiting 0 into a green badge that
-# reads as "everything passed".
-#
-# The presence test is on CONTENT, through this repository's own resolver
-# (host/deps.sh coherent), not on whether a checkout step succeeded: a
-# repository of that name can exist, clone cleanly, and hold no os/ at all.
+# CI sets C900_EMU explicitly; the dependency search has its own test
+# (resolver-isolation.yml).
 name: build
 
 on:
@@ -56,55 +29,18 @@ permissions:
 jobs:
   linux:
     runs-on: ubuntu-latest
-    outputs:
-      os: ${{ steps.os.outputs.have }}
+    env:
+      C900_EMU: ${{ github.workspace }}/src/external/commodore-900-emulator/bin/c900
     steps:
       - uses: actions/checkout@v4
         with: { path: src }
-      # The pinned edges: the emulator, a binary we cannot fix, and the OS
-      # snapshot.  "Which of each ran this build" is a number chosen in advance,
-      # in DEPS, so external/ is cached on BOTH -- keyed on the emulator alone, a
-      # coherent pin bumped on its own would restore the old snapshot from cache
-      # and `make deps' would leave it alone as already resolved, a stale input
-      # surviving a deliberate version change.  host/build is deliberately NOT
-      # cached: a stale artifact outliving a source change is a bug class this
-      # project has already been bitten by.
-      - name: The pins
+      - name: The emulator pin
         id: pin
-        run: |
-          tag=$(sh src/host/deps-fetch.sh -tag emu)
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "os=$(awk '$1=="coherent"{print $4}' src/DEPS)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(sh src/host/deps-fetch.sh -tag emu)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: src/external
-          key: deps-${{ runner.os }}-${{ steps.pin.outputs.tag }}-${{ steps.pin.outputs.os }}
-
-      # The OS edge is the pinned SNAPSHOT (DEPS: `coherent release'), not a
-      # checkout: that repository is unpublished, and the snapshot is what lets
-      # S2/S3 run here at all.  continue-on-error, because an OS edge that is
-      # not there is a state this workflow handles rather than a fault -- the
-      # job goes on to run everything that does not need one.
-      - name: The OS edge
-        id: os
-        continue-on-error: true
-        working-directory: src
-        run: |
-          # A placement that fails is a state this job handles, below -- but it
-          # is never handled silently: the reason has to reach the run page or
-          # the next failure is read as the first one.
-          make deps DEP=coherent || \
-            echo "::warning title=The OS snapshot was not placed::make deps DEP=coherent failed; the stages needing it do not run."
-          p=$(sh host/deps.sh coherent)
-          if [ -n "$p" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "COHERENT OS source: $p"
-            sed -n 's/^commit /snapshot commit /p;s/^date /snapshot date /p' "$p/.provenance" 2>/dev/null || :
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::warning title=S2 and S3 will not run::The pinned COHERENT OS snapshot could not be placed (DEPS names the tag). The target cross-build and the self-host fixpoint need it and are NOT RUN in this build."
-          fi
-
+          key: deps-${{ runner.os }}-${{ steps.pin.outputs.tag }}
       - name: Place the pinned emulator
         working-directory: src
         run: make deps DEP=emu
@@ -114,30 +50,17 @@ jobs:
         run: make all
       - name: S1 - host correctness
         working-directory: src
-        env:
-          C900_EMU: ${{ github.workspace }}/src/external/commodore-900-emulator/bin/c900
         run: make check
       - name: S2 - target cross-build
-        if: steps.os.outputs.have == 'yes'
         working-directory: src
         run: make libc selfhost native
       - name: S3 - the self-host fixpoint
-        if: steps.os.outputs.have == 'yes'
         working-directory: src
-        env:
-          C900_EMU: ${{ github.workspace }}/src/external/commodore-900-emulator/bin/c900
         run: make check-selfhost
-      # S3 runs cc0/cc1/cc2.  The native as and ld are built by S2 and shipped in
-      # the release archive, and until this stage existed nothing ever ran them.
       - name: S3b - the native assembler and linker
-        if: steps.os.outputs.have == 'yes'
         working-directory: src
-        env:
-          C900_EMU: ${{ github.workspace }}/src/external/commodore-900-emulator/bin/c900
         run: sh tests/nativetools.sh
 
-      # The verdict line already names the guilty pass (cc0/cc1/cc2); this is
-      # the material behind it, and it is kilobytes.
       - name: Fixpoint evidence
         if: failure()
         uses: actions/upload-artifact@v4
@@ -149,12 +72,6 @@ jobs:
             src/host/build/z8001/.provenance
           retention-days: 90
 
-      # The deliverables, off every green push -- a stranger should not have to
-      # wait for a tag to get a compiler.  Split in two, and the second is
-      # conditional: the host compiler comes out of S0, the native Z8001 one and
-      # the Z8001 libraries out of S2, and an artifact named `toolchain' that
-      # quietly held half of what it usually does would be the skip lying in
-      # another place.
       - uses: actions/upload-artifact@v4
         with:
           name: linux-toolchain
@@ -162,23 +79,20 @@ jobs:
             src/host/build/z8001/
             src/host/build/as-z8001
             src/host/build/ld-z8001
+            src/host/build/mkarz
       - uses: actions/upload-artifact@v4
-        if: steps.os.outputs.have == 'yes'
         with:
           name: linux-native-z8001
           path: |
             src/host/build/native/
             src/host/build/libc-z8001/
       - uses: actions/upload-artifact@v4
-        if: steps.os.outputs.have == 'yes'
         with:
           name: linux-objects
           path: src/host/build/selfhost/root/work/h2/*.o
 
   windows:
     runs-on: windows-latest
-    outputs:
-      os: ${{ steps.os.outputs.have }}
     defaults:
       run:
         shell: msys2 {0}
@@ -191,48 +105,18 @@ jobs:
           install: >-
             mingw-w64-x86_64-gcc make perl python unzip tar
             diffutils coreutils findutils gawk grep sed patch curl git
-
-      # external/ now holds BOTH pinned edges, so the key names both.  Keyed on the
-      # emulator alone, a coherent pin bumped on its own would restore the old
-      # snapshot from cache and `make deps' would leave it alone as already
-      # resolved -- a stale input surviving a deliberate version change.
-      - name: The pins
+      - name: The emulator pin
         id: pin
-        run: |
-          tag=$(sh src/host/deps-fetch.sh -tag emu)
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "os=$(awk '$1=="coherent"{print $4}' src/DEPS)" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(sh src/host/deps-fetch.sh -tag emu)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
           path: src/external
-          key: deps-${{ runner.os }}-${{ steps.pin.outputs.tag }}-${{ steps.pin.outputs.os }}
-
-      # Inside the msys2 shell, like every other path here: ${{ github.workspace }}
-      # is a Windows path with backslashes and a POSIX test on one finds nothing.
-      - name: The OS edge
-        id: os
-        working-directory: src
-        run: |
-          # A placement that fails is a state this job handles, below -- but it
-          # is never handled silently: the reason has to reach the run page or
-          # the next failure is read as the first one.
-          make deps DEP=coherent || \
-            echo "::warning title=The OS snapshot was not placed::make deps DEP=coherent failed; the stages needing it do not run."
-          p=$(sh host/deps.sh coherent)
-          if [ -n "$p" ]; then
-            echo "have=yes" >> "$GITHUB_OUTPUT"
-            echo "COHERENT OS source: $p"
-          else
-            echo "have=no" >> "$GITHUB_OUTPUT"
-            echo "::warning title=S4 will not run::The pinned COHERENT OS snapshot could not be placed. The Windows half of the cross-host object comparison is NOT RUN, so nothing in this build compares the two hosts' objects."
-          fi
+          key: deps-${{ runner.os }}-${{ steps.pin.outputs.tag }}
       - name: Place the pinned emulator
         working-directory: src
         run: make deps DEP=emu
 
-      # The variables are still set explicitly, but they are computed INSIDE the
-      # msys2 shell: ${{ github.workspace }} is a Windows path with backslashes,
-      # and a POSIX test on one silently finds nothing.
+      # Paths are computed inside msys2: ${{ github.workspace }} has backslashes.
       - name: S0 - host build
         working-directory: src
         run: make all
@@ -241,20 +125,13 @@ jobs:
         run: |
           export C900_EMU=$(pwd)/external/commodore-900-emulator
           make check
-
-      # S2/S3 proper are host-independent, so running them twice buys only a
-      # second chance to disagree about something that is not host-specific.
-      # What IS host-specific is the objects this compiler emits, so the host
-      # half of the fixpoint runs here -- 86 translation units, under a second --
-      # and the equivalence job compares them with the Linux ones.
+      # Only the host half of the fixpoint: the objects are what can differ.
       - name: S4 - compile the corpus for the cross-host comparison
-        if: steps.os.outputs.have == 'yes'
         working-directory: src
         run: |
           sh host/selfhost-root.sh
           sh host/build-selfhost2.sh -hostonly
       - uses: actions/upload-artifact@v4
-        if: steps.os.outputs.have == 'yes'
         with:
           name: windows-objects
           path: src/host/build/selfhost/root/work/h2/*.o
@@ -265,16 +142,10 @@ jobs:
             src/host/build/z8001/
             src/host/build/as-z8001*
             src/host/build/ld-z8001*
+            src/host/build/mkarz*
 
-  # S4.  Both sides of this comparison are compiled against the OS source (the
-  # corpus is the compiler's own 86 translation units, staged into a root that
-  # holds the OS headers), so with no OS tree there are no objects to compare
-  # and this job does not run.  It is not made to pass on one side: an empty
-  # side would compare equal to nothing, which is the shape of every gate this
-  # repository has had to take apart.
   equivalence:
     needs: [ linux, windows ]
-    if: needs.linux.outputs.os == 'yes' && needs.windows.outputs.os == 'yes'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -283,7 +154,7 @@ jobs:
         with: { name: linux-objects, path: obj/linux }
       - uses: actions/download-artifact@v4
         with: { name: windows-objects, path: obj/windows }
-      - name: S4 - deliverables 1 and 2 are one compiler
+      - name: S4 - the two hosts are one compiler
         run: sh src/host/cmp-objdirs.sh obj/linux obj/windows linux windows
       - name: Both sides, when they disagree
         if: failure()
@@ -292,72 +163,3 @@ jobs:
           name: s4-evidence
           path: obj/
           retention-days: 90
-
-  # THE VERDICT.  What a badge cannot say is which stages produced it, and this
-  # workflow can now legitimately finish green having run five of eight -- so
-  # the run states its own coverage, in the two places a person looks: the job
-  # NAME in the checks list, which reads INCOMPLETE when the OS stages did not
-  # run, and a table in the run summary naming every stage, its result, and the
-  # reason for each one that did not run.
-  #
-  # It does not fail the build.  A job that is red on every push for a reason
-  # nobody in this repository can fix teaches a reader to ignore the colour,
-  # which costs more than it buys; what it must never do is report five stages
-  # as eight.
-  verdict:
-    needs: [ linux, windows, equivalence ]
-    if: always()
-    name: ${{ needs.linux.outputs.os == 'yes' && 'coverage - every stage ran' || 'coverage - INCOMPLETE, the OS stages did not run' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: What ran, and what did not
-        env:
-          OS_LINUX: ${{ needs.linux.outputs.os }}
-          OS_WINDOWS: ${{ needs.windows.outputs.os }}
-          R_LINUX: ${{ needs.linux.result }}
-          R_WINDOWS: ${{ needs.windows.result }}
-          R_EQUIVALENCE: ${{ needs.equivalence.result }}
-        run: |
-          # $1 stage  $2 what it is  $3 ran? (yes/no)  $4 result or reason
-          row() { printf '| %s | %s | %s | %s |\n' "$1" "$2" "$3" "$4" >> "$GITHUB_STEP_SUMMARY"; }
-          noos='**NOT RUN** — no COHERENT OS source; that repository is unpublished (`DEPS`: `coherent local`)'
-
-          if [ "$OS_LINUX" = yes ]; then
-            echo "## Coverage: every stage ran" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "## Coverage: INCOMPLETE" >> "$GITHUB_STEP_SUMMARY"
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "A green result on this run means the stages marked RAN below passed." >> "$GITHUB_STEP_SUMMARY"
-            echo "It says nothing about the ones marked NOT RUN — no compiler in this" >> "$GITHUB_STEP_SUMMARY"
-            echo "run was tested against the OS source, and no target-built compiler" >> "$GITHUB_STEP_SUMMARY"
-            echo "was produced or compared at all." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=Incomplete run::S2, S3 and S4 did not run: no COHERENT OS source. A green badge on this run covers S0 and S1 only."
-          fi
-          # A host that did not run is announced in its own right: it is not the
-          # OS edge, and the row below would otherwise blame the wrong absence.
-          nowin='**NOT RUN** — the `windows` job did not complete'
-          if [ "$R_WINDOWS" = skipped ]; then
-            echo "::warning title=Windows did not run::The windows job did not complete. S0 and S1 covered Linux only, and S4 -- that the two hosts emit identical objects -- did not run at all."
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "| stage | what it proves | ran | result |" >> "$GITHUB_STEP_SUMMARY"
-          echo "|---|---|---|---|" >> "$GITHUB_STEP_SUMMARY"
-          row S0 "the source compiles under gcc, both hosts" RAN "linux $R_LINUX, windows $R_WINDOWS"
-          row S1 "731 assertions, most executing compiled code" RAN "linux $R_LINUX, windows $R_WINDOWS"
-          [ "$OS_LINUX" = yes ] \
-            && row S2 "the compiler compiles itself to Z8001" RAN "$R_LINUX" \
-            || row S2 "the compiler compiles itself to Z8001" NO "$noos"
-          [ "$OS_LINUX" = yes ] \
-            && row S3 "the target-built passes reproduce the host objects" RAN "$R_LINUX" \
-            || row S3 "the target-built passes reproduce the host objects" NO "$noos"
-          [ "$OS_LINUX" = yes ] \
-            && row S3b "the native as and ld run, and ld refuses a bad object" RAN "$R_LINUX" \
-            || row S3b "the native as and ld run, and ld refuses a bad object" NO "$noos"
-          if [ "$R_EQUIVALENCE" != skipped ]; then
-            row S4 "the two hosts emit identical objects" RAN "$R_EQUIVALENCE"
-          elif [ "$R_WINDOWS" = skipped ]; then
-            row S4 "the two hosts emit identical objects" NO "$nowin"
-          else
-            row S4 "the two hosts emit identical objects" NO "$noos"
-          fi
-          cat "$GITHUB_STEP_SUMMARY"
