@@ -705,6 +705,17 @@ register TREE	*tp;
 			tp->t_op = DIV;
 			lp->t_dp = NULL;
 			lp->t_type = T_INT;
+			/* A pointer difference divides exactly: shift it. */
+			sp = tp->t_rp;
+			es = sp->t_op == ICON ? (lval_t)sp->t_ival
+			   : sp->t_op == LCON ? sp->t_lval
+			   : sp->t_op == ZCON ? (lval_t)sp->t_zval : 0;
+			if (es >= 2 && (es & (es - 1)) == 0) {
+				for (iv = 0; es != 1; es >>= 1)
+					++iv;
+				tp->t_op = SHR;
+				tp->t_rp = bzcon(iv);
+			}
 		}
 	}
 	/* Fixup any remaining ZCON's */

@@ -35,6 +35,19 @@ register TREE *tp;
 }
 
 /*
+ * A signed int divided by 2^k, which modoper gives an unsigned word or long
+ * constant: shifts and masks in one register, no DIV pair.
+ */
+static
+ispow2div(tp)
+register TREE *tp;
+{
+	return ((tp->t_op == DIV && tp->t_rp->t_op == ICON && tp->t_rp->t_type == U16
+	      || tp->t_op == REM && tp->t_rp->t_op == LCON && tp->t_rp->t_type == U32)
+	     && tp->t_type == S16);
+}
+
+/*
  * Select a register. 'tp' is the tree; 'c' is a context (PAIR or ANY*); 'flag'
  * is true if ANY should be resolved.
  */
@@ -105,7 +118,7 @@ register int	r;
 #endif
 	op = tp->t_op;
 	ptp = &pertype[tp->t_type];
-	if ((op >= MUL && op <= REM) || (op >= AMUL && op <= AREM))
+	if (((op >= MUL && op <= REM) || (op >= AMUL && op <= AREM)) && !ispow2div(tp))
 		kind = ptp->p_pair;
 	else
 		kind = ptp->p_kind;

@@ -51,6 +51,20 @@ REM:
 			[ZSUBL]		[REGNO RR0],[REGNO RR0]
 			[ZCLR]		[REGNO R2]
 			[ZDIVL]		[REGNO RQ0],[AR]
+/ SIGNED by 2^k: modoper gives the node the unsigned long whose high word is
+/ 0x8000|m and low word m = 2^k-1 (a signed word remainder has no long operand
+/ otherwise).  x & 0x8000|m is the remainder of a non-negative x; for a negative one
+/ it leaves 0x8000|v, and NEG, AND m, NEG makes -(-v & m).
+%	PEFFECT|PRVALUE|P_SLT
+	FS16	ANYR	ANYR	*	TEMP
+		TREG	FS16
+		IMM|MMX	FU32
+			[ZAND]	[R],[HI AR]
+			[ZJRPL]	[LAB0]
+			[ZNEG]	[R]
+			[ZAND]	[R],[LO AR]
+			[ZNEG]	[R]
+		[DLAB0]:
 / SIGNED remainder: sign-extend dividend.
 %	PEFFECT|PRVALUE
 	FS16		RR0	R0	*	R0

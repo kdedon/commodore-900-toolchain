@@ -8,7 +8,7 @@
 # words divided by unsigned words, also through a ?: of such values; an
 # unsigned constant over 0x7FFF keeps MULTL.
 # A signed long divided by 2^k is a sign test and shifts, its remainder a sign
-# test and masks (two of the four dividends negative).
+# test and masks (two of the four dividends negative); so is a signed int's.
 H="$(cd "$(dirname "$0")/.." && pwd)"
 B="${C900_TC_BUILD:-$H/host/build}"
 CCZ="$H/host/ccz"; N2="${N2:-$(sh "$H/host/runner.sh")}"
@@ -88,6 +88,10 @@ cost 'unsigned long'	'(unsigned long)ua[j] * 80'		125
 cost 'unsigned long'	'(unsigned long)ua[j] * cb[j]'		151
 cost 'unsigned long'	'(unsigned long)ua[j] * ub[j]'		181
 cost long		'(long)sa[j] * ub[j]'			166
+cost int		'sa[j] / 2'				71
+cost int		'sa[j] / 16'				80
+cost int		'sa[j] % 16'				63
+cost int		'sa[j] / 1024'				101
 cost long		'la[j] / 16'				96
 cost long		'la[j] % 16'				87
 cost long		'la[j] / 1024'				115

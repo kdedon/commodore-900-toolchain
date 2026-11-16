@@ -1124,6 +1124,39 @@ TREE		*ptp;
 		return (NULL);
 	}
 	/*
+	 * The same for a signed int and 2^k, k <= 14, without the EXTS and DIV.
+	 * The DIV takes the unsigned word m = 2^k-1, which no signed word divide
+	 * has otherwise, and adds it to a negative x before an SRA by k; for k = 1
+	 * the word is 0, since a divisor of 1 would be taken for a shift if the
+	 * node is walked again.  The REM takes the unsigned long with 0x8000|m
+	 * and m in its words for `x & m' or `-(-x & m)'.
+	 */
+	if ((op==DIV || op==REM || op==ADIV || op==AREM) && tt==S16 && rt==S16
+	&&  rp!=NULL && rp->t_op==ICON && (n2 = lpow2((lval_t)rp->t_ival)) >= 1) {
+		if (op==ADIV || op==AREM)
+			return (modopasg(tp, lp, rp, S16));
+		tp2 = ivalnode((ival_t)(n2 == 1 ? 0 : (1 << n2) - 1));
+		tp2->t_type = U16;
+		if (op == REM) {
+			tp2 = lvalnode((lval_t)(0x8000L | ((1L << n2) - 1)) << 16
+				| ((1L << n2) - 1));
+			tp2->t_type = U32;
+		}
+		if (op == DIV) {
+			tp1 = leftnode(DIV, lp, S16, 2);
+			tp1->t_rp = tp2;
+			amd(tp2, tp1);
+			amd(tp1, tp);
+			tp->t_op = SHR;
+			tp->t_lp = tp1;
+			tp->t_rp = ivalnode((ival_t)-n2);
+		} else
+			tp->t_rp = tp2;
+		amd(tp->t_rp, tp);
+		amd(tp, ptp);
+		return (NULL);
+	}
+	/*
 	 * A compound divide or remainder whose operands balance to another type
 	 * than the left's: cc0 hands `i /= u' the right operand unsigned, as the
 	 * divide must be.  The adiv and arem rules divide in the node's type, so

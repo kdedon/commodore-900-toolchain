@@ -51,6 +51,25 @@ DIV:
 			[ZSUBL]		[REGNO RR0],[REGNO RR0]
 			[ZCLR]		[REGNO R2]
 			[ZDIVL]		[REGNO RQ0],[AR]
+/ SIGNED by 2^k: modoper makes the quotient an SRA of this node, whose right operand
+/ is the unsigned word 2^k-1 (a signed word divide has none otherwise), added to a
+/ negative dividend; 0 stands for the 1 of k = 1.
+%	PEFFECT|PRVALUE|P_SLT
+	FS16	ANYR	ANYR	*	TEMP
+		TREG	FS16
+		0|MMX	FU16
+			[ZTEST]	[R]
+			[ZJRPL]	[LAB0]
+			[ZINC]	[R],[CONST 1]
+		[DLAB0]:
+%	PEFFECT|PRVALUE|P_SLT
+	FS16	ANYR	ANYR	*	TEMP
+		TREG	FS16
+		IMM|MMX	FU16
+			[ZTEST]	[R]
+			[ZJRPL]	[LAB0]
+			[ZADD]	[R],[AR]
+		[DLAB0]:
 / SIGNED (FS16): sign-extend the dividend.
 %	PEFFECT|PRVALUE
 	FS16		RR0	R1	*	R1

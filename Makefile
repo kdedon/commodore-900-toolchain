@@ -213,6 +213,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/longuns.sh
 	sh tests/mul16.sh
 	sh tests/sdiv2.sh
+	sh tests/sdivw.sh
 	sh tests/opasg.sh
 	sh tests/condcast.sh
 	sh tests/dblcast.sh
