@@ -12,11 +12,8 @@
  * the container and prints.
  *
  * Header (n.out.h): short l_magic,l_flag,l_machine,l_tbase; long l_ssize[9];
- * long l_entry -- 48 bytes, text following.  Code words are big-endian, but the
- * integer FIELDS of recovered objects are not always stored the same way, so
- * the 16- and 32-bit field encodings are detected from invariants (magic 0407,
- * l_tbase == the header size, section sizes consistent with the file length)
- * rather than assumed.
+ * long l_entry -- 48 bytes, text following.  Code words are big-endian; the
+ * header's field order is taken from l_magic.
  *
  * K&R C, 16-bit int safe: every header field is read through unsigned long, or
  * a 0xFFFF field comes back negative on the target.
@@ -39,6 +36,8 @@
 #define	SEGSYM	7
 #define	LF_LNAME 02000		/* names over 16 chars in a string table */
 #define	LNMAX	127
+#define	M_Z8001	4
+#define	M_Z8002	5
 
 char *progname = "loutdis";
 
@@ -54,7 +53,7 @@ static char *d32name[4] = { "BE", "LE", "PDP", "PDPLE" };
 
 struct hdr {
 	int d16, d32;
-	int hsize, stride, entryoff;
+	int hsize;
 	unsigned long flag, machine, tbase;
 	unsigned long ssize[NLSEG];
 	unsigned long entry;
@@ -107,63 +106,34 @@ unsigned char *b;
 	       ((unsigned long)b[3] << 8) | b[2];
 }
 
-/* detect chooses the field encodings that make the header self-consistent:
- * magic 0407, l_tbase == the header size, and 48 + the file-backed section
- * sizes closest to the real file length. */
+/* The order l_magic reads 0407 in is the order of every short.  Longs follow
+ * it: high word first in a canonical (low byte first) file, big-endian in a
+ * big-endian one.  Nothing is inferred from the section sizes: a file with no
+ * symbols and short sections fits the file length in more than one order. */
 static int
-detect(data, n, h)
+detect(data, h)
 unsigned char *data;
-long n;
 struct hdr *h;
 {
-	static int lhsize[2] = { 48, 88 };
-	static int lstride[2] = { 4, 8 };
-	static int lentry[2] = { 44, 80 };
-	struct hdr t;
-	long best, score, total;
-	int lay, d16, d32, i, ok;
+	int d16, i;
 
-	best = -1;
-	for (lay = 0; lay < 2; lay++) {
-		for (d16 = 0; d16 < 2; d16++) {
-			if (u16of(d16, data) != LMAGIC)
-				continue;
-			if ((int)u16of(d16, data + 6) != lhsize[lay])
-				continue;
-			for (d32 = 0; d32 < 4; d32++) {
-				t.d16 = d16;
-				t.d32 = d32;
-				t.hsize = lhsize[lay];
-				t.stride = lstride[lay];
-				t.entryoff = lentry[lay];
-				t.flag = u16of(d16, data + 2);
-				t.machine = u16of(d16, data + 4);
-				t.tbase = u16of(d16, data + 6);
-				for (i = 0; i < NLSEG; i++)
-					t.ssize[i] = u32of(d32, data + 8 + lstride[lay] * i);
-				t.entry = u32of(d32, data + lentry[lay]);
-				total = t.hsize;
-				ok = 1;
-				for (i = 0; i < 7; i++) {
-					if (t.ssize[filebacked[i]] > (unsigned long)n) {
-						ok = 0;
-						break;
-					}
-					total += (long)t.ssize[filebacked[i]];
-				}
-				if (!ok)
-					continue;
-				score = total - n;
-				if (score < 0)
-					score = -score;
-				if (best < 0 || score < best) {
-					best = score;
-					*h = t;
-				}
-			}
-		}
-	}
-	return best >= 0;
+	for (d16 = 0; d16 < 2; d16++)
+		if (u16of(d16, data) == LMAGIC)
+			break;
+	if (d16 == 2)
+		return 0;
+	h->d16 = d16;
+	h->d32 = d16 == 1 ? 3 : 0;
+	h->hsize = 48;
+	h->flag = u16of(d16, data + 2);
+	h->machine = u16of(d16, data + 4);
+	h->tbase = u16of(d16, data + 6);
+	if ((h->machine != M_Z8001 && h->machine != M_Z8002) || h->tbase != 48)
+		return 0;
+	for (i = 0; i < NLSEG; i++)
+		h->ssize[i] = u32of(h->d32, data + 8 + 4 * i);
+	h->entry = u32of(h->d32, data + 44);
+	return 1;
 }
 
 static long
@@ -182,11 +152,14 @@ int s;
 	return off;
 }
 
-static int
-textseg(h)
+/* the instruction segments that hold code, as "SHRI", "PRVI" or "SHRI+PRVI". */
+static char *
+textname(h)
 struct hdr *h;
 {
-	return h->ssize[SEGSHRI] > 0 ? SEGSHRI : SEGPRVI;
+	if (h->ssize[SEGSHRI] == 0)
+		return segname[SEGPRVI];
+	return h->ssize[SEGPRVI] == 0 ? segname[SEGSHRI] : "SHRI+PRVI";
 }
 
 /* the symbol table, in file order. */
@@ -337,7 +310,7 @@ char **argv;
 	unsigned long *w;
 	FILE *f;
 	char *path, *fn;
-	long n, toff, tsize, nwords, total, far, near, lbase, start, end;
+	long n, toff, tsize, wsize, nwords, total, far, near, lbase, start, end;
 	int i, k, verbose, dohdr, dosyms, seg, nsym, found;
 
 #ifdef _WIN32
@@ -376,8 +349,8 @@ char **argv;
 	if ((long)fread(data, 1, (size_t)n, f) != n)
 		fatal("short read", path);
 	fclose(f);
-	if (!detect(data, n, &h))
-		fatal("no l.out layout (48/88-byte) matches magic 0407", path);
+	if (!detect(data, &h))
+		fatal("not a Z8000 l.out with a 48-byte header", path);
 
 	if (dohdr) {
 		printf("%s: %ld bytes\n", path, n);
@@ -407,24 +380,36 @@ char **argv;
 		return 0;
 	}
 
-	seg = textseg(&h);
-	toff = segoffset(&h, seg);
-	tsize = (long)h.ssize[seg];
-	w = (unsigned long *)malloc((size_t)(tsize / 2 + 4) * sizeof(unsigned long));
+	wsize = (long)(h.ssize[SEGSHRI] > h.ssize[SEGPRVI] ?
+	    h.ssize[SEGSHRI] : h.ssize[SEGPRVI]);
+	w = (unsigned long *)malloc((size_t)(wsize / 2 + 4) * sizeof(unsigned long));
 	if (w == 0)
 		fatal("out of memory", (char *)0);
 	total = far = near = 0;
 
 	if (fn) {
 		/* text symbols, sorted; the window is this symbol to the next. */
+		for (i = 0; i < nsym; i++)
+			if ((syms[i].seg == SEGSHRI || syms[i].seg == SEGPRVI)
+			    && strcmp(syms[i].name, fn) == 0)
+				break;
+		seg = i < nsym ? syms[i].seg : SEGSHRI;
+		toff = segoffset(&h, seg);
+		tsize = (long)h.ssize[seg];
 		k = 0;
 		for (i = 0; i < nsym; i++)
 			if (syms[i].seg == seg)
 				syms[k++] = syms[i];
 		nsym = k;
 		symsort(syms, nsym);
+		/* a .o numbers its sections on from 0; an image's text starts at
+		 * its first symbol */
+		lbase = seg == SEGPRVI ? (long)h.ssize[SEGSHRI] : 0L;
+		if (nsym > 0 && ((long)syms[0].addr < lbase
+		    || (long)syms[0].addr >= lbase + tsize))
+			lbase = (long)syms[0].addr;
 		start = 0;
-		end = tsize;
+		end = lbase + tsize;
 		found = 0;
 		for (i = 0; i < nsym; i++)
 			if (strcmp(syms[i].name, fn) == 0) {
@@ -436,24 +421,28 @@ char **argv;
 			}
 		if (!found) {
 			fprintf(stderr, "symbol \"%s\" not found in text segment %s\n",
-				fn, segname[seg]);
+				fn, textname(&h));
 			return 1;
 		}
 		printf("%s  %s [0x%lx..0x%lx)  (%ld bytes)\n", path, fn,
 		       (unsigned long)start, (unsigned long)end, end - start);
-		/* symbol addresses are absolute in a linked image, 0-based in a .o */
-		lbase = 0;
-		if (nsym > 0 && (long)syms[0].addr >= tsize)
-			lbase = (long)syms[0].addr;
 		nwords = textwords(data, n, toff + start - lbase, end - start, w);
 		disasm(w, nwords, start, 1, &total, &far, &near, counts);
 		return 0;
 	}
 
-	nwords = textwords(data, n, toff, tsize, w);
-	disasm(w, nwords, 0L, verbose, &total, &far, &near, counts);
+	for (seg = SEGSHRI; seg <= SEGPRVI; seg++) {
+		if (h.ssize[seg] == 0)
+			continue;
+		if (verbose && seg == SEGPRVI && h.ssize[SEGSHRI] > 0)
+			printf("%s:\n", segname[seg]);
+		nwords = textwords(data, n, segoffset(&h, seg),
+		    (long)h.ssize[seg], w);
+		disasm(w, nwords, seg == SEGPRVI ? (long)h.ssize[SEGSHRI] : 0L,
+		    verbose, &total, &far, &near, counts);
+	}
 	printf("%s: text=%s %ld insns, FAR-ish(@RR/L/RRn-base)=%ld  near(@Rn single)=%ld\n",
-	       path, segname[seg], total, far, near);
+	       path, textname(&h), total, far, near);
 	for (i = 0; i < 12; i++)
 		if (counts[i] > 0)
 			printf("    %-6s %ld\n", hist[i], counts[i]);
