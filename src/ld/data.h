@@ -69,6 +69,7 @@ typedef	struct	site_t	{	/* an LR_SHORT or LR_CALL operand in text */
 	char	seg;		/* target segment when sp is NULL */
 	char	form;		/* RF_LONG, RF_SHORT or RF_CALR */
 	char	nogo;		/* forms that stopped fitting */
+	char	was;		/* form before a trial */
 } site_t;
 
 typedef	struct	mod_t	{	/* descriptor for each input module */
@@ -80,6 +81,7 @@ typedef	struct	mod_t	{	/* descriptor for each input module */
 	uaddr_t	ooff[NXSEG];	/* pass 1 offset in each output segment */
 	uaddr_t	noff;		/* SHRI offset once relaxed */
 	uaddr_t	pad;		/* zeros before its SHRI once relaxed */
+	int	stay;		/* keeps its pad while sites are retried */
 	site_t	*site;		/* in address order */
 	unsigned int	nsite;
 	unsigned int	nsym;	/* #symbols for this module */

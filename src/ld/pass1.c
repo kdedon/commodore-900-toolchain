@@ -268,6 +268,7 @@ char	*fname, mname[];
 	for (i=0; i<NXSEG; i++)
 		mp->ooff[i] = oseg[i].size;
 	mp->noff = mp->pad = 0;
+	mp->stay = 0;
 	mp->site = NULL;
 	mp->nsite = 0;
 	baseall(mp->seg, &ldh);

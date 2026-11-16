@@ -189,6 +189,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/calr.sh
 	sh tests/switch.sh
 	sh tests/relax.sh
+	sh tests/relax-seg.sh
 	sh tests/peepfold.sh
 	sh tests/regvar.sh
 	sh tests/promote.sh

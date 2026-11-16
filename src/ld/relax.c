@@ -10,7 +10,8 @@
  * segment and within reach becomes CALR, else short where it can.  Each cut
  * moves the text after it down, so the layout is redone until no operand
  * changes form.  An operand that stops fitting is barred from that form for
- * good, which bounds the loop.
+ * good, which bounds the loop; a barred operand that fits again afterwards
+ * is shortened only when no other operand grows.
  *
  *	CALL long	5F00 8Sss oooo	6 bytes
  *	CALL short	5F00 0Sso	4 bytes
@@ -23,6 +24,7 @@
 
 #define	NOSHORT		1
 #define	NOCALR		2
+#define	NOTARGET	4		/* target unknown while relaxing */
 
 static	int	fcut[] = { 0, 2, 4 };	/* bytes each form saves */
 
@@ -143,14 +145,14 @@ unsigned int	symno;
 
 	if (s->seg == L_SYM) {
 		if (symno >= mp->nsym || (sp = mp->sym[symno]) == NULL) {
-			s->nogo = NOSHORT|NOCALR;
+			s->nogo = NOSHORT|NOCALR|NOTARGET;
 			return;
 		}
 		s->sp = sp;
 		seg = sp->s.ls_type & ~L_GLOBAL;
 		if (sp->s.ls_type == (L_GLOBAL|L_REF)
 		 || seg >= L_SYM && seg != L_ABS)
-			s->nogo = NOSHORT|NOCALR;
+			s->nogo = NOSHORT|NOCALR|NOTARGET;
 		else if (seg == L_SHRI)
 			s->tm = rlxmod(sp->s.ls_addr, sp->mod, &s->toff);
 		return;
@@ -159,7 +161,7 @@ unsigned int	symno;
 		s->tm = mp;
 		s->toff = (s->field - mp->seg[L_SHRI].vbase) & 0xFFFFL;
 	} else if (s->seg >= NXSEG && s->seg != L_ABS)
-		s->nogo = NOSHORT|NOCALR;
+		s->nogo = NOSHORT|NOCALR|NOTARGET;
 }
 
 /*
@@ -252,7 +254,8 @@ seg_t	lay[];
 		}
 		size = mp->seg[L_SHRI].size - c;
 		mp->pad = 0;
-		if (lmodel && (cur&max1) + size > max) {
+		if (lmodel && ((cur&max1) + size > max
+			    || mp->stay && (cur&max1) != 0)) {
 			mp->pad = max - (cur&max1);
 			cur += mp->pad;
 		}
@@ -300,43 +303,49 @@ uaddr_t	newmods;
 	return (b + s->field);
 }
 
-void
-relax()
+/*
+ * Redo the layout and every site's form until none changes, counting the
+ * forms in nform[].  With `trial' set a form only shrinks, and 0 is
+ * returned as soon as a site's present form stops fitting.
+ */
+static int
+rlxrun(lay, newmodsp, nform, trial)
+seg_t	lay[];
+uaddr_t	*newmodsp;
+unsigned int	nform[];
+int	trial;
 {
 	register mod_t	*mp;
 	register site_t	*s;
-	register sym_t	*sp;
 	register unsigned int	i;
-	seg_t	lay[NLSEG];
-	uaddr_t	newmods, v, off;
-	int	changed, want;
-	unsigned int	nform[3];
+	uaddr_t	newmods, v;
+	int	changed, want, c, sh;
 
-	changed = 0;
-	for (mp = modhead; mp != NULL; mp = mp->next)
-		if (mp->fname != NULL && mp->relax) {
-			rlxread(mp);
-			changed |= mp->nsite != 0;
-		}
-	if (!changed)
-		return;
 	do {
-		newmods = rlxlay(lay);
+		*newmodsp = newmods = rlxlay(lay);
 		changed = 0;
 		nform[RF_LONG] = nform[RF_SHORT] = nform[RF_CALR] = 0;
 		for (mp = modhead; mp != NULL; mp = mp->next)
 			for (i = 0; i < mp->nsite; i++) {
 				s = &mp->site[i];
 				want = RF_LONG;
-				if ((s->nogo&(NOSHORT|NOCALR)) != (NOSHORT|NOCALR)) {
+				if ((s->nogo&(NOSHORT|NOCALR)) != (NOSHORT|NOCALR)
+				 || trial && s->form != RF_LONG) {
 					v = rlxval(mp, s, lay, newmods);
-					if (s->kind == LR_CALL && (s->nogo&NOCALR) == 0
+					c = s->kind == LR_CALL
 					 && calrok(lay[L_SHRI].vbase + mp->noff + s->off
-						   - s->cut + 2, v))
+						   - s->cut + 2, v);
+					sh = shortok(v);
+					if (c && (s->nogo&NOCALR) == 0)
 						want = RF_CALR;
-					else if ((s->nogo&NOSHORT) == 0 && shortok(v))
+					else if (sh && (s->nogo&NOSHORT) == 0)
 						want = RF_SHORT;
+					if (trial && (s->form == RF_CALR && !c
+						   || s->form == RF_SHORT && !sh))
+						return (0);
 				}
+				if (trial && fcut[want] < fcut[s->form])
+					want = s->form;
 				if (s->form == RF_CALR && want != RF_CALR)
 					s->nogo |= NOCALR;
 				if (s->form == RF_SHORT && want == RF_LONG)
@@ -348,6 +357,113 @@ relax()
 				nform[want]++;
 			}
 	} while (changed);
+	return (1);
+}
+
+/*
+ * The shorter form a barred site now fits, else its own.
+ */
+static int
+rlxfit(mp, s, lay, newmods)
+register mod_t	*mp;
+register site_t	*s;
+seg_t	lay[];
+uaddr_t	newmods;
+{
+	uaddr_t	v;
+
+	if (s->nogo == 0 || (s->nogo&NOTARGET) != 0 || s->form == RF_CALR)
+		return (s->form);
+	v = rlxval(mp, s, lay, newmods);
+	if (s->kind == LR_CALL
+	 && calrok(lay[L_SHRI].vbase + mp->noff + s->off - s->cut + 2, v))
+		return (RF_CALR);
+	if (s->form == RF_LONG && shortok(v))
+		return (RF_SHORT);
+	return (s->form);
+}
+
+/*
+ * Put barred sites (`only', or all of them) in the form each now fits and
+ * relax on, shrinking only.  If a site stops fitting, go back.
+ */
+static int
+rlxtry(lay, newmodsp, nform, only)
+seg_t	lay[];
+uaddr_t	*newmodsp;
+unsigned int	nform[];
+site_t	*only;
+{
+	register mod_t	*mp;
+	register site_t	*s;
+	register unsigned int	i;
+	int	n;
+
+	n = 0;
+	for (mp = modhead; mp != NULL; mp = mp->next)
+		for (i = 0; i < mp->nsite; i++) {
+			s = &mp->site[i];
+			s->was = s->form;
+			if (only == NULL || s == only) {
+				s->form = rlxfit(mp, s, lay, *newmodsp);
+				n += s->form != s->was;
+			}
+		}
+	if (n == 0)
+		return (0);
+	if (rlxrun(lay, newmodsp, nform, 1))
+		return (1);
+	for (mp = modhead; mp != NULL; mp = mp->next)
+		for (i = 0; i < mp->nsite; i++)
+			mp->site[i].form = mp->site[i].was;
+	*newmodsp = rlxlay(lay);
+	return (0);
+}
+
+void
+relax()
+{
+	register mod_t	*mp;
+	register site_t	*s;
+	register sym_t	*sp;
+	register unsigned int	i;
+	seg_t	lay[NLSEG];
+	uaddr_t	newmods, off;
+	int	changed;
+	unsigned int	nform[3];
+
+	changed = 0;
+	for (mp = modhead; mp != NULL; mp = mp->next)
+		if (mp->fname != NULL && mp->relax) {
+			rlxread(mp);
+			changed |= mp->nsite != 0;
+		}
+	if (!changed)
+		return;
+	rlxrun(lay, &newmods, nform, 0);
+
+	/*
+	 * A bar can be stale: under -L a module may drop into the segment
+	 * below, bar its sites, and climb back once other barred sites grow.
+	 * Try the barred sites that fit again, all at once and then one by
+	 * one, and keep a try if no site has to grow.  A module padded into
+	 * its segment stays there, or the cut could drop it back.
+	 */
+	for (mp = modhead; mp != NULL; mp = mp->next)
+		mp->stay = mp->pad != 0;
+	while (rlxtry(lay, &newmods, nform, (site_t *)NULL))
+		;
+	do {
+		changed = 0;
+		for (mp = modhead; mp != NULL; mp = mp->next)
+			for (i = 0; i < mp->nsite; i++) {
+				s = &mp->site[i];
+				if (rlxfit(mp, s, lay, newmods) != s->form
+				 && rlxtry(lay, &newmods, nform, s))
+					changed = 1;
+			}
+	} while (changed);
+	rlxrun(lay, &newmods, nform, 1);
 	if (watch)
 		message("relax: %u short, %u calr, %u long",
 			nform[RF_SHORT], nform[RF_CALR], nform[RF_LONG]);
