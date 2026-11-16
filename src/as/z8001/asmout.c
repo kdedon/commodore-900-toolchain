@@ -345,6 +345,11 @@ outinit()
 		if (i!=L_BSSI && i!=L_BSSD)
 			sb += ss;
 	}
+	/* the sizes are rounded even; write the last pad byte so the file holds them */
+	if (sb > sizeof(ldh)) {
+		fseek(ofp, sb-1, 0);
+		xwrite("", 1, 1);
+	}
 	fseek(ofp, sb, 0);
 	ss = 0;
 	rn = 0;

@@ -177,6 +177,7 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/asbytes.sh
 	sh tests/disround.sh
 	sh tests/loutdis-hdr.sh
+	sh tests/asoddpad.sh
 	sh tests/as-locptr.sh
 	sh tests/shlib-format.sh
 	sh tests/shlib-client.sh
