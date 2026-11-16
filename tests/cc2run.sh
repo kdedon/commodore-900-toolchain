@@ -64,6 +64,9 @@ chk 'long x; x=100000L; return (int)(x/7L);' 14285
 chk 'int dy,u; unsigned h,k; dy=-7; u=2; h=5; k = h < dy / u ? h : dy / u; return k;' 5
 chk 'int dy,u; unsigned h,k; dy=-7; u=2; h=0; k = h ? h : (dy /= u); return k + dy;' -6
 chk 'int x; unsigned h; x=-3; h=0; return h + x / 2;' -1
+# a shift op-assign by a variable count as a `?:' arm
+chk 'int h,k,dy,u; h=0; dy=-64; u=3; k = h ? h : (dy >>= u); return k;' -8
+chk 'int h,k,dy,u; h=0; dy=3; u=4; k = h ? h : (dy <<= u); return k;' 48
 
 # Cross-translation-unit linkage: a file-scope global defined in one object must be
 # EXPORTED so another object's `extern' reference resolves.  This is a correctness class

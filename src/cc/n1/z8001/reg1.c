@@ -17,6 +17,24 @@
 #endif
 
 /*
+ * A shift op-assign by a count in a register (ashl.t, ashr.t) loads its value
+ * temp from the lvalue after the count is selected, and the count, selected
+ * after the temp is bound, can land in the register bound to it.  So
+ * isusable() does not bind the caller's register early but records it, and
+ * regselect() binds the temp to it once the count is busy, unless the count
+ * holds it.
+ */
+static	TREE	*shtree;	/* the shift op-assign */
+static	int	shreg;		/* the caller's register for its value temp */
+
+static
+isvarshift(tp)
+register TREE *tp;
+{
+	return ((tp->t_op == ASHL || tp->t_op == ASHR) && tp->t_rp->t_op != ICON);
+}
+
+/*
  * Select a register. 'tp' is the tree; 'c' is a context (PAIR or ANY*); 'flag'
  * is true if ANY should be resolved.
  */
@@ -29,6 +47,12 @@ TREE	*tp;
 	register int		byte;
 	register PERTYPE	*ptp;
 
+	if (tp == shtree && c != PAIR && flag != 0) {
+		shtree = NULL;
+		if (!isrealreg(tp->t_rp->t_rreg)
+		 || (reg[shreg].r_phys & reg[tp->t_rp->t_rreg].r_phys) == 0)
+			return (shreg);
+	}
 	ptp = &pertype[tp->t_type];
 	kind = ptp->p_pair;
 	byte = bytereg(tp);
@@ -95,6 +119,13 @@ register int	r;
 	}
 	if (byte && (reg[r].r_phys & ~BYTEREGS) != 0)
 		goto no;
+	/* Keep r used, as binding it would, so the lvalue's index avoids it. */
+	if (isvarshift(tp)) {
+		tp->t_used |= reg[r].r_phys;
+		shtree = tp;
+		shreg = r;
+		goto no;
+	}
 #if !TINY
 	if (sflag > 2)
 		snapf("yes\n");

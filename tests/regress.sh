@@ -555,6 +555,24 @@ chkf 'int f(x,y) int x,y; { unsigned h; h = y; return (h - x) / 2; }' 3 0 32766
 # A pointer difference's quotient is exact, so it still shifts.
 chkf 'int f(x,y) int x,y; { long a[8]; long *p, *q; unsigned n; p = a + x; q = a + y; n = (p - q) * sizeof(long); return n; }' 1 6 -20
 chklist 'int f(p,q) long *p, *q; { unsigned n; n = (p - q) * sizeof(long); return n; }' 'sla r[0-9]+, \$-2' yes
+# A shift op-assign by a variable count as an arm of `?:', or returned in the pair
+# the count went to: the value was loaded into the count's register, as in
+# `LD R0,u; LD R0,dy; NEG R0; SDA R0,R0'.
+chkf 'int f(x,y) int x,y; { int h, k, dy; h = 0; dy = x; k = h ? h : (dy >>= y); return k; }' -64 3 -8
+chkf 'int f(x,y) int x,y; { int h, k, dy; h = 0; dy = x; k = h ? h : (dy <<= y); return k; }' 3 4 48
+chkf 'int f(x,y) int x,y; { int h, k; unsigned dy; h = 0; dy = x; k = h ? h : (dy >>= y); return k; }' -64 3 8184
+chkf 'int f(x,y) int x,y; { int h, k, dy; h = 1; dy = x; k = h ? (dy >>= y) : h; return k + dy; }' -64 3 -16
+chkf 'int f(x,y) int x,y; { int h, k, dy; h = 0; dy = x; k = h ? h : (dy >>= y) + 1; return k; }' -64 3 -7
+chkf 'int g; int f(x,y) int x,y; { int h, k; h = 0; g = x; k = h ? h : (g >>= y); return k * 10 + (g == -8); }' -64 3 -79
+chkf 'int f(x,y) int x,y; { int h, k, *p; h = 0; p = &x; k = h ? h : (*p >>= y); return k; }' -64 3 -8
+chkf 'int f(x,y) int x,y; { register int r; int h, k; h = 0; r = x; k = h ? h : (r >>= y); return k + r; }' -64 3 -16
+chkf 'int f(x,y) int x,y; { int h, k; char c; h = 0; c = x; k = h ? h : (c >>= y); return k; }' -64 3 -8
+chkf 'int g(n) int n; { return n; } int f(x,y) int x,y; { int h; h = 0; return h ? h : (x >>= g(y)); }' -64 3 -8
+chkf 'int f(x,y) int x,y; { int h; h = 0; return h ? h : (x >>= y / 2); }' -64 6 -8
+chkf 'long g(x,y) int x,y; { long h, dy; h = 0; dy = x * 65536L; return h ? h : (dy >>= y); } int f(x,y) int x,y; { return (int)(g(x, y) >> 16); }' -64 3 -8
+chkf 'long g(x,y) int x,y; { long h, dy; h = 0; dy = x; return h ? h : (dy <<= y); } int f(x,y) int x,y; { return (int)g(x, y); }' 3 4 48
+chkf 'unsigned long g(x,y) int x,y; { unsigned long h, dy; h = 0; dy = x * 65536L; return h ? h : (dy >>= y); } int f(x,y) int x,y; { return (int)(g(x, y) >> 16); }' -64 3 8184
+chkf 'long g(x,y) int x,y; { long dy; dy = x; return (dy <<= y); } int f(x,y) int x,y; { return (int)g(x, y); }' 3 4 48
 chklist 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : (dy /= u); return k; }' 'div rr0, ' yes
 chklist 'int f(dy,u) int dy,u; { unsigned h, k; h = 0; k = h ? h : (dy /= u); return k; }' 'divl ' no
 chklist 'int f(x,y) int x,y; { long a, b; a = x; b = y; return (int)(a / b); }' 'divl ' yes
