@@ -95,7 +95,7 @@ shape() { # <fn> <DIVL count> <bytes> <what>
 	fi
 }
 shape d2_ 0 16 "EXTSL SUBL SRAL; 16 bytes with the DIVL"
-shape a2_ 0 22 "the same, compound; 22"
+shape a2_ 0 20 "the same, compound, the reload a copy; 22"
 shape nd_ 0 24 "TEST JR ADDL SRAL; 18"
 shape odd_ 0 40 "TEST JR AND CLR JR | NEG AND NEG SBC; 26"
 shape trim_ 0 44 "the same, subtracted; 46"

@@ -353,6 +353,7 @@ simpoperop(op)
 {
 	switch (op) {
 	case ZADD: case ZSUB: case ZAND: case ZOR: case ZXOR: case ZCP:
+	case ZADDL: case ZSUBL: case ZCPL:
 		return (1);
 	}
 	return (0);
@@ -607,8 +608,10 @@ clrstamps()
 		p->i_pc = 0;
 }
 
+#define	pairdeadcfg(start, d)	regdeadcfg(start, d, 0xF)
+
 static
-pairdeadcfg(start, d)
+regdeadcfg(start, d, m0)
 register INS	*start;
 {
 	register INS	*p, *tg;
@@ -619,7 +622,7 @@ register INS	*start;
 	if (++ddgen > 0x07FFFFFFL)		/* leave room to pack the 4-bit mask into i_pc */
 		ddgen = 1;
 	sp = 0;
-	ddstk[sp] = start; ddmsk[sp] = 0xF; ++sp;
+	ddstk[sp] = start; ddmsk[sp] = m0; ++sp;
 	while (sp > 0) {
 		--sp;
 		p = ddstk[sp];
@@ -838,10 +841,11 @@ register INS	*p;
 	register int	opj, i, nr, w, needlow, needhigh;
 	register AFIELD	*o;
 	register int	op;
-	int		regs[2];
+	int		regs[2], lowset;
 
 	needlow = 1;
 	needhigh = pair;
+	lowset = 0;
 	for (; p != &ins; p = p->i_fp) {
 		if (p->i_type == EPILOG)
 			return (d > 3);			/* R0..R3 may carry the return value */
@@ -858,6 +862,19 @@ register INS	*p;
 		}
 		if (barrierop(op) || quadhit(op, d) || op == ZJP)
 			return (0);			/* block move, or a switch dispatch */
+		/* `LDB RLd,src' then `EXTSB Rd' or `CLRB RHd': the low byte is written, then the
+		 * high one from it or cleared, so the word is redefined without being read. */
+		if (lowset && !pair && p->i_naddr == 1
+		 && (op == ZEXTSB && p->i_af[0].a_mode == (A_WR|d)
+		  || op == ZCLRB && p->i_af[0].a_mode == (A_BR|d)))
+			return (1);
+		if (op == ZLDB && p->i_naddr == 2 && p->i_af[0].a_mode == (A_BR|(d+8)) && d < 8
+		 && (p->i_af[1].a_mode&A_AMOD) != A_WR && (p->i_af[1].a_mode&A_AMOD) != A_BR
+		 && !(((p->i_af[1].a_mode&A_AMOD) == A_X || (p->i_af[1].a_mode&A_AMOD) == A_IR)
+		      && ((p->i_af[1].a_mode&A_REGM) == d || (p->i_af[1].a_mode&A_REGM)+1 == d))) {
+			lowset = 1;
+			continue;
+		}
 		w = isbyteop(op);
 		for (opj = 0; opj < p->i_naddr; ++opj) {
 			o = &p->i_af[opj];
@@ -914,14 +931,12 @@ cpstate()
 
 	resetstate();
 	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
-		if (ip->i_type == LLABEL || ip->i_type == JUMP) {
+		if (ip->i_type != CODE) {		/* a label, a jump, data in the code */
 			resetstate();
 			continue;
 		}
-		if (ip->i_type != CODE)
-			continue;
 		op = ip->i_op;
-		if (barrierop(op)) {
+		if (barrierop(op) || op == ZSC || opinfo[op].op_style == OF_IO) {
 			resetstate();
 			continue;
 		}
@@ -957,6 +972,22 @@ cpstate()
 				++changes;
 				continue;
 			}
+		}
+		/* `LD Rd,M' or `LDL RRd,M' where another register holds M: copy that register,
+		 * a word or two shorter and faster. */
+		if ((op == ZLD || op == ZLDL) && ip->i_naddr == 2 && (d->a_mode&A_AMOD) == A_WR) {
+			dr = d->a_mode&A_REGM;
+			k.wid = opwidth(op);
+			if (memkey(s, &k))
+				for (r = 0; r < 13; ++r)
+					if (r != dr && samehold(&holds[r], &k)
+					 && (op == ZLD || (pairHold[r] && (r & 1) == 0))) {
+						s->a_mode = A_WR | r;
+						s->a_sp = NULL;
+						s->a_value = 0;
+						++changes;
+						break;
+					}
 		}
 		/* redundant reg-reg pair copy: `LDL RRd,RRs' where RRd already equals RRs. */
 		if (op == ZLDL && ip->i_naddr == 2
@@ -1017,7 +1048,7 @@ cpstate()
 		if (ip->i_naddr > 0 && !cmpop(op)) {
 			register int	dm;
 			dm = d->a_mode & A_AMOD;
-			if (dm == A_DIR || dm == A_X || dm == A_IR)
+			if (dm != A_WR && dm != A_BR && dm != A_IMM)
 				for (r = 0; r < NMREG; ++r)
 					holds[r].kind = 0;
 		}
@@ -1343,6 +1374,216 @@ selfmove()
 }
 
 /*
+ * `CP Rn,#0' is `TEST Rn' in one word less: both set Z and S from Rn, and CP also
+ * clears V and C, which TEST leaves alone.  So is `CP M,#0' `TEST M', and `CPB M,#0'
+ * `TESTB M', with the read and no immediate word.  The branches right after it may test Z
+ * and S, and LT and GE become MI and PL; any other reader of V or C keeps the CP.
+ */
+static
+cptest()
+{
+	register INS	*ip, *p;
+	register int	cc;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || (ip->i_op != ZCP && ip->i_op != ZCPB) || ip->i_naddr != 2
+		 || (ip->i_af[1].a_mode&A_AMOD) != A_IMM || ip->i_af[1].a_sp != NULL
+		 || ip->i_af[1].a_value != 0)
+			continue;
+		switch (ip->i_af[0].a_mode&A_AMOD) {	/* a register, or memory without a step */
+		case A_WR:
+			if (ip->i_op != ZCP)
+				continue;
+			break;
+		case A_X:
+		case A_DIR:
+			break;
+		case A_IR:
+			if (ip->i_af[0].a_value == 0)
+				break;
+		default:
+			continue;
+		}
+		for (p = ip->i_fp; p != &ins && p->i_type == JUMP; p = p->i_fp) {
+			cc = p->i_rel & 0xF;
+			if (cc != 1 && cc != 5 && cc != 6 && cc != 8 && cc != 9 && cc != 0xD
+			 && cc != 0xE)
+				break;
+		}
+		if (p == ip->i_fp || (p != &ins && p->i_type == JUMP))
+			continue;
+		if (!carrydead(p->i_bp) || !overflowdead(p->i_bp))
+			continue;
+		for (p = ip->i_fp; p != &ins && p->i_type == JUMP; p = p->i_fp) {
+			cc = p->i_rel & 0xF;
+			if (cc == 1)
+				p->i_rel = (p->i_rel & ~0xF) | 5;
+			else if (cc == 9)
+				p->i_rel = (p->i_rel & ~0xF) | 0xD;
+		}
+		ip->i_op = ip->i_op == ZCPB ? ZTESTB : ZTEST;
+		ip->i_naddr = 1;
+		++changes;
+	}
+}
+
+/*
+ * `TEST Rn' sets only Z and S from Rn.  Delete it when the instruction before is a
+ * word op that wrote Rn and set Z and S from it: the flags are already the same.
+ */
+static
+testdrop()
+{
+	register INS	*ip, *bp;
+	register int	op;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_op != ZTEST || ip->i_naddr != 1
+		 || (ip->i_af[0].a_mode&A_AMOD) != A_WR)
+			continue;
+		if (ip == lastins || ip == lastpred || ip == exitrun)
+			continue;
+		bp = ip->i_bp;
+		if (bp == &ins || bp->i_type != CODE || bp->i_naddr < 1)
+			continue;
+		op = bp->i_op;
+		if (op != ZADD && op != ZSUB && op != ZADC && op != ZSBC && op != ZAND
+		 && op != ZOR && op != ZXOR && op != ZINC && op != ZDEC && op != ZNEG
+		 && op != ZCOM)
+			continue;
+		if ((bp->i_af[0].a_mode&A_AMOD) != A_WR
+		 || (bp->i_af[0].a_mode&A_REGM) != (ip->i_af[0].a_mode&A_REGM))
+			continue;
+		ip = deleteins(ip, ip->i_fp);
+		++changes;
+	}
+}
+
+/*
+ * `LD M,Rn' and then `TEST M', `TESTB' after `LDB' or `TESTL' after `LDL': the register
+ * holds what the store wrote, so test it, a word shorter and faster.  A word TEST also
+ * goes when the loads before it lead back, through copies `LD M,Rn' or `LD Rm,Rn' of the
+ * value, to a word op that set Z and S from it: a load sets no flags.
+ */
+static
+teststore()
+{
+	register INS	*ip, *bp;
+	register int	op, ld, n;
+	AFIELD		want;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_naddr != 1 || volins(ip))
+			continue;
+		op = ip->i_op;
+		ld = op == ZTEST ? ZLD : op == ZTESTB ? ZLDB : op == ZTESTL ? ZLDL : 0;
+		if (ld == 0)
+			continue;
+		bp = ip->i_bp;
+		if (bp != &ins && bp->i_type == CODE && bp->i_op == ld && bp->i_naddr == 2
+		 && ((bp->i_af[1].a_mode&A_AMOD) == A_WR || (bp->i_af[1].a_mode&A_AMOD) == A_BR)
+		 && !volins(bp) && sameaddr(&bp->i_af[0], &ip->i_af[0])) {
+			ip->i_af[0] = bp->i_af[1];
+			++changes;
+		}
+		if (op != ZTEST || ip == lastins || ip == lastpred || ip == exitrun)
+			continue;
+		want = ip->i_af[0];
+		for (n = 0; n < 4 && bp != &ins && bp->i_type == CODE; ++n, bp = bp->i_bp) {
+			if (bp->i_op == ZLD && bp->i_naddr == 2 && !volins(bp)
+			 && (bp->i_af[1].a_mode&A_AMOD) == A_WR
+			 && ((want.a_mode&A_AMOD) == A_WR
+			   ? (bp->i_af[0].a_mode&(A_AMOD|A_REGM)) == (want.a_mode&(A_AMOD|A_REGM))
+			   : sameaddr(&bp->i_af[0], &want))) {
+				want = bp->i_af[1];
+				continue;
+			}
+			if (bp->i_op == ZLD && bp->i_naddr == 2 && (want.a_mode&A_AMOD) == A_WR
+			 && (bp->i_af[0].a_mode&(A_AMOD|A_REGM)) != (want.a_mode&(A_AMOD|A_REGM)))
+				continue;	/* writes another register, or memory */
+			break;
+		}
+		if (n == 0 || bp == &ins || bp->i_type != CODE || bp->i_naddr < 1
+		 || (want.a_mode&A_AMOD) != A_WR)
+			continue;
+		op = bp->i_op;
+		if (op != ZADD && op != ZSUB && op != ZADC && op != ZSBC && op != ZAND
+		 && op != ZOR && op != ZXOR && op != ZINC && op != ZDEC && op != ZNEG
+		 && op != ZCOM)
+			continue;
+		if ((bp->i_af[0].a_mode&A_AMOD) != A_WR
+		 || (bp->i_af[0].a_mode&A_REGM) != (want.a_mode&A_REGM))
+			continue;
+		ip = deleteins(ip, ip->i_fp);
+		++changes;
+	}
+}
+
+/* Is word register r dead from `p' on, on every path?  The flags C and V too? */
+static
+chaindead(p, r)
+register INS	*p;
+{
+	return (regdeadcfg(p, r & ~1, (r & 1) ? 0xC : 0x3)
+	     && carrydead(p->i_bp) && overflowdead(p->i_bp));
+}
+
+/*
+ * A compare chain `CP Rn,#k1 ; JR EQ,L1 ; CP Rn,#k2 ; JR EQ,L2 ...' whose Rn is dead at
+ * every target and after: `DEC Rn,#d' for each compare whose constant is 1..16 above the
+ * one before it (or above 0 for the first), a word shorter and 3 clocks faster, and the
+ * later constants less what has been taken off.  Z and S come from the same difference
+ * either way; C and V must be dead.  NE takes the place of EQ as well.
+ */
+static
+cpchain()
+{
+	register INS	*ip, *p, *q;
+	register int	r, n, ndec;
+	long		cur, d;
+
+	for (ip = ins.i_fp; ip != &ins; ip = ip->i_fp) {
+		if (ip->i_type != CODE || ip->i_op != ZCP || ip->i_naddr != 2
+		 || (ip->i_af[0].a_mode&A_AMOD) != A_WR
+		 || (ip->i_af[1].a_mode&A_AMOD) != A_IMM || ip->i_af[1].a_sp != NULL)
+			continue;
+		r = ip->i_af[0].a_mode & A_REGM;
+		if (r >= 13)
+			continue;
+		n = ndec = 0;
+		cur = 0;
+		for (p = ip; p != &ins && p->i_type == CODE && p->i_op == ZCP && p->i_naddr == 2
+		     && (p->i_af[0].a_mode&(A_AMOD|A_REGM)) == (A_WR|r)
+		     && (p->i_af[1].a_mode&A_AMOD) == A_IMM && p->i_af[1].a_sp == NULL;
+		     p = q->i_fp) {
+			q = p->i_fp;
+			if (q == &ins || q->i_type != JUMP
+			 || ((q->i_rel & 0xF) != 6 && (q->i_rel & 0xF) != 0xE))
+				break;
+			if (labtarget(q->i_labno) == NULL || !chaindead(labtarget(q->i_labno), r))
+				break;
+			d = (p->i_af[1].a_value - cur) & 0xFFFF;
+			if (d >= 1 && d <= 16) {
+				++ndec;
+				cur = p->i_af[1].a_value & 0xFFFF;
+			}
+			++n;
+		}
+		if (ndec == 0 || p == &ins || !chaindead(p, r))
+			continue;
+		for (p = ip, cur = 0; n > 0; --n, p = p->i_fp->i_fp) {
+			d = (p->i_af[1].a_value - cur) & 0xFFFF;
+			if (d >= 1 && d <= 16) {
+				cur = p->i_af[1].a_value & 0xFFFF;
+				p->i_op = ZDEC;
+			}
+			p->i_af[1].a_value = d;
+		}
+		++changes;
+	}
+}
+
+/*
  * `EXTSB Rn' writes only RHn.  Delete it when the next instruction clears RHn without
  * reading it: `AND Rn,#k' with k < 0x100, or `CLRB RHn'.  EXTSB sets no flags.
  */
@@ -1610,6 +1851,10 @@ peephole()
 	copyfwd();
 	pushfold();
 	selfmove();
+	cptest();
+	testdrop();
+	teststore();
+	cpchain();
 	extsbdead();
 	extdup();
 	incmem();

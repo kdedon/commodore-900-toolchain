@@ -179,6 +179,24 @@ register INS	*ip;
 	     && s->a_value >= 0 && s->a_value <= 15);
 }
 
+/*
+ * Does this ZLDL encode as two LDKs, LDK Rd,#hi; LDK Rd+1,#lo?  Both words of a 32-bit
+ * immediate with no relocation in 0..15 do: two words and 10 clocks against three and 11,
+ * and neither sets a flag.
+ */
+ldlkform(ip)
+register INS	*ip;
+{
+	register AFIELD	*s;
+
+	if (ip->i_type != CODE || ip->i_op != ZLDL || ip->i_naddr != 2
+	 || (ip->i_af[0].a_mode&A_AMOD) != A_WR)
+		return (0);
+	s = &ip->i_af[1];
+	return ((s->a_mode&A_AMOD) == A_IMML && s->a_sp == NULL
+	     && ((unsigned long)s->a_value & 0xFFF0FFF0L) == 0);
+}
+
 /* byte-immediate replicate: a Z8000 byte op (even opcode high byte) puts the data byte
  * in BOTH halves of the immediate word (the HW reads the high half). */
 static
@@ -472,6 +490,11 @@ register INS	*ip;
 				outw((base|0x8000) | sn<<4 | dn);
 				return;
 			case A_IMML:			/* OP RRd,#imm32 (high word, then low) */
+				if (ldlkform(ip)) {
+					outw(0xBD00 | dn<<4 | (int)(s->a_value>>16 & 0xF));
+					outw(0xBD00 | (dn+1)<<4 | (int)(s->a_value & 0xF));
+					return;
+				}
 				outw(base | dn);
 				outw((unsigned short)(s->a_value >> 16));
 				outw((unsigned short)s->a_value);

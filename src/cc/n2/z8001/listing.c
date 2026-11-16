@@ -125,6 +125,12 @@ register INS	*ip;
 	 * will actually encode, not the ZLD the list holds. */
 	if (ldkform(ip))
 		op = ZLDK;
+	if (ldlkform(ip)) {
+		printf("\tldk\tr%d, #%ld\n\tldk\tr%d, #%ld\n", ip->i_af[0].a_mode&A_REGM,
+		    (long)(ip->i_af[1].a_value>>16 & 0xF), (ip->i_af[0].a_mode&A_REGM) + 1,
+		    (long)(ip->i_af[1].a_value & 0xF));
+		return;
+	}
 	if (opname[op] != NULL)
 		printf("\t%s", opname[op]);
 	else

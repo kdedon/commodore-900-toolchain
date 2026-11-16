@@ -53,6 +53,16 @@ ADIV:
 		[ZCLR]		[REGNO R2]
 		[ZDIVL]		[REGNO RQ0],[AR]
 		[ZLD]		[AL],[REGNO R3]
+/ `x /= 2': as div.t's.
+%	PEFFECT|PRVALUE
+	FS16	RR0	*	*	R1
+		ADR|LV	WORD
+		2|MMX	WORD
+		[ZLD]	[REGNO R1],[AL]
+		[ZEXTS]	[REGNO RR0]
+		[ZSUB]	[REGNO R1],[REGNO R0]
+		[ZRRC]	[REGNO R1]
+		[ZLD]	[AL],[REGNO R1]
 %	PEFFECT|PRVALUE
 	FS16	RR0	*	*	R1
 		ADR|LV	WORD
@@ -118,6 +128,17 @@ ADIV:
 / char promotes to int): signed sign-extends byte->word->long (EXTSB then EXTS);
 / unsigned zeroes the whole dividend first (one SUBL) and drops the byte into RL1.
 / Quotient -> R1; store its low byte, and for a VALUE context widen that byte back.
+%	PEFFECT|PRVALUE
+	WORD	RR0	*	*	R1
+		ADR|LV	FS8
+		2|MMX	WORD
+		[ZLDB]	[LO REGNO R1],[AL]
+		[ZEXTSB]	[REGNO R1]
+		[ZEXTS]	[REGNO RR0]
+		[ZSUB]	[REGNO R1],[REGNO R0]
+		[ZRRC]	[REGNO R1]
+		[ZLDB]	[AL],[LO REGNO R1]
+	[IFV]	[ZEXTSB]	[REGNO R1]
 %	PEFFECT|PRVALUE
 	WORD	RR0	*	*	R1
 		ADR|LV	FS8

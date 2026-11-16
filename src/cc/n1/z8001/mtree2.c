@@ -1078,6 +1078,43 @@ TREE		*ptp;
 		}
 	}
 	/*
+	 * A signed int remainder by 2^k against 0, or as a condition, is 0 exactly when
+	 * x & 2^k-1 is, whatever the sign of x.  A walked REM holds the long operand below,
+	 * whose low word is 2^k-1.
+	 */
+	if (ac==MFLOW && op==REM && tt==S16 && rt==S16 && rp!=NULL && rp->t_op==ICON
+	&&  lpow2((lval_t)rp->t_ival) >= 1) {
+		tp->t_op = AND;
+		tp->t_rp = ivalnode((ival_t)(rp->t_ival - 1));
+		amd(tp->t_rp, tp);
+		return (tp);
+	}
+	if ((op==EQ || op==NE) && rp!=NULL && rp->t_op==ICON && rp->t_ival==0
+	&&  lp->t_op==REM && lp->t_type==S16 && lp->t_lp->t_type==S16
+	&&  ((tp1 = lp->t_rp)->t_op==LCON && tp1->t_type==U32
+	  || tp1->t_op==ICON && lpow2((lval_t)tp1->t_ival) >= 1)) {
+		lp->t_op = AND;
+		lp->t_rp = ivalnode((ival_t)(tp1->t_op==LCON ? tp1->t_lval & 0x7FFF
+					     : tp1->t_ival - 1));
+		amd(lp->t_rp, lp);
+		return (tp);
+	}
+	/*
+	 * Against 0 < c < 2^k: x & 0x8000|2^k-1 is the remainder of a non-negative x and
+	 * negative for a negative one, whose remainder is not positive either.
+	 */
+	if ((op==EQ || op==NE) && rp!=NULL && rp->t_op==ICON && rp->t_ival > 0
+	&&  lp->t_op==REM && lp->t_type==S16 && lp->t_lp->t_type==S16
+	&&  ((tp1 = lp->t_rp)->t_op==LCON && tp1->t_type==U32
+	  || tp1->t_op==ICON && lpow2((lval_t)tp1->t_ival) >= 1)
+	&&  rp->t_ival < (tp1->t_op==LCON ? (tp1->t_lval & 0x7FFF) + 1 : tp1->t_ival)) {
+		lp->t_op = AND;
+		lp->t_rp = ivalnode((ival_t)(0x8000 | (tp1->t_op==LCON ? tp1->t_lval & 0x7FFF
+							     : tp1->t_ival - 1)));
+		amd(lp->t_rp, lp);
+		return (tp);
+	}
+	/*
 	 * Z8000 has no dedicated right-shift instruction: SRL/SRA are the SAME
 	 * SLL/SLA opcode (0xB3) with a NEGATIVE count word -- the decoder infers
 	 * the right direction from the count's sign (verified in the sim
@@ -1126,16 +1163,15 @@ TREE		*ptp;
 	/*
 	 * The same for a signed int and 2^k, k <= 14, without the EXTS and DIV.
 	 * The DIV takes the unsigned word m = 2^k-1, which no signed word divide
-	 * has otherwise, and adds it to a negative x before an SRA by k; for k = 1
-	 * the word is 0, since a divisor of 1 would be taken for a shift if the
-	 * node is walked again.  The REM takes the unsigned long with 0x8000|m
+	 * has otherwise, and adds it to a negative x before an SRA by k; k = 1 keeps
+	 * the DIV, whose rule for 2 is as short.  The REM takes the unsigned long with 0x8000|m
 	 * and m in its words for `x & m' or `-(-x & m)'.
 	 */
 	if ((op==DIV || op==REM || op==ADIV || op==AREM) && tt==S16 && rt==S16
-	&&  rp!=NULL && rp->t_op==ICON && (n2 = lpow2((lval_t)rp->t_ival)) >= 1) {
+	&&  rp!=NULL && rp->t_op==ICON && (n2 = lpow2((lval_t)rp->t_ival)) >= 1 + (op==DIV || op==ADIV)) {
 		if (op==ADIV || op==AREM)
 			return (modopasg(tp, lp, rp, S16));
-		tp2 = ivalnode((ival_t)(n2 == 1 ? 0 : (1 << n2) - 1));
+		tp2 = ivalnode((ival_t)((1 << n2) - 1));
 		tp2->t_type = U16;
 		if (op == REM) {
 			tp2 = lvalnode((lval_t)(0x8000L | ((1L << n2) - 1)) << 16

@@ -160,7 +160,7 @@ shape() { # <fn> <bytes> <what>
 }
 shape d8_ 16 "TEST JR INC SRA; 12 with the DIV"
 shape r8_ 20 "AND JR NEG AND NEG; 14"
-shape d2_ 16 "INC #1; 12"
+shape d2_ 12 "EXTS SUB RRC; 12"
 shape r2_ 20 "AND #1; 14"
 shape dk_ 18 "ADD #1023; 12"
 shape rk_ 20 "AND #1023; 14"

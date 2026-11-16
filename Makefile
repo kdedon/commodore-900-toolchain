@@ -214,6 +214,9 @@ check: check-tools all check-sources check-mi check-shims check-cc3tab check-isa
 	sh tests/mul16.sh
 	sh tests/sdiv2.sh
 	sh tests/sdivw.sh
+	sh tests/cptest.sh
+	sh tests/loadreuse.sh
+	sh tests/peepvals.sh
 	sh tests/opasg.sh
 	sh tests/condcast.sh
 	sh tests/dblcast.sh
