@@ -14,9 +14,14 @@
 #endif
 
 extern	FILE	*ifp;
+extern	unsigned char	*ibufp;
 
 unbget(b)
 {
+	if (ibufp != NULL) {
+		*--ibufp = b;
+		return (b);
+	}
 #if	TEMPBUF
 	if (ifp == NULL) {
 		if (inbuf == inbufp)

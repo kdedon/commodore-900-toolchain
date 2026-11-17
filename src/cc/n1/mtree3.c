@@ -75,7 +75,7 @@ register TREE *tp;
 				flag = tp2->t_flag;
 				if ((flag&T_LEAF)!=0 && tp2->t_op!=LEAF) {
 					tp2 = leafnode(tp2);
-					amd(tp2);
+					amd(tp2, NULL);
 					tp1->t_lp = tp2;
 				}
 				if ((tp2->t_op==LEAF || tp2->t_op==CONVERT
@@ -87,7 +87,7 @@ register TREE *tp;
 				tp = leafnode(tp);
 				if (ac == MFNARG)
 					fixtoptype(tp);
-				amd(tp);
+				amd(tp, NULL);
 			}
 		}
 	}

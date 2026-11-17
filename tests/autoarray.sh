@@ -55,7 +55,7 @@ main() {
 }
 EOF
 [ -n "$N2" ] || { echo "  autoarray: no guest runner"; exit 2; }
-want=$(gcc -std=gnu89 -w -o "$T/host" "$T/main.c" "$T/a.c" && "$T/host" | sed 's/ [0-9]*$//')
+want=$(gcc -std=gnu89 -w -o "$T/host" "$T/main.c" "$T/a.c" && "$T/host" | sed 's/ [0-9]*$//' | tr -d '\r')
 want="$want 125"	# f9: sizeof a is 4 with a 16-bit int
 if "$CCZ" -o "$T/m" "$T/main.c" "$T/a.c" >/dev/null 2>&1; then
 	got=$("$N2" -runexec "$T/m" 2>/dev/null) || true

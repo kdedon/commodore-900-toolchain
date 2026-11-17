@@ -86,7 +86,7 @@ main() {
 }
 EOF
 [ -n "$N2" ] || { echo "  addrarray: no guest runner"; exit 2; }
-want=$(gcc -std=gnu89 -w -o "$T/host" "$T/main.c" "$T/v.c" && "$T/host")
+want=$(gcc -std=gnu89 -w -o "$T/host" "$T/main.c" "$T/v.c" && "$T/host" | tr -d '\r')
 if "$CCZ" -o "$T/m" "$T/main.c" "$T/v.c" >/dev/null 2>&1; then
 	got=$("$N2" -runexec "$T/m" 2>/dev/null) || true
 	if [ "$got" = "$want" ]; then
@@ -117,7 +117,7 @@ cat > "$T/om.c" <<'EOF'
 extern printf();
 main() { printf("%d\n", of()); return 0; }
 EOF
-want=$(gcc -std=gnu89 -w -o "$T/ohost" "$T/om.c" "$T/o.c" && "$T/ohost")
+want=$(gcc -std=gnu89 -w -o "$T/ohost" "$T/om.c" "$T/o.c" && "$T/ohost" | tr -d '\r')
 if "$CCZ" -o "$T/om" "$T/om.c" "$T/o.c" >/dev/null 2>&1; then
 	got=$("$N2" -runexec "$T/om" 2>/dev/null) || true
 	if [ "$got" = "$want" ]; then

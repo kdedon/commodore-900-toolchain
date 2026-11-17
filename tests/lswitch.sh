@@ -128,7 +128,7 @@ main() {
 EOF
 
 [ -n "$N2" ] || { echo "  lswitch: no guest runner"; exit 2; }
-want=$(gcc -std=gnu89 -w -DLONG=int '-DULONG=unsigned int' -o "$T/host" "$T/sw.c" && "$T/host")
+want=$(gcc -std=gnu89 -w -DLONG=int '-DULONG=unsigned int' -o "$T/host" "$T/sw.c" && "$T/host" | tr -d '\r')
 if "$CCZ" -o "$T/sw" "$T/sw.c" >/dev/null 2>&1; then
 	got=$("$N2" -runexec "$T/sw" 2>/dev/null) || true
 	if [ "$got" = "$want" ]; then

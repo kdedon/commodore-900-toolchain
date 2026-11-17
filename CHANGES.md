@@ -1,6 +1,6 @@
 # Changes
 
-## Next release (since v0.1.9)
+## v0.2.0 (2026-11-16)
 
 Objects from v0.1.9 still link, but rebuild them to pick up the code
 generation fixes. `l.out` files and archives without long names are

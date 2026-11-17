@@ -170,7 +170,7 @@ cat > "$T/hm.c" <<'EOF'
 int f();
 int main() { printf("%d\n", f(3, 4)); return 0; }
 EOF
-want=$(gcc -std=gnu89 -w -o "$T/h" "$T/hm.c" "$T/a.c" "$T/b.c" "$T/old.c" "$T/c.c" && "$T/h")
+want=$(gcc -std=gnu89 -w -o "$T/h" "$T/hm.c" "$T/a.c" "$T/b.c" "$T/old.c" "$T/c.c" && "$T/h" | tr -d '\r')
 run() { "$N2" -runobjint "$1" 3 4 2>/dev/null | grep -oE 'signed -?[0-9]+' | grep -oE '\-?[0-9]+' || true; }
 got=$(run "$T/out")
 [ "$got" = "$want" ] && ok "values across the cuts ($got)" ||

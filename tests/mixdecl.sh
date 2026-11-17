@@ -65,7 +65,7 @@ main() {
 EOF
 
 [ -n "$N2" ] || { echo "  mixdecl: no guest runner"; exit 2; }
-want=$(gcc -std=gnu99 -w -o "$T/host" "$T/m.c" && "$T/host")
+want=$(gcc -std=gnu99 -w -Wno-implicit-int -o "$T/host" "$T/m.c" && "$T/host" | tr -d '\r')
 if "$CCZ" -o "$T/m" "$T/m.c" >/dev/null 2>&1; then
 	got=$("$N2" -runexec "$T/m" 2>/dev/null) || true
 	if [ "$got" = "$want" ]; then

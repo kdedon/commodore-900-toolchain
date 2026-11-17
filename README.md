@@ -124,6 +124,11 @@ with a nonzero reserved field or a zero address register, print as `ILLEGAL`.
 | `Z8001_DONOR` | broad compiler corpus tests |
 | `C900_TC_BUILD` | alternate build directory, for the build and for a consumer reading it |
 
+## AI disclosure
+
+Porting, bug fixes and new features in this repository were assisted by a
+coding agent (Anthropic's Claude).
+
 ## License
 
 Project-authored code is MIT licensed. The Mark Williams COHERENT sources are

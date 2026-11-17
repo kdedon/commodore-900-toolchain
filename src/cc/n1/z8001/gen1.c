@@ -84,9 +84,9 @@ coderinit()
  * A local the source did not declare `register' still gets a callee-saved
  * register when nothing outside the function can reach its frame slot.  That
  * takes the whole body, so at PROLOG the records are read ahead to EPILOG; if
- * anything is promoted they are read again into a temporary file with its
- * automatic ids made registers and its allocation records widened, and the
- * tree reader takes its input from there until EPILOG.
+ * anything is promoted they are copied into memory with the automatic ids
+ * made registers and the allocation records widened, and the tree reader
+ * takes its input from there until EPILOG.
  *
  * A candidate is a word, long or pointer slot of the function's own block --
  * inner-block slots are reused once the block closes -- whose address is never
@@ -111,9 +111,10 @@ typedef struct {
 
 static	PMSLOT	*pmslot;
 static	int	npmslot, pmslotmax;
-static	FILE	*pmout;		/* the rewrite goes here; NULL: only look */
-static	FILE	*pmtmp;
-static	FILE	*pmsaved;	/* the real input, while reading pmtmp */
+static	unsigned char	*pmbuf;	/* the rewritten function */
+static	unsigned char	*pmout;	/* the rewrite goes here; NULL: only look */
+static	unsigned char	*pmend;
+extern	unsigned char	*ibufp, *ibufend;
 static	long	pmlen;		/* bytes read since PROLOG */
 static	int	pmbad;		/* not a function this can read */
 static	int	pmsetjmp;
@@ -142,7 +143,12 @@ register int	n;
 {
 	if (pmout != NULL)
 		while (n-- > 0)
-			putc(*p++, pmout);
+			if (pmout < pmend)
+				*pmout++ = *p++;
+			else {
+				pmbad = 1;
+				return;
+			}
 }
 
 static
@@ -585,7 +591,6 @@ pmpick()
 /* On PROLOG: decide, and if anything is promoted, switch to a rewritten copy. */
 promote()
 {
-	char	*name;
 	long	start;
 
 	if (isvariant(VDEBUG) || ifp == NULL || (start = ftell(ifp)) < 0)
@@ -597,21 +602,22 @@ promote()
 	pmpro = 0;
 	if (pmfunc() && pmlen <= PMAXLEN && pmnauto != 0 && !pmsetjmp
 	 && pmpick() != 0) {
-		if (pmtmp == NULL && (name = tmpnam(NULL)) != NULL
-		 && (pmtmp = fopen(name, "w+")) != NULL)
-			unlink(name);
-		if (pmtmp != NULL) {
-			rewind(pmtmp);
-			fseek(ifp, start, 0);
-			pmout = pmtmp;
-			pmfunc();
+		/* The rewrite is never longer than the original.  Failing here
+		 * rather than skipping keeps the output independent of the heap. */
+		if ((pmbuf = (unsigned char *)malloc((unsigned)(pmlen-1))) == NULL)
+			cnomem("promote");
+		fseek(ifp, start, 0);
+		pmout = pmbuf;
+		pmend = pmbuf + (unsigned)(pmlen-1);
+		if (pmfunc()) {
+			ibufp = pmbuf;
+			ibufend = pmout;
 			pmout = NULL;
-			fflush(pmtmp);
-			rewind(pmtmp);
-			pmsaved = ifp;
-			ifp = pmtmp;
 			return;
 		}
+		pmout = NULL;
+		free((char *)pmbuf);
+		pmbuf = NULL;
 	}
 	fseek(ifp, start, 0);
 }
@@ -634,9 +640,10 @@ doprolog()
  * it).  cc0's per-block cmask grows and shrinks; the UNION is what must be saved. */
 doepilog()
 {
-	if (pmsaved != NULL) {		/* back from the rewritten copy */
-		ifp = pmsaved;
-		pmsaved = NULL;
+	if (pmbuf != NULL) {		/* back from the rewritten copy */
+		ibufp = NULL;
+		free((char *)pmbuf);
+		pmbuf = NULL;
 	}
 	bput(AUTOS);
 	iput(maxtemp);

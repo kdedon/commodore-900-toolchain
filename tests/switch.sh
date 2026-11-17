@@ -125,7 +125,7 @@ EOF
 printf '\t.shri\n\t.blkw\t20000\n' > "$T/fill.s"
 
 [ -n "$N2" ] || { echo "  switch: no guest runner"; exit 2; }
-want=$(gcc -std=gnu89 -w -o "$T/host" "$T/sw.c" && "$T/host")
+want=$(gcc -std=gnu89 -w -o "$T/host" "$T/sw.c" && "$T/host" | tr -d '\r')
 
 run() { # <name> <ccz args...>
 	name=$1; shift

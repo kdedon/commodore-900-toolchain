@@ -532,7 +532,7 @@ TREE	*ttp;
 		ttp->t_rp = ap;
 	else
 		ttp->t_lp = ap;
-	amd(ttp);
+	amd(ttp, NULL);
 	ap = tempnode(tp, 0);
 	ap = leftnode(ASSIGN, ap, ap->t_type, ap->t_size);
 	while (tp->t_op == LEAF)

@@ -34,7 +34,7 @@ PY
 "$H/host/ccz" -i -L -o "$T/big.out" "$T/bigm.c" "$T/big0.c" "$T/big1.c" "$T/big2.c" >/dev/null 2>&1
 ts=$(python3 -c "b=open('$T/big.out','rb').read(); print((b[8]|b[9]<<8)<<16 | (b[10]|b[11]<<8))")
 got=$("${N2:-$(sh "$H/host/runner.sh")}" -runexec "$T/big.out" 2>/dev/null | grep -oE 'sum=-?[0-9]+')
-want=$(gcc -std=gnu89 -w -o "$T/bigh" "$T/bigm.c" "$T/big0.c" "$T/big1.c" "$T/big2.c" && "$T/bigh")
+want=$(gcc -std=gnu89 -w -o "$T/bigh" "$T/bigm.c" "$T/big0.c" "$T/big1.c" "$T/big2.c" && "$T/bigh" | tr -d '\r')
 if [ "$got" = "$want" ] && [ "$ts" -gt 65536 ]; then
 	echo "=== multi-segment text: PASS (text=$ts B > 64K, $got == host)"
 else
@@ -114,7 +114,7 @@ print("; ".join(bad))
 PY
 )
 	got=$("${N2:-$(sh "$H/host/runner.sh")}" -runexec "$T/$p" 2>/dev/null | grep -E '^-?[0-9]+( -?[0-9]+)+$')
-	want=$(gcc -std=gnu89 -w -o "$T/${p}h" $srcs && "$T/${p}h")
+	want=$(gcc -std=gnu89 -w -o "$T/${p}h" $srcs && "$T/${p}h" | tr -d '\r')
 	if [ -z "$why" ] && [ -n "$got" ] && [ "$got" = "$want" ]; then
 		echo "=== multi-segment text $p: PASS ($nseg segments, $(echo $names | wc -w) symbols placed, [$got] == host)"
 	else

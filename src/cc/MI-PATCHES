@@ -51,7 +51,7 @@ why: the bare-TOK form relies on link-order adjacency of the id string -- an ABI
 
 patch: relop-long-fold
 file: n1/out.c 516d8b7c37baf86c44cc8c0c83f3a5471095f5f3b843ac9afbb7ef84fe0a4ca4
-file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
+file: n1/sel0.c dd47d1a8ba612f4ce172c5eded940076112a166242c3d2f16ecc82f29f142e2e
 fix: `!islong(...)` -- a long compare-vs-0 must not fold to a direct operand test
 why: Z8001: no test-long reaches the relop selector; the fold drops the explicit `CPL n,#0`. The donor i386 coder needs the fold; this tree builds only the Z8001 compiler.
 
@@ -61,12 +61,12 @@ fix: subgoal-output sites skip re-materializing an operand already a `REG` leaf
 why: Z8001 far pointers arrive in a register pair as a REG leaf; re-routing one through `outtree` derefs a garbage `t_lp` (FUZZ-13 SIGSEGV)
 
 patch: opeq0-convert-narrow
-file: n1/mtree0.c 0841ad1b7c1785231e0154ad730a10d2bf12cc7dfdf585efde77d678351aaf38
+file: n1/mtree0.c 4a35094318ff2f96c1034ed6aa6c68a0fc4082d0c77dfb0d945bb850ccc9f2e8
 fix: `x op= 0' folding CONVERTs a narrower lvalue to the node's promoted type instead of retyping it in place; an effect context keeps the retype
 why: the value of `x op= 0' is x at the PROMOTED type, so retyping the lvalue node widens the object's own load -- on the Z8001 `char c; v = (c += 0)' emitted `ld r0,-1(r13)', a WORD load of a one-byte auto, reading the neighbouring byte as the high half (big-endian, so v became c<<8|junk). Confirmed at HEAD and fixed: the load is now `ldb rl0,-1(r13)' + `extsb', identical to plain `v = c'. Reached by AADD/ASUB/AOR/AXOR/ASHL/ASHR (AAND is rewritten to ASSIGN above); `c += 1' was never affected, only the zero fold. MEFFECT reads nothing, so it keeps the cheaper retype and no code moves
 
 patch: subadd-keep-type
-file: n1/mtree0.c 0841ad1b7c1785231e0154ad730a10d2bf12cc7dfdf585efde77d678351aaf38
+file: n1/mtree0.c 4a35094318ff2f96c1034ed6aa6c68a0fc4082d0c77dfb0d945bb850ccc9f2e8
 fix: the SUB->ADD constant canonicalization keeps the node's own type (donor stamped `IVAL_T` "Signed")
 why: the stamp writes junk signedness over the C type (`u - 1` labeled signed, `p - c` labeled non-pointer); the Z8001 MD selects signed-vs-unsigned divide/shift by node type, and the MD `fixaddtype` now preserves node signedness through reassociation (FUZZ-5), so the stamp must not lie. Donor i386 relied on the re-derive repairing it each pass
 
@@ -135,14 +135,14 @@ fix: new variant code `VKERN` (9)
 why: the kernel model: numeric frame/auto addresses carry the system stack segment (SS = 0x3F) rather than the flat model's segment 0. Variant codes are a shared namespace, so the definition has to live with the others; nothing machine-independent reads it
 
 patch: store-converge
-file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
+file: n1/sel0.c dd47d1a8ba612f4ce172c5eded940076112a166242c3d2f16ecc82f29f142e2e
 file: n1/code.c 747566dae0a5a81d9c31afcef4616d0376bf40f107ad3340dbf05e3637affc41
 file: h/cc1.h ad9eaee22669a51462c1027abede6574b6ae9b24206679793c6c4d9c2430e171
 fix: `store()` records the subtree each spill was made for (`storesub[]`, beside the existing `storelist[]`), and a second demand for the same subtree is a `cbotch` naming the operator instead of a silent re-enqueue
 why: `store()` spills a subtree to a stack temp and enqueues `temp = <subtree>`; if selecting that assignment cannot address the subtree either, the donor enqueues it again with the same tree and the same registers, so the list grows without converging and NSTORE decides only how long the loop runs (ICE 5149). One subtree now gets one store. This is a termination guarantee, not a codegen change: no accepted program compiles differently, and the diagnostic lands at the demand rather than as an exhausted table. The native cost is the array itself -- NSTORE is 20 off the i386 arm, so 20 near pointers of BSS in cc1, which has room; the loop it bounds is over at most 20 entries and runs once per store, so it is invisible beside selection
 
 patch: lvalue-fixup-terminate
-file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
+file: n1/sel0.c dd47d1a8ba612f4ce172c5eded940076112a166242c3d2f16ecc82f29f142e2e
 fix: `iselect()' does not fall back on an RVALUE pattern plus a fixup when the context is MLVALUE and the register is not a real one
 why: a fixup leaves the value in a register of its own choosing, which is an answer to MRVALUE and not to `an lvalue in any addressing register'; the node it builds arrives back at the same test, matches the same RVALUE pattern and is fixed up again, so selection does not terminate and cc1 dies on its own stack (a far pointer dereferenced as an lvalue -- the donor's i386 can address through every register and never asks). Returning failure instead is what the caller already handles: `seltree()' goes on to its next pattern. The disabled MLVALUE-fixup arm below is the donor's own note that this machine class needs the case; nothing here re-enables it. No accepted program compiles differently -- a fixup that terminated was reached through a real register, which this leaves alone
 
@@ -308,7 +308,7 @@ file: n0/expr.c 858c5e0a6abcc2375eaee45d132c23944ab1c861595c7480ffc68781335f2c9b
 file: n0/gdecl.c 6c8fa941b1282cf3af5e63e23c4d9b3b9148ba68ffb5ee4668512035fe28a572
 file: n1/tree0.c 4e05e7114ccc76adcd5bd3d0f78a1f27cf369fd7368e8933eb672a21ad59ae7d
 file: n1/out.c 516d8b7c37baf86c44cc8c0c83f3a5471095f5f3b843ac9afbb7ef84fe0a4ca4
-file: n1/sel0.c 640bdfe6742a65726da0ae384eb1c52a02b8e401bfe91d7b011921fa80ccef53
+file: n1/sel0.c dd47d1a8ba612f4ce172c5eded940076112a166242c3d2f16ecc82f29f142e2e
 file: h/z8001/mch.h
 file: n1/z8001/gen1.c
 file: n2/z8001/afield.c
@@ -397,7 +397,7 @@ fix: FEATURE ADDITION. An automatic structure or union may be initialized from a
 why: additive: a structure-valued initializer was a type clash before, in every position, and every other initializer reaches the same member code in the same order: the expression is read with the same `newtree()', `ininit' and LINE record the member read emitted, and nothing is output between the two points, so the brace lists, member lists and static initializers compile byte-identical (the library, kernel, driver, userland, Exec900 and Workbench objects). No ABI or data change on the C900: the initialization is the structure assignment cc1 already generates for `o = e', block move and all, and is object-identical to `struct R o; o = e;' (tests/structinit.sh); cc0 gains one static pointer
 
 patch: init-cast-context
-file: n1/mtree0.c 0841ad1b7c1785231e0154ad730a10d2bf12cc7dfdf585efde77d678351aaf38
+file: n1/mtree0.c 4a35094318ff2f96c1034ed6aa6c68a0fc4082d0c77dfb0d945bb850ccc9f2e8
 file: n1/z8001/gen2.c
 fix: `modtree()' modifies a CONVERT or CAST operand in the MINIT context when the conversion is in it, as it already does the operands of unary, address, indirection and binary operators; the donor passed MRVALUE there alone. Z8001 `iexpr()' then initializes a long from an address as the far pointer (ZGPTR, the i386 donor's `tt = PTR'), and rejects an address under a conversion to a word or byte as not constant
 why: the MINIT context is what tells a machine layer that an address in an initializer is a link-time constant; losing it under a cast is wrong on every target whose machine layer reads it -- the i8086 LARGE model and the Z8001 pool a static address in an MRVALUE context, so `(unsigned long)a' in an initializer became the address of a literal-pool cell holding a, and `int i = (int)a' silently initialized i with that cell's offset -- and changes nothing on the i386, whose machine layer reads MINIT only at the root. On the C900 a far pointer and a long are the same two words (leaves.t shares the pair), so the datum is the pointer's relocated long, object-identical to `char *p = a' (tests/ptrlong.sh); AROS IPTR tables (keymaps, tag lists) need it. Only initializers with a cast over an address change: before they were `initializer too complex' or the pool cell above
@@ -501,3 +501,18 @@ file: n0/stat.c d4219f7af1663dee21e4067e3e1b644ad3b6475d7b10f3c3027f7e9e87f92918
 file: n2/z8001/peep.c
 fix: a return in a function declared with a char type narrows its value to that type before widening it to the int or unsigned the function is compiled as returning. `declare()' (n0/ddecl.c) keeps a function's declared return type in its symbol's `s_width', which only a member otherwise uses, before `fixtype()' widens it; the return coercion (n0/stat.c) then casts the value to it with `rnarrow()', which reads a char variable of the other signedness as the declared type in place, as a cast does, narrows a widened char unwidened, and leaves alone a comparison, `!', `&&' or `||', an assignment to a variable of the declared type and a call of a function declared with it, whose values are narrowed already. The Z8001 peephole (n2/z8001/peep.c `extdup()') deletes an `EXTSB Rn' or `CLRB RHn' that repeats the instruction before it, so the narrowing and the widening extend once
 why: wrong code on every target: `fixtype()' replaces the declared char type with the widened one, so the return converted the value to int or unsigned only, and `unsigned char f() { return i; }' with int i = -2 returned 65534 instead of 254, `signed char f() { return i - 300; }' -302 instead of -46, `unsigned char f() { char c = -2; return c; }' 65534, and `unsigned char f() { return 300; }' 300. C converts the value of a return as if by assignment to the function's type. The donor and the June 1985 Z8001 compiler write the same tree. The callee is the side responsible: a caller of such a function, in the donor, the 1985 passes and here, takes the word in R1 as the int value of the call and widens, compares and passes it without narrowing, so a callee that narrows gives every existing caller the right value and the calling convention does not change; a callee compiled before the fix still returns what it returned. On the C900 the narrowing costs one EXTSB or CLRB, none for a value narrowed already. tests/charret.sh checks 432 returns from char, signed char and unsigned char functions of a variable of each integer type, through an automatic, a register, a parameter and a pointer, of an expression, a `?:', a comma, an assignment, a compound assignment, a postincrement, a comparison, a negation, a call and constants, used fourteen ways by the caller, against C's rules with a 16-bit int; on the donor's rule 312 of them are wrong. The corpus sites (the library, kernel, driver, userland, Exec900 and Workbench objects) are the returns from char functions of a value C requires narrowing, and the repeated extensions the peephole deletes. No ABI or data change on the C900
+
+patch: amd-ptp-null
+file: n1/mtree0.c 4a35094318ff2f96c1034ed6aa6c68a0fc4082d0c77dfb0d945bb850ccc9f2e8
+file: n1/mtree3.c e127d3190b374a1fd9f30d1e8e14a8764fa56353f7c1125144a496042de63d5e
+file: n1/sel0.c dd47d1a8ba612f4ce172c5eded940076112a166242c3d2f16ecc82f29f142e2e
+file: n1/z8001/amd.c
+fix: the five one-argument calls of `amd()' pass NULL for its second parameter, the parent tree that the called-STAR check (n1/z8001/amd.c) reads
+why: K&R does not check the argument count, so those calls left the parent as whatever the caller had in that register or stack slot; the check then dereferenced it. On the Linux host it happened to be 0; on Windows cc1 faulted on crypt.c, nlist.c and printf.c, and on the C900 the word is stack garbage. NULL is what every other caller with no parent passes. No code change where the old value was 0: the library compiles byte-identical
+
+patch: bget-membuf
+file: common/bget.c 155164a28159cbdb6a5cc42e5b288dd41fa990b7fe95f085a907837b2cb14a4c
+file: common/unbget.c 74271c54443c9a61566dff5758daac47e6f559fd8af3e3255087f623d51eaf44
+file: n1/z8001/gen1.c
+fix: while `ibufp' is set, `bget()' and `unbget()' read from memory up to `ibufend' instead of the input file; cc1's register promotion (n1/z8001/gen1.c) points them at the rewritten function until EPILOG
+why: the rewrite went through a temporary file, so the code depended on the file system: a target without /tmp silently compiled without promotion, and a short or locked file on Windows miscompiled. Memory makes the result the same on the host and the C900; a rewrite that cannot be allocated is a fatal `out of space', never a silent difference. A NULL test per byte when unset; cc0 and cc2 never set it

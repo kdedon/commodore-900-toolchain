@@ -83,7 +83,7 @@ for f in dq rq; do shape $f ' DIV ' 'DIVL|JR +PL'; done
 for f in ls lu; do shape $f 'MULTL' ' MULT '; done
 
 python3 "$H/tests/mul16.py" "$T" 64 3 7 &&
-cc -O1 -o "$T/h" "$T/h.c" && "$T/h" > "$T/want" &&
+cc -O1 -o "$T/h" "$T/h.c" && "$T/h" | tr -d '\r' > "$T/want" &&
 "$CCZ" -o "$T/t" "$T/t.c" >/dev/null 2>&1 || { echo "  mul16: values build FAIL"; exit 1; }
 "$N2" -runexec "$T/t" 2>/dev/null | grep -v '^\[exit' > "$T/got"
 if cmp -s "$T/want" "$T/got"; then

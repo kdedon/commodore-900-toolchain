@@ -15,8 +15,13 @@
 
 extern	FILE	*ifp;
 
+/* While ibufp is set, input comes from memory up to ibufend. */
+unsigned char	*ibufp, *ibufend;
+
 bget()
 {
+	if (ibufp != NULL)
+		return (ibufp < ibufend ? *ibufp++ : EOF);
 #if	TEMPBUF
 	if (ifp == NULL) {
 		if (inbufp == inbufmax)

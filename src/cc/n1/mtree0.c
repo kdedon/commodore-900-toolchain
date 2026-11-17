@@ -358,7 +358,7 @@ again:
 			/* the node keeps the subtract's own type: its signedness
 			 * (and pointer-ness) selects the form in consumers */
 			rp->t_ival = -rp->t_ival;
-			amd(rp);
+			amd(rp, NULL);
 			tp->t_lp  = lp;
 			tp->t_rp  = rp;
 			goto again;
@@ -540,7 +540,7 @@ TREE		*ptp;
 		if (rp->t_op==ICON && !isuns(rp->t_type) && rp->t_ival<0) {
 			tp->t_op += SUB-ADD;
 			rp->t_ival = -rp->t_ival;
-			amd(rp);
+			amd(rp, NULL);
 		}
 	}
 }

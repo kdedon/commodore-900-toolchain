@@ -71,7 +71,7 @@ cat > "$T/main.c" <<'EOF'
 #include "h.h"
 extern printf();
 long mix(h, v) long h, v; { return (h * 31 + v) & 0xFFFFFFL; }
-long hp(p) char *p; { return p == 0 ? 0 : (long)p < 256 ? (long)p : 1000 + *p; }
+long hp(p) char *p; { return p == 0 ? 0 : (unsigned long)p < 256 ? (long)p : 1000 + *p; }
 long hN(p, n) struct N *p; { long h = 0; for (; n-- > 0; p++) h = mix(mix(mix(mix(h, (long)p->t), hp(p->l)), hp(p->k)), (long)p->f); return h; }
 long hR(p, n) struct R *p; { long h = 0; for (; n-- > 0; p++) h = mix(mix(h, (long)p->a), (long)p->b); return h; }
 long hs(p, n) char *p; { long h = 0; while (n-- > 0) h = mix(h, (long)*p++); return h; }
@@ -113,7 +113,7 @@ EOF
 
 # Values, against the host compiler, with the stack dirtied before each call.
 [ -n "$N2" ] || { echo "  autozero: no guest runner"; exit 2; }
-want=$(cd "$T" && gcc -std=gnu89 -w -o host main.c mc.c k.c c.c && ./host)
+want=$(cd "$T" && gcc -std=gnu89 -w -o host main.c mc.c k.c c.c && ./host | tr -d '\r')
 wantk=$(printf '%s\n' "$want" | sed 2q)
 run() { # <what> <want> <level> <sources...>
 	what=$1; w=$2; lv=$3; shift 3

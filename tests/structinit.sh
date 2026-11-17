@@ -104,7 +104,7 @@ EOF
 # The member lists are not C89, so the second line is the compiler's own.
 echo 'l1(){return 0;} l2(){return 0;} l3(){return 0;} l4(){return 0;}
 l5(){return 0;} l6(){return 0;} l7(){return 0;} l8(){return 0;}' > "$T/stub.c"
-want=$(gcc -std=gnu89 -w -o "$T/host" "$T/main.c" "$T/i.c" "$T/stub.c" && "$T/host" | sed 1q)
+want=$(gcc -std=gnu89 -w -o "$T/host" "$T/main.c" "$T/i.c" "$T/stub.c" && "$T/host" | sed 1q | tr -d '\r')
 want="$want
 1 2 9 101 123 102 63 7"
 if "$CCZ" -o "$T/m" "$T/main.c" "$T/i.c" "$T/l.c" >/dev/null 2>&1; then
